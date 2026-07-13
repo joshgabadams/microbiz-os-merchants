@@ -5,9 +5,43 @@ use App\Http\Controllers\Api\OfficeSyncController;
 use App\Http\Controllers\Api\GlAccountSyncController;
 use App\Http\Controllers\Api\VaultController;
 use App\Http\Controllers\Api\TellerController;
+use App\Http\Controllers\Api\ApprovalController;
+use App\Http\Controllers\Api\CustomerCashController;
+use App\Http\Controllers\Api\BalancingController;
+use App\Http\Controllers\Api\BranchEodController;
+use App\Http\Controllers\Api\AuthController;
 
-Route::get('/sync/offices', [OfficeSyncController::class, 'sync']);
-Route::get('/sync/glaccounts', [GlAccountSyncController::class, 'sync']);
+Route::prefix('v1')->group(function () {
+    Route::post('/login', [AuthController::class, 'login']);
+});
 
-Route::apiResource('vaults', VaultController::class);
-Route::apiResource('tellers', TellerController::class);
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/sync/offices', [OfficeSyncController::class, 'sync']);
+    Route::get('/sync/glaccounts', [GlAccountSyncController::class, 'sync']);
+
+    Route::apiResource('vaults', VaultController::class);
+    Route::apiResource('tellers', TellerController::class);
+
+    Route::prefix('v1')->group(function () {
+        Route::post('/logout', [AuthController::class, 'logout']);
+        Route::get('/me', [AuthController::class, 'me']);
+
+        Route::post('/teller/open', [TellerController::class, 'open']);
+        Route::post('/teller/close', [TellerController::class, 'close']);
+
+        Route::post('/float/allocate/request', [ApprovalController::class, 'requestAllocateFloat']);
+        Route::post('/float/return/request', [ApprovalController::class, 'requestReturnFloat']);
+
+        Route::get('/approvals/pending', [ApprovalController::class, 'pending']);
+        Route::post('/approvals/{id}/approve', [ApprovalController::class, 'approve']);
+        Route::post('/approvals/{id}/reject', [ApprovalController::class, 'reject']);
+
+        Route::post('/customer/deposit', [CustomerCashController::class, 'deposit']);
+        Route::post('/customer/withdraw', [CustomerCashController::class, 'withdraw']);
+
+        Route::post('/teller/balance', [BalancingController::class, 'tellerBalance']);
+        Route::post('/vault/balance', [BalancingController::class, 'vaultBalance']);
+
+        Route::post('/branch/eod', [BranchEodController::class, 'close']);
+    });
+});

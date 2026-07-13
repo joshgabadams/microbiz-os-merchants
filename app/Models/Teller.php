@@ -60,4 +60,9 @@ class Teller extends Model
     {
         return $this->hasMany(CashLedger::class);
     }
+
+    public function balance()
+{
+    return $this->hasOne(TellerBalance::class);
+}
 }

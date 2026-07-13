@@ -4,109 +4,192 @@ namespace App\Services\Accounting;
 
 use App\Models\CashLedger;
 use App\Models\GlJournal;
-use App\Models\GlAccount;
 use Exception;
 
 class GlPostingService
 {
+    public function __construct(
+        protected GlAccountResolver $resolver
+    ) {
+    }
+
     /**
-     * Post a CashLedger entry into the General Ledger
+     * Post a CashLedger transaction to the General Ledger.
+     *
+     * @throws Exception
      */
-    public function postFromCashLedger(CashLedger $ledger): bool
-    {
-        // Ensure ledger is valid
+    public function postFromCashLedger(
+        CashLedger $ledger
+    ): bool {
+
         $this->validateLedger($ledger);
 
-        // 1. Resolve GL accounts
-        $debitAccount = $this->resolveDebitAccount($ledger);
-        $creditAccount = $this->resolveCreditAccount($ledger);
+        /*
+        |--------------------------------------------------------------------------
+        | Resolve Business Account Keys
+        |--------------------------------------------------------------------------
+        */
 
-        if (!$debitAccount || !$creditAccount) {
-            throw new Exception("GL Account mapping failed for ledger reference: {$ledger->reference_no}");
-        }
+        $debitAccount = $this->resolver->resolve(
+            $ledger->debit_account_key
+        );
 
-        // 2. Create DEBIT entry
-        $debitEntry = GlJournal::create([
-            'gl_account_id' => $debitAccount->id,
-            'entry_type'     => 'DEBIT',
-            'amount'         => $ledger->debit,
-            'reference'      => $ledger->reference_no,
-            'source_type'    => CashLedger::class,
-            'source_id'      => $ledger->id,
-            'posted_at'      => now(),
+        $creditAccount = $this->resolver->resolve(
+            $ledger->credit_account_key
+        );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Determine Posting Amount
+        |--------------------------------------------------------------------------
+        */
+
+        $amount = max(
+            $ledger->debit,
+            $ledger->credit
+        );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Debit Entry
+        |--------------------------------------------------------------------------
+        */
+
+        $debitEntry = $this->createJournalEntry(
+
+            account: $debitAccount,
+
+            entryType: 'DEBIT',
+
+            amount: $amount,
+
+            ledger: $ledger
+
+        );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Credit Entry
+        |--------------------------------------------------------------------------
+        */
+
+        $creditEntry = $this->createJournalEntry(
+
+            account: $creditAccount,
+
+            entryType: 'CREDIT',
+
+            amount: $amount,
+
+            ledger: $ledger
+
+        );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Validate Double Entry
+        |--------------------------------------------------------------------------
+        */
+
+        $this->validateBalance(
+            $debitEntry,
+            $creditEntry
+        );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Mark Ledger Posted
+        |--------------------------------------------------------------------------
+        */
+
+        $ledger->update([
+            'status' => 'APPROVED'
         ]);
-
-        // 3. Create CREDIT entry
-        $creditEntry = GlJournal::create([
-            'gl_account_id' => $creditAccount->id,
-            'entry_type'     => 'CREDIT',
-            'amount'         => $ledger->credit,
-            'reference'      => $ledger->reference_no,
-            'source_type'    => CashLedger::class,
-            'source_id'      => $ledger->id,
-            'posted_at'      => now(),
-        ]);
-
-        // 4. Validate double-entry integrity
-        $this->validateBalance($debitEntry, $creditEntry);
 
         return true;
     }
 
     /**
-     * Ensure ledger is valid before posting
+     * Validate Ledger.
      */
-    private function validateLedger(CashLedger $ledger): void
-    {
-        if ($ledger->status !== 'POSTED' && $ledger->status !== 'PENDING') {
-            throw new Exception("Ledger is not in a postable state.");
+    private function validateLedger(
+        CashLedger $ledger
+    ): void {
+
+        if (!in_array(
+            $ledger->status,
+            ['PENDING', 'POSTED']
+        )) {
+
+            throw new Exception(
+                "Ledger {$ledger->reference_no} is not postable."
+            );
         }
 
-        if (!$ledger->debit && !$ledger->credit) {
-            throw new Exception("Ledger must have either debit or credit amount.");
+        if (($ledger->debit + $ledger->credit) <= 0) {
+
+            throw new Exception(
+                "Ledger contains no monetary value."
+            );
+        }
+
+        if (
+            empty($ledger->debit_account_key) ||
+            empty($ledger->credit_account_key)
+        ) {
+
+            throw new Exception(
+                "Ledger account keys are missing."
+            );
         }
     }
 
     /**
-     * Resolve DEBIT GL account
+     * Create Journal Entry.
      */
-    private function resolveDebitAccount(CashLedger $ledger): ?GlAccount
-    {
-        return match ($ledger->transaction_type) {
-            'CASH_IN',
-            'CUSTOMER_DEPOSIT',
-            'VAULT_TO_TELLER' => GlAccount::where('account_code', 'TELLER_CASH')->first(),
+    private function createJournalEntry(
+        $account,
+        string $entryType,
+        float $amount,
+        CashLedger $ledger
+    ): GlJournal {
 
-            'CASH_OUT',
-            'CUSTOMER_WITHDRAWAL' => GlAccount::where('account_code', 'CUSTOMER_LIABILITY')->first(),
+        return GlJournal::create([
 
-            default => null,
-        };
+            'gl_account_id' => $account->id,
+
+            'entry_type' => $entryType,
+
+            'amount' => $amount,
+
+            'reference' => $ledger->reference_no,
+
+            'source_type' => CashLedger::class,
+
+            'source_id' => $ledger->id,
+
+            'currency' => $ledger->currency,
+
+            'narration' => $ledger->narration,
+
+            'posted_at' => now(),
+
+        ]);
     }
 
     /**
-     * Resolve CREDIT GL account
+     * Ensure Double Entry.
      */
-    private function resolveCreditAccount(CashLedger $ledger): ?GlAccount
-    {
-        return match ($ledger->transaction_type) {
-            'CUSTOMER_DEPOSIT',
-            'VAULT_TO_TELLER' => GlAccount::where('account_code', 'CUSTOMER_LIABILITY')->first(),
+    private function validateBalance(
+        GlJournal $debitEntry,
+        GlJournal $creditEntry
+    ): void {
 
-            'CASH_OUT',
-            'CUSTOMER_WITHDRAWAL' => GlAccount::where('account_code', 'TELLER_CASH')->first(),
+        if ($debitEntry->amount != $creditEntry->amount) {
 
-            default => null,
-        };
-    }
-
-    /**
-     * Ensure debit and credit are balanced
-     */
-    private function validateBalance(GlJournal $debitEntry, GlJournal $creditEntry): void
-    {
-        if ($debitEntry->amount !== $creditEntry->amount) {
-            throw new Exception("Unbalanced GL entries detected for reference: {$debitEntry->reference}");
+            throw new Exception(
+                "Unbalanced GL Posting."
+            );
         }
     }
 }

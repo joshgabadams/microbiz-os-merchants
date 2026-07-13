@@ -13,6 +13,8 @@ class GlJournal extends Model
         'reference',
         'source_type',
         'source_id',
+        'currency',
+        'narration',
         'posted_at'
     ];
 

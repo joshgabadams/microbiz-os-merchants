@@ -26,6 +26,11 @@ class CashLedger extends Model
         'debit',
         'credit',
 
+        'debit_account_key',
+        'credit_account_key',
+
+        'running_balance',
+
         'currency',
 
         'narration',
@@ -39,6 +44,7 @@ class CashLedger extends Model
     protected $casts = [
         'debit' => 'decimal:2',
         'credit' => 'decimal:2',
+         'running_balance' => 'decimal:2',
         'transaction_date' => 'datetime',
     ];
 

@@ -4,11 +4,11 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-class VaultTransaction extends Model
+class TellerTransaction extends Model
 {
     protected $fillable = [
 
-        'vault_id',
+        'teller_id',
 
         'transaction_no',
 
@@ -33,11 +33,7 @@ class VaultTransaction extends Model
         'reversal_of_transaction_id',
         'is_reversed',
         'reversed_at',
-        'reversed_by',
-        
-      
-
-
+         'reversed_by',
 
     ];
 
@@ -45,27 +41,33 @@ class VaultTransaction extends Model
 
         'amount' => 'decimal:2',
 
-        'posted' => 'boolean',
-
         'transaction_date' => 'datetime',
 
+        'posted' => 'boolean',
+
         'is_reversed' => 'boolean',
-        'reversed_at' => 'datetime',
+'reversed_at' => 'datetime',
 
     ];
 
-    public function vault()
+    /*
+    |--------------------------------------------------------------------------
+    | Relationships
+    |--------------------------------------------------------------------------
+    */
+
+    public function teller()
     {
-        return $this->belongsTo(Vault::class);
+        return $this->belongsTo(Teller::class);
     }
 
     public function performer()
     {
-        return $this->belongsTo(User::class,'performed_by');
+        return $this->belongsTo(User::class, 'performed_by');
     }
 
     public function approver()
     {
-        return $this->belongsTo(User::class,'approved_by');
+        return $this->belongsTo(User::class, 'approved_by');
     }
 }

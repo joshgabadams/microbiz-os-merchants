@@ -4,68 +4,38 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-class VaultTransaction extends Model
+class CustomerAccountTransaction extends Model
 {
     protected $fillable = [
-
-        'vault_id',
-
+        'customer_account_id',
         'transaction_no',
-
         'transaction_type',
-
         'amount',
-
         'currency',
-
         'reference',
-
         'narration',
-
         'performed_by',
-
         'approved_by',
-
         'transaction_date',
-
         'posted',
-
         'reversal_of_transaction_id',
-        'is_reversed',
-        'reversed_at',
-        'reversed_by',
-        
-      
-
-
+'is_reversed',
+'reversed_at',
+'reversed_by',
 
     ];
 
     protected $casts = [
-
         'amount' => 'decimal:2',
-
         'posted' => 'boolean',
-
         'transaction_date' => 'datetime',
-
         'is_reversed' => 'boolean',
-        'reversed_at' => 'datetime',
+'reversed_at' => 'datetime',
 
     ];
 
-    public function vault()
+    public function account()
     {
-        return $this->belongsTo(Vault::class);
-    }
-
-    public function performer()
-    {
-        return $this->belongsTo(User::class,'performed_by');
-    }
-
-    public function approver()
-    {
-        return $this->belongsTo(User::class,'approved_by');
+        return $this->belongsTo(CustomerAccount::class, 'customer_account_id');
     }
 }
