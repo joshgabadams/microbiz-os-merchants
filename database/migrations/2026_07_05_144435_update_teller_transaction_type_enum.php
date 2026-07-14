@@ -6,8 +6,12 @@ use Illuminate\Support\Facades\DB;
 return new class extends Migration {
     public function up(): void
     {
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            return;
+        }
+
         DB::statement("
-            ALTER TABLE teller_transactions 
+            ALTER TABLE teller_transactions
             MODIFY transaction_type ENUM(
                 'RECEIVE_FLOAT',
                 'RETURN_FLOAT',
@@ -22,8 +26,12 @@ return new class extends Migration {
 
     public function down(): void
     {
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            return;
+        }
+
         DB::statement("
-            ALTER TABLE teller_transactions 
+            ALTER TABLE teller_transactions
             MODIFY transaction_type ENUM(
                 'FLOAT_RECEIVED',
                 'FLOAT_RETURNED',
