@@ -29,6 +29,16 @@ class UpdateVaultRequest extends FormRequest
 
         'name' => 'required|string|max:255',
 
+        'code' => 'sometimes|string|unique:vaults,code,' . $this->vault->id,
+
+        'type' => 'sometimes|in:HEAD_OFFICE,MAIN,RESERVE,ATM,CASH_IN_TRANSIT,TREASURY',
+
+        'currency' => 'sometimes|string|size:3',
+
+        'minimum_balance' => 'sometimes|numeric',
+
+        'maximum_balance' => 'sometimes|numeric',
+
         'active' => 'boolean'
         ];
     }

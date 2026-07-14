@@ -29,6 +29,16 @@ class StoreVaultRequest extends FormRequest
 
         'name' => 'required|string|max:255',
 
+        'code' => 'required|string|unique:vaults,code',
+
+        'type' => 'sometimes|in:HEAD_OFFICE,MAIN,RESERVE,ATM,CASH_IN_TRANSIT,TREASURY',
+
+        'currency' => 'sometimes|string|size:3',
+
+        'minimum_balance' => 'sometimes|numeric',
+
+        'maximum_balance' => 'sometimes|numeric',
+
         'active' => 'boolean'
         ];
     }
