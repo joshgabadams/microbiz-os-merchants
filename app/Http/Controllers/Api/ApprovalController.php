@@ -7,7 +7,6 @@ use App\Models\ApprovalRequest;
 use App\Services\Approval\ApprovalRequestService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
-use Exception;
 
 class ApprovalController extends Controller
 {
@@ -18,18 +17,21 @@ class ApprovalController extends Controller
     ) {
     }
 
+    /**
+     * Create a maker-checker request for vault-to-teller float allocation.
+     */
     public function requestAllocateFloat(Request $request)
     {
         $validated = $request->validate([
             'vault_id' => ['required', 'integer', 'exists:vaults,id'],
             'teller_id' => ['required', 'integer', 'exists:tellers,id'],
             'amount' => ['required', 'numeric', 'min:1'],
-            'performed_by' => ['required', 'integer', 'exists:users,id'],
             'reference' => ['nullable', 'string', 'max:255'],
             'narration' => ['nullable', 'string'],
-            'maker_id' => ['required', 'integer', 'exists:users,id'],
             'maker_note' => ['nullable', 'string'],
         ]);
+
+        $authenticatedUserId = $request->user()->id;
 
         $approval = $this->approvalRequestService->createRequest(
             'ALLOCATE_FLOAT',
@@ -37,31 +39,42 @@ class ApprovalController extends Controller
                 'vault_id' => $validated['vault_id'],
                 'teller_id' => $validated['teller_id'],
                 'amount' => $validated['amount'],
-                'performed_by' => $validated['performed_by'],
+
+                // The authenticated maker will perform the transaction
+                // after the request is approved.
+                'performed_by' => $authenticatedUserId,
+
                 'reference' => $validated['reference'] ?? null,
                 'narration' => $validated['narration'] ?? null,
             ],
-            $validated['maker_id'],
+            $authenticatedUserId,
             $validated['amount'],
             'NGN',
             $validated['maker_note'] ?? null
         );
 
-        return $this->success($approval, 'Float allocation request created successfully.', 201);
+        return $this->success(
+            $approval,
+            'Float allocation request created successfully.',
+            201
+        );
     }
 
+    /**
+     * Create a maker-checker request for teller-to-vault float return.
+     */
     public function requestReturnFloat(Request $request)
     {
         $validated = $request->validate([
             'vault_id' => ['required', 'integer', 'exists:vaults,id'],
             'teller_id' => ['required', 'integer', 'exists:tellers,id'],
             'amount' => ['required', 'numeric', 'min:1'],
-            'performed_by' => ['required', 'integer', 'exists:users,id'],
             'reference' => ['nullable', 'string', 'max:255'],
             'narration' => ['nullable', 'string'],
-            'maker_id' => ['required', 'integer', 'exists:users,id'],
             'maker_note' => ['nullable', 'string'],
         ]);
+
+        $authenticatedUserId = $request->user()->id;
 
         $approval = $this->approvalRequestService->createRequest(
             'RETURN_FLOAT',
@@ -69,69 +82,89 @@ class ApprovalController extends Controller
                 'vault_id' => $validated['vault_id'],
                 'teller_id' => $validated['teller_id'],
                 'amount' => $validated['amount'],
-                'performed_by' => $validated['performed_by'],
+
+                // Derived from the authenticated maker.
+                'performed_by' => $authenticatedUserId,
+
                 'reference' => $validated['reference'] ?? null,
                 'narration' => $validated['narration'] ?? null,
             ],
-            $validated['maker_id'],
+            $authenticatedUserId,
             $validated['amount'],
             'NGN',
             $validated['maker_note'] ?? null
         );
 
-        return $this->success($approval, 'Float return request created successfully.', 201);
+        return $this->success(
+            $approval,
+            'Float return request created successfully.',
+            201
+        );
     }
 
+    /**
+     * Retrieve all pending approval requests.
+     */
     public function pending()
     {
-        $requests = ApprovalRequest::where('status', 'PENDING')
+        $requests = ApprovalRequest::query()
+            ->where('status', 'PENDING')
             ->latest()
             ->get();
 
-        return $this->success($requests, 'Pending approval requests retrieved successfully.');
+        return $this->success(
+            $requests,
+            'Pending approval requests retrieved successfully.'
+        );
     }
 
+    /**
+     * Approve a pending maker-checker request.
+     */
     public function approve(Request $request, int $id)
     {
-        try {
-            $validated = $request->validate([
-                'checker_id' => ['required', 'integer', 'exists:users,id'],
-                'checker_note' => ['nullable', 'string'],
-            ]);
+        $validated = $request->validate([
+            'checker_note' => ['nullable', 'string'],
+        ]);
 
-            $approvalRequest = ApprovalRequest::findOrFail($id);
+        $approvalRequest = ApprovalRequest::findOrFail($id);
 
-            $approved = $this->approvalRequestService->approve(
-                $approvalRequest,
-                $validated['checker_id'],
-                $validated['checker_note'] ?? null
-            );
+        $checkerId = $request->user()->id;
 
-            return $this->success($approved, 'Approval request approved successfully.');
-        } catch (Exception $e) {
-            return $this->error($e->getMessage());
-        }
+        $approved = $this->approvalRequestService->approve(
+            $approvalRequest,
+            $checkerId,
+            $validated['checker_note'] ?? null
+        );
+
+        return $this->success(
+            $approved,
+            'Approval request approved successfully.'
+        );
     }
 
+    /**
+     * Reject a pending maker-checker request.
+     */
     public function reject(Request $request, int $id)
     {
-        try {
-            $validated = $request->validate([
-                'checker_id' => ['required', 'integer', 'exists:users,id'],
-                'checker_note' => ['nullable', 'string'],
-            ]);
+        $validated = $request->validate([
+            'checker_note' => ['nullable', 'string'],
+        ]);
 
-            $approvalRequest = ApprovalRequest::findOrFail($id);
+        $approvalRequest = ApprovalRequest::findOrFail($id);
 
-            $rejected = $this->approvalRequestService->reject(
-                $approvalRequest,
-                $validated['checker_id'],
-                $validated['checker_note'] ?? null
-            );
+        $checkerId = $request->user()->id;
 
-            return $this->success($rejected, 'Approval request rejected successfully.');
-        } catch (Exception $e) {
-            return $this->error($e->getMessage());
-        }
+        $rejected = $this->approvalRequestService->reject(
+            $approvalRequest,
+            $checkerId,
+            $validated['checker_note'] ?? null
+        );
+
+        return $this->success(
+            $rejected,
+            'Approval request rejected successfully.'
+        );
     }
 }
