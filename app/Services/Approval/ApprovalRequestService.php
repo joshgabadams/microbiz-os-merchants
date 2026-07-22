@@ -3,17 +3,25 @@
 namespace App\Services\Approval;
 
 use App\Models\ApprovalRequest;
+use App\Models\Teller;
+use App\Models\Vault;
+use App\Services\CashManagement\VaultTellerFloatService;
 use App\Services\Common\TransactionNumberService;
 use Illuminate\Support\Facades\DB;
-use Exception;
+use Illuminate\Validation\ValidationException;
+use RuntimeException;
 
 class ApprovalRequestService
 {
     public function __construct(
-        protected TransactionNumberService $transactionNumberService
+        protected TransactionNumberService $transactionNumberService,
+        protected VaultTellerFloatService $vaultTellerFloatService
     ) {
     }
 
+    /**
+     * Create a new maker-checker approval request.
+     */
     public function createRequest(
         string $requestType,
         array $payload,
@@ -34,84 +42,190 @@ class ApprovalRequestService
         ]);
     }
 
+    /**
+     * Reject a pending approval request.
+     */
     public function reject(
-        ApprovalRequest $request,
+        ApprovalRequest $approvalRequest,
         int $checkerId,
         ?string $checkerNote = null
     ): ApprovalRequest {
-        if ($request->status !== 'PENDING') {
-            throw new Exception('Only pending approval requests can be rejected.');
+        return DB::transaction(function () use (
+            $approvalRequest,
+            $checkerId,
+            $checkerNote
+        ) {
+            $approvalRequest = ApprovalRequest::query()
+                ->lockForUpdate()
+                ->findOrFail($approvalRequest->id);
+
+            $this->ensureRequestIsPending($approvalRequest);
+            $this->ensureMakerAndCheckerAreDifferent(
+                $approvalRequest,
+                $checkerId
+            );
+
+            $approvalRequest->update([
+                'status' => 'REJECTED',
+                'checker_id' => $checkerId,
+                'rejected_at' => now(),
+                'approved_at' => null,
+                'checker_note' => $checkerNote,
+            ]);
+
+            return $approvalRequest->fresh();
+        });
+    }
+
+    /**
+     * Approve and execute a pending approval request.
+     */
+    public function approve(
+        ApprovalRequest $approvalRequest,
+        int $checkerId,
+        ?string $checkerNote = null
+    ): ApprovalRequest {
+        return DB::transaction(function () use (
+            $approvalRequest,
+            $checkerId,
+            $checkerNote
+        ) {
+            $approvalRequest = ApprovalRequest::query()
+                ->lockForUpdate()
+                ->findOrFail($approvalRequest->id);
+
+            $this->ensureRequestIsPending($approvalRequest);
+            $this->ensureMakerAndCheckerAreDifferent(
+                $approvalRequest,
+                $checkerId
+            );
+
+            $payload = $approvalRequest->payload;
+
+            if (!is_array($payload)) {
+                throw new RuntimeException(
+                    'The approval request payload is invalid.'
+                );
+            }
+
+            $result = match ($approvalRequest->request_type) {
+                'ALLOCATE_FLOAT' => $this->executeAllocateFloat($payload),
+                'RETURN_FLOAT' => $this->executeReturnFloat($payload),
+
+                default => throw new RuntimeException(
+                    "Unsupported approval request type: {$approvalRequest->request_type}."
+                ),
+            };
+
+            $executedTransaction = $result['vault_transaction']
+                ?? $result['teller_transaction']
+                ?? null;
+
+            $approvalRequest->update([
+                'status' => 'APPROVED',
+                'checker_id' => $checkerId,
+                'approved_at' => now(),
+                'rejected_at' => null,
+                'checker_note' => $checkerNote,
+                'executed_transaction_type' => $executedTransaction
+                    ? get_class($executedTransaction)
+                    : null,
+                'executed_transaction_id' => $executedTransaction?->id,
+            ]);
+
+            return $approvalRequest->fresh();
+        });
+    }
+
+    /**
+     * Execute an approved vault-to-teller float allocation.
+     */
+    protected function executeAllocateFloat(array $payload): array
+    {
+        $this->validateFloatPayload($payload);
+
+        return $this->vaultTellerFloatService->allocateFloat(
+            Vault::findOrFail($payload['vault_id']),
+            Teller::findOrFail($payload['teller_id']),
+            (float) $payload['amount'],
+            (int) $payload['performed_by'],
+            $payload['reference'] ?? null,
+            $payload['narration'] ?? null
+        );
+    }
+
+    /**
+     * Execute an approved teller-to-vault float return.
+     */
+    protected function executeReturnFloat(array $payload): array
+    {
+        $this->validateFloatPayload($payload);
+
+        return $this->vaultTellerFloatService->returnFloat(
+            Vault::findOrFail($payload['vault_id']),
+            Teller::findOrFail($payload['teller_id']),
+            (float) $payload['amount'],
+            (int) $payload['performed_by'],
+            $payload['reference'] ?? null,
+            $payload['narration'] ?? null
+        );
+    }
+
+    /**
+     * Ensure the request has not already been processed.
+     */
+    protected function ensureRequestIsPending(
+        ApprovalRequest $approvalRequest
+    ): void {
+        if ($approvalRequest->status !== 'PENDING') {
+            throw ValidationException::withMessages([
+                'status' => [
+                    'Only pending approval requests can be processed.',
+                ],
+            ]);
+        }
+    }
+
+    /**
+     * Enforce maker-checker separation.
+     */
+    protected function ensureMakerAndCheckerAreDifferent(
+        ApprovalRequest $approvalRequest,
+        int $checkerId
+    ): void {
+        if ((int) $approvalRequest->maker_id === $checkerId) {
+            throw ValidationException::withMessages([
+                'checker' => [
+                    'The maker cannot approve or reject their own request.',
+                ],
+            ]);
+        }
+    }
+
+    /**
+     * Validate the stored float transaction payload.
+     */
+    protected function validateFloatPayload(array $payload): void
+    {
+        $requiredFields = [
+            'vault_id',
+            'teller_id',
+            'amount',
+            'performed_by',
+        ];
+
+        foreach ($requiredFields as $field) {
+            if (!array_key_exists($field, $payload)) {
+                throw new RuntimeException(
+                    "The approval payload is missing the {$field} field."
+                );
+            }
         }
 
-        $request->update([
-            'status' => 'REJECTED',
-            'checker_id' => $checkerId,
-            'rejected_at' => now(),
-            'checker_note' => $checkerNote,
-        ]);
-
-        return $request->fresh();
+        if ((float) $payload['amount'] <= 0) {
+            throw new RuntimeException(
+                'The approval payload contains an invalid amount.'
+            );
+        }
     }
-
-    public function approve(
-    ApprovalRequest $request,
-    int $checkerId,
-    ?string $checkerNote = null
-): ApprovalRequest {
-    if ($request->status !== 'PENDING') {
-        throw new Exception('Only pending approval requests can be approved.');
-    }
-
-    if ($request->maker_id === $checkerId) {
-        throw new Exception('Maker cannot approve own request.');
-    }
-
-    return DB::transaction(function () use (
-        $request,
-        $checkerId,
-        $checkerNote
-    ) {
-        $payload = $request->payload;
-
-        $result = match ($request->request_type) {
-            'ALLOCATE_FLOAT' => app(\App\Services\CashManagement\VaultTellerFloatService::class)
-                ->allocateFloat(
-                    \App\Models\Vault::findOrFail($payload['vault_id']),
-                    \App\Models\Teller::findOrFail($payload['teller_id']),
-                    (float) $payload['amount'],
-                    (int) $payload['performed_by'],
-                    $payload['reference'] ?? null,
-                    $payload['narration'] ?? null
-                ),
-
-            'RETURN_FLOAT' => app(\App\Services\CashManagement\VaultTellerFloatService::class)
-                ->returnFloat(
-                    \App\Models\Vault::findOrFail($payload['vault_id']),
-                    \App\Models\Teller::findOrFail($payload['teller_id']),
-                    (float) $payload['amount'],
-                    (int) $payload['performed_by'],
-                    $payload['reference'] ?? null,
-                    $payload['narration'] ?? null
-                ),
-
-            default => throw new Exception('Unsupported approval request type.'),
-        };
-
-        $executedTransaction = $result['vault_transaction']
-            ?? $result['teller_transaction']
-            ?? null;
-
-        $request->update([
-            'status' => 'APPROVED',
-            'checker_id' => $checkerId,
-            'approved_at' => now(),
-            'checker_note' => $checkerNote,
-            'executed_transaction_type' => $executedTransaction ? get_class($executedTransaction) : null,
-            'executed_transaction_id' => $executedTransaction?->id,
-        ]);
-
-        return $request->fresh();
-    });
-}
-
 }
