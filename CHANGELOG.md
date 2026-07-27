@@ -12,6 +12,21 @@ These were fixed directly in the local environment (not committed/pushed) and ve
 - **A 500 crash instead of a clean 401 on any unauthenticated request without an `Accept: application/json` header.** Laravel's default behavior tries to redirect unauthenticated requests to a route named `login`; this app never defined one, so it crashed instead of returning a normal 401. Fixed with one line in `bootstrap/app.php` (`$middleware->redirectGuestsTo(null);`), telling the app to never attempt that redirect — always return a clean JSON 401 instead. This is unrelated to the repo owner's commit; it's a gap in the new auth system he just added.
 - **Two migrations used MySQL-only syntax** (`ALTER TABLE ... MODIFY ... ENUM(...)`), which crashes on SQLite (this project's own documented default local setup) and blocked every migration after it from running — including the table Sanctum needs to store login tokens, meaning **login was completely non-functional** until this was fixed. Guarded both migrations to only run that statement on MySQL, matching a pattern already used elsewhere in the same set of migrations. Also part of the repo owner's new commit, also not something he tested outside his own MySQL setup.
 
+## Security — actor identity can be spoofed in maker-checker/approval flows (found 2026-07-16, partially fixed 2026-07-22)
+
+**In plain terms:** Several endpoints that record "who did this" — approving a float request, confirming a till balance, closing a branch's end-of-day — were trusting whatever user ID the caller *sent in the request*, instead of checking who was actually logged in. That meant any authenticated user could submit someone else's user ID and have the system record that person as the one who approved/balanced/closed something, even though they never made the call. This defeats the entire point of maker-checker separation (two different people are supposed to be involved) and is a financial-integrity risk, not just a bug.
+
+**Status — partially fixed by the 2026-07-22 pull from main:**
+- **Fixed:** `ApprovalController`/`ApprovalRequestService` (float allocate/return requests, approve, reject) — `maker_id`, `checker_id`, and `performed_by` are now all correctly derived from `$request->user()->id` (the authenticated session), never accepted as request fields. Verified directly in the current code.
+- **Still open:** three other controllers accept the exact same kind of client-supplied identity field and were not touched by this pull:
+  - `app/Http/Controllers/Api/CustomerCashController.php` — `performed_by` (lines 29, 59)
+  - `app/Http/Controllers/Api/BalancingController.php` — `balanced_by` (lines 31, 58)
+  - `app/Http/Controllers/Api/BranchEodController.php` — `closed_by` (line 26)
+
+**Where (still open):** the three files above — each validates the actor ID as `'required|integer|exists:users,id'` from the request body instead of pulling it from the session.
+
+**Fix (still needed):** apply the same pattern already used correctly in `ApprovalController` and in `TellerController::open()`/`close()` — replace the client-supplied field with `$request->user()->id` in all three remaining controllers.
+
 ## ⚠ Important caveat — the GL Journals "fix" doesn't actually apply to an existing database
 
 The repo owner's commit edited `database/migrations/2026_06_28_205601_create_gl_journals_table.php` **directly**, adding the missing columns to it, instead of writing a new migration. That only works for someone setting up the database completely from scratch. For any database that had already run this migration before the pull (including ours), Laravel sees the filename is already recorded as "done" and skips it — so the file now looks correct, but the actual table in the database is still just `id`/`created_at`/`updated_at`, and GL posting is **still broken** in practice. Bug #1 below is still open as a result — see that entry for what fixing it properly (a new migration, not an edit) would look like. Reconciliation's migration was not touched at all and remains fully broken too.
