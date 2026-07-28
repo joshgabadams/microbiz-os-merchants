@@ -2,6 +2,7 @@
 
 namespace App\Services\Accounting;
 
+use App\Events\FinancialTransactionPosted;
 use App\Models\CashLedger;
 use App\Models\GlJournal;
 use Exception;
@@ -105,6 +106,8 @@ class GlPostingService
         $ledger->update([
             'status' => 'APPROVED'
         ]);
+
+        event(new FinancialTransactionPosted($ledger));
 
         return true;
     }

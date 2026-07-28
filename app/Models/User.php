@@ -30,4 +30,31 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
+    // ----- RBAC -----
+
+    public function roles()
+    {
+        return $this->belongsToMany(Role::class, 'role_user')
+            ->withPivot(['assigned_at', 'assigned_by']);
+    }
+
+    public function hasRole(string $roleName): bool
+    {
+        return $this->roles->contains('name', $roleName);
+    }
+
+    public function hasAnyRole(array $roleNames): bool
+    {
+        return $this->roles->pluck('name')->intersect($roleNames)->isNotEmpty();
+    }
+
+    public function hasPermission(string $permissionName): bool
+    {
+        return $this->roles
+            ->loadMissing('permissions')
+            ->flatMap(fn (Role $role) => $role->permissions->pluck('name'))
+            ->unique()
+            ->contains($permissionName);
+    }
 }
