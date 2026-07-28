@@ -73,7 +73,7 @@ class RbacSeeder extends Seeder
 
             $this->command->info("Attached 'admin' role to existing user: {$firstUser->email}");
         } else {
-            $this->command->warn('No existing user found \u2014 run this after your user seeder, or create a user and re-run.');
+            $this->command->warn('No existing user found -- run this after your user seeder, or create a user and re-run.');
         }
     }
 }
