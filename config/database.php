@@ -44,6 +44,22 @@ return [
             'transaction_mode' => 'DEFERRED',
         ],
 
+        'mpay' => [
+            'driver' => env('MPAY_DB_CONNECTION', 'sqlite'),
+            'url' => env('MPAY_DB_URL'),
+            'host' => env('MPAY_DB_HOST', '127.0.0.1'),
+            'port' => env('MPAY_DB_PORT'),
+            'database' => env('MPAY_DB_DATABASE', database_path('mpay.sqlite')),
+            'username' => env('MPAY_DB_USERNAME'),
+            'password' => env('MPAY_DB_PASSWORD'),
+            'prefix' => '',
+            'foreign_key_constraints' => env('MPAY_DB_FOREIGN_KEYS', true),
+            'busy_timeout' => null,
+            'journal_mode' => null,
+            'synchronous' => null,
+            'transaction_mode' => 'DEFERRED',
+        ],
+
         'mysql' => [
             'driver' => 'mysql',
             'url' => env('DB_URL'),
