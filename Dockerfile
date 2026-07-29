@@ -10,7 +10,7 @@ FROM php:8.3-cli
 
 RUN apt-get update && apt-get install -y \
         git unzip zip \
-        libzip-dev libpq-dev libsqlite3-dev \
+        libzip-dev libpq-dev libsqlite3-dev libonig-dev \
     && docker-php-ext-install pdo pdo_mysql pdo_pgsql pdo_sqlite mbstring bcmath zip \
     && rm -rf /var/lib/apt/lists/*
 
