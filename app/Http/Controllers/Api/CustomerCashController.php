@@ -26,7 +26,6 @@ class CustomerCashController extends Controller
                 'teller_id' => ['required', 'integer', 'exists:tellers,id'],
                 'customer_account_id' => ['required', 'integer', 'exists:customer_accounts,id'],
                 'amount' => ['required', 'numeric', 'min:1'],
-                'performed_by' => ['required', 'integer', 'exists:users,id'],
                 'reference' => ['nullable', 'string', 'max:255'],
                 'narration' => ['nullable', 'string'],
             ]);
@@ -38,7 +37,7 @@ class CustomerCashController extends Controller
                 $teller,
                 $account,
                 $validated['amount'],
-                $validated['performed_by'],
+                $request->user()->id,
                 $validated['reference'] ?? null,
                 $validated['narration'] ?? null
             );
@@ -56,7 +55,6 @@ class CustomerCashController extends Controller
                 'teller_id' => ['required', 'integer', 'exists:tellers,id'],
                 'customer_account_id' => ['required', 'integer', 'exists:customer_accounts,id'],
                 'amount' => ['required', 'numeric', 'min:1'],
-                'performed_by' => ['required', 'integer', 'exists:users,id'],
                 'reference' => ['nullable', 'string', 'max:255'],
                 'narration' => ['nullable', 'string'],
             ]);
@@ -68,7 +66,7 @@ class CustomerCashController extends Controller
                 $teller,
                 $account,
                 $validated['amount'],
-                $validated['performed_by'],
+                $request->user()->id,
                 $validated['reference'] ?? null,
                 $validated['narration'] ?? null
             );
