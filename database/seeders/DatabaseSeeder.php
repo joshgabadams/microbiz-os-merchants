@@ -23,5 +23,6 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $this->call(RbacSeeder::class);
+        $this->call(PaymentsRbacSeeder::class);
     }
 }

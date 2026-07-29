@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\ApprovalController;
 use App\Http\Controllers\Api\CustomerCashController;
 use App\Http\Controllers\Api\BalancingController;
 use App\Http\Controllers\Api\BranchEodController;
+use App\Http\Controllers\Api\MerchantController;
 use App\Http\Controllers\Api\AuthController;
 
 Route::prefix('v1')->group(function () {
@@ -43,5 +44,17 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/vault/balance', [BalancingController::class, 'vaultBalance']);
 
         Route::post('/branch/eod', [BranchEodController::class, 'close']);
+
+        Route::get('/merchants', [MerchantController::class, 'index']);
+        Route::get('/merchants/{merchant}', [MerchantController::class, 'show']);
+
+        Route::post('/merchants/onboard', [MerchantController::class, 'onboard'])
+            ->middleware('permission:merchants.onboard');
+
+        Route::post('/merchants/collect/qr', [MerchantController::class, 'collectQr'])
+            ->middleware('permission:payments.process');
+
+        Route::post('/merchants/collect/pos', [MerchantController::class, 'collectPos'])
+            ->middleware('permission:payments.process');
     });
 });
