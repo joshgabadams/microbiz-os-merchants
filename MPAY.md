@@ -113,3 +113,50 @@ This module is being built against the M-Pay Backend Build Guide (shared separat
 sits underneath the CBN agent-banking/Peak Empowerment structure discussed alongside it — Peak operates as
 a distribution/support layer, never touching balances or ledgers directly, which is exactly the same
 isolation principle this module enforces in code.
+
+## 7. Known architectural divergence — a Merchant module already exists on `main`
+
+As of 2026-07-29, `main` has its own payment-collection feature (`app/Models/Merchant.php`,
+`MerchantBalance.php`, `MerchantTransaction.php`, `app/Services/Payments/MerchantPaymentService.php`,
+migrations for `merchants`/`merchant_balances`/`merchant_transactions`), introduced in a commit titled
+"changes for bug fixes, and m-pay merger." This was built independently of the module described in this
+file, and the two are **not the same thing** — but they represent a real fork in direction that needs a
+decision, not silent parallel development.
+
+**What exists on `main`, factually:**
+- Lives entirely in the *main* database — `merchants`/`merchant_balances`/`merchant_transactions` have real
+  foreign keys straight into `branches`, `users`, and `CashLedger`. It's built as a direct extension of
+  FinCore, not an isolated payments layer.
+- Amounts are `decimal(24,2)` — actual decimals, not integer minor units. This violates the Build Guide's
+  own money rule (the same guide this feature's commit message references).
+- `MerchantPaymentService::collect()` writes to `CashLedger` and calls
+  `GlPostingService::postFromCashLedger()` **synchronously**, in the same request that creates the
+  transaction.
+- No idempotency handling — no replay guard against a duplicate/retried request.
+
+**Immediate issue:** `collect()`'s synchronous GL post means every merchant collection attempt hits the
+*exact* `gl_journals` schema bug already tracked as bug #1 in `CHANGELOG.md`. This feature is not
+functional right now, for the same root cause as everything else that touches GL posting on this
+database. Fixing that bug fixes this too — it isn't a separate problem to solve twice.
+
+**Long-term risk if this isn't reconciled:**
+1. **Two incompatible philosophies for handling money in the same codebase.** This module treats FinCore
+   integration as something to reach via an interface (`FineractGateway`), keep isolated, and validate
+   before trusting. The Merchant module treats FinCore's ledger as directly writable from application code,
+   synchronously, with no isolation boundary. A developer picking up either one as "the pattern to follow"
+   for a new feature will build something incompatible with whichever pattern the other one used.
+2. **Split financial truth.** If merchant collections post to the real GL/CashLedger but M-Pay wallet
+   transactions (once real FinCore integration exists) post through a different path, reconciling "what
+   does the ledger actually say happened" requires checking two disconnected systems instead of one —
+   directly undermining the "FinCore as single source of truth" principle both the Build Roadmap and the
+   M-Pay Build Guide state explicitly.
+3. **Precedent for duplicated effort.** This is structurally the same situation as the `till_transactions`
+   vs. `teller_transactions` duplication found earlier in this repo's bug audit (`CHANGELOG.md` #6) — two
+   systems independently solving the same problem, one of which will eventually become dead code once the
+   team picks a direction. The longer both are built out in parallel, the more expensive that eventual
+   consolidation gets.
+
+**Not an urgent blocker today** — moving the app onto a shared server (so everyone develops against the
+same environment and can actually see each other's work as it lands) will surface this kind of overlap
+faster in the future, which helps, but it doesn't substitute for the two builders agreeing on one direction.
+That conversation is still owed, just not blocking anything immediate.
