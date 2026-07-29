@@ -19,7 +19,9 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 WORKDIR /var/www
 
 COPY composer.json composer.lock ./
-RUN composer install --no-dev --optimize-autoloader --no-scripts --no-interaction
+# Includes dev dependencies (e.g. fakerphp/faker) since this staging image is
+# meant to be seeded with test data via php artisan db:seed.
+RUN composer install --optimize-autoloader --no-scripts --no-interaction
 
 COPY . .
 COPY --from=assets /app/public/build ./public/build
