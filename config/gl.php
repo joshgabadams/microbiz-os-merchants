@@ -29,6 +29,7 @@ return [
     'AGENCY_FLOAT'          => '400140',
     'TELLER_OVER_SHORT'     => '400150',
     'SUSPENSE_LIABILITY'    => '400160',
+    'MERCHANT_LIABILITY'    => '400170',
 
 /*
 |--------------------------------------------------------------------------

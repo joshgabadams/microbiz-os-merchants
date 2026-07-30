@@ -3,7 +3,7 @@
 namespace App\Listeners;
 
 use App\Events\FinancialTransactionPosted;
-use App\Services\Ledger\GlPostingService;
+use App\Services\Accounting\GlPostingService;
 
 class PostFinancialTransactionToGL
 {
@@ -22,7 +22,10 @@ class PostFinancialTransactionToGL
             ]
         );
 
-        // Next step:
-        // $this->glPostingService->post(...);
+        // Next step: this event only guarantees a "transaction" occurred \u2014
+        // confirm $event->transaction resolves to (or wraps) a CashLedger
+        // before wiring the actual post() call, since GlPostingService
+        // expects a CashLedger specifically:
+        // $this->glPostingService->postFromCashLedger($event->transaction);
     }
 }

@@ -251,6 +251,15 @@ class GlAccountSeeder extends Seeder
                 'manual_entries_allowed' => false,
                 'disabled' => false,
             ],
+            [
+                'fineract_gl_id' => 400170,
+                'gl_code' => '400170',
+                'name' => 'Merchant Settlement Liability',
+                'type' => 'LIABILITY',
+                'usage' => 'MERCHANT_LIABILITY',
+                'manual_entries_allowed' => false,
+                'disabled' => false,
+            ],
 
             /*
             |--------------------------------------------------------------------------
