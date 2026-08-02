@@ -37,8 +37,13 @@ import { Vault } from '../../core/models/api.models';
           <tr>
             <th>Code</th>
             <th>Name</th>
+            <th>Branch</th>
+            <th>GL Account</th>
             <th>Type</th>
             <th>Currency</th>
+            <th>Min / Max Balance</th>
+            <th>Ledger Balance</th>
+            <th>Available Balance</th>
             <th>Active</th>
           </tr>
         </thead>
@@ -47,8 +52,13 @@ import { Vault } from '../../core/models/api.models';
             <tr>
               <td>{{ vault.code }}</td>
               <td>{{ vault.name }}</td>
+              <td>{{ vault.branch?.name ?? ('Branch #' + vault.branch_id) }}</td>
+              <td>{{ vault.glAccount?.name ?? ('GL #' + vault.gl_account_id) }}</td>
               <td>{{ vault.type }}</td>
               <td>{{ vault.currency }}</td>
+              <td>{{ vault.minimum_balance }} / {{ vault.maximum_balance }}</td>
+              <td>{{ vault.balance?.ledger_balance ?? '-' }}</td>
+              <td>{{ vault.balance?.available_balance ?? '-' }}</td>
               <td>{{ vault.active ? 'Yes' : 'No' }}</td>
             </tr>
           }
@@ -70,6 +80,7 @@ import { Vault } from '../../core/models/api.models';
     .create-form label { font-size: 0.85rem; display: flex; flex-direction: column; gap: 0.3rem; }
     .create-form input { padding: 0.4rem; border: 1px solid #d5d9e6; border-radius: 6px; }
     .create-form button { padding: 0.5rem; background: #1e2761; color: white; border: none; border-radius: 6px; }
+    table { font-size: 0.85rem; }
   `],
 })
 export class VaultListComponent implements OnInit {

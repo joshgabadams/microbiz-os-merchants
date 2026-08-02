@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\OfficeSyncController;
+use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\GlAccountSyncController;
 use App\Http\Controllers\Api\VaultController;
 use App\Http\Controllers\Api\TellerController;
@@ -15,6 +16,9 @@ use App\Http\Controllers\Api\AuthController;
 
 Route::prefix('v1')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
+    Route::get('/reports/teller-transactions', [ReportController::class, 'tellerTransactions']);
+Route::get('/reports/vault-transactions', [ReportController::class, 'vaultTransactions']);
+
 });
 
 Route::middleware('auth:sanctum')->group(function () {

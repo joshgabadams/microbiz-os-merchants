@@ -1,3 +1,25 @@
+export interface BranchSummary {
+  id: number;
+  name: string;
+  code: string;
+}
+
+export interface GlAccountSummary {
+  id: number;
+  name: string;
+  gl_code: string;
+  type: string;
+  usage: string;
+}
+
+export interface BalanceSummary {
+  id: number;
+  currency: string;
+  ledger_balance: string;
+  available_balance: string;
+  locked_balance: string;
+}
+
 export interface Vault {
   id: number;
   branch_id: number;
@@ -9,6 +31,9 @@ export interface Vault {
   minimum_balance: string;
   maximum_balance: string;
   active: boolean;
+  branch?: BranchSummary;
+  glAccount?: GlAccountSummary;
+  balance?: BalanceSummary;
 }
 
 export interface TellerModel {
@@ -26,6 +51,10 @@ export interface TellerModel {
   maximum_cash: string;
   active: boolean;
   status: 'OPEN' | 'CLOSED' | 'SUSPENDED';
+  branch?: BranchSummary;
+  vault?: Vault;
+  glAccount?: GlAccountSummary;
+  balance?: BalanceSummary;
 }
 
 export interface ApprovalRequestModel {
