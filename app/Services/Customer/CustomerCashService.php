@@ -2,6 +2,8 @@
 
 namespace App\Services\Customer;
 
+use App\Events\FinancialTransactionCreated;
+use App\Events\FinancialTransactionPosted;
 use App\Models\CashLedger;
 use App\Models\CustomerAccount;
 use App\Models\Teller;
@@ -81,6 +83,8 @@ class CustomerCashService
                 'posted' => false,
             ]);
 
+            event(new FinancialTransactionCreated($tellerTransaction));
+
             $tellerBalance->ledger_balance += $amount;
             $tellerBalance->available_balance += $amount;
             $tellerBalance->last_transaction_id = $tellerTransaction->id;
@@ -111,13 +115,15 @@ class CustomerCashService
             ]);
 
             $tellerTransaction->update([
-    'posted' => true,
-]);
+                'posted' => true,
+            ]);
 
-$cashLedger->update([
-    'status' => 'APPROVED',
-    'approved_by' => $performedBy,
-]);
+            $cashLedger->update([
+                'status' => 'APPROVED',
+                'approved_by' => $performedBy,
+            ]);
+
+            event(new FinancialTransactionPosted($cashLedger));
 
             return [
                 'customer_transaction' => $customerTransaction,
@@ -128,115 +134,118 @@ $cashLedger->update([
     }
 
     public function withdraw(
-    Teller $teller,
-    CustomerAccount $account,
-    float $amount,
-    int $performedBy,
-    ?string $reference = null,
-    ?string $narration = null
-): array {
-    if ($amount <= 0) {
-        throw new Exception('Withdrawal amount must be greater than zero.');
-    }
-
-    return DB::transaction(function () use (
-        $teller,
-        $account,
-        $amount,
-        $performedBy,
-        $reference,
-        $narration
-    ) {
-        if (!$teller->active) {
-            throw new Exception('Teller is inactive.');
+        Teller $teller,
+        CustomerAccount $account,
+        float $amount,
+        int $performedBy,
+        ?string $reference = null,
+        ?string $narration = null
+    ): array {
+        if ($amount <= 0) {
+            throw new Exception('Withdrawal amount must be greater than zero.');
         }
 
-        if ($teller->status !== 'OPEN') {
-            throw new Exception('Teller must be open to process customer withdrawals.');
-        }
-
-        if ($account->status !== 'ACTIVE') {
-            throw new Exception('Customer account is not active.');
-        }
-
-        $tellerBalance = TellerBalance::where('teller_id', $teller->id)
-            ->lockForUpdate()
-            ->first();
-
-        if (!$tellerBalance) {
-            throw new Exception('Teller balance not found.');
-        }
-
-        if ($tellerBalance->available_balance < $amount) {
-            throw new Exception('Insufficient teller cash balance.');
-        }
-
-        $customerTransaction = $this->customerAccountService->withdraw(
+        return DB::transaction(function () use (
+            $teller,
             $account,
             $amount,
             $performedBy,
             $reference,
-            $narration ?? 'Customer cash withdrawal'
-        );
+            $narration
+        ) {
+            if (!$teller->active) {
+                throw new Exception('Teller is inactive.');
+            }
 
-        $tellerTransaction = TellerTransaction::create([
-            'teller_id' => $teller->id,
-            'transaction_no' => app(\App\Services\Common\TransactionNumberService::class)->generate('TLR'),
-            'transaction_type' => 'CUSTOMER_WITHDRAWAL',
-            'amount' => $amount,
-            'currency' => $tellerBalance->currency,
-            'reference' => $reference,
-            'narration' => $narration ?? 'Customer cash withdrawal',
-            'performed_by' => $performedBy,
-            'approved_by' => null,
-            'transaction_date' => now(),
-            'posted' => false,
-        ]);
+            if ($teller->status !== 'OPEN') {
+                throw new Exception('Teller must be open to process customer withdrawals.');
+            }
 
-        $tellerBalance->ledger_balance -= $amount;
-        $tellerBalance->available_balance -= $amount;
-        $tellerBalance->last_transaction_id = $tellerTransaction->id;
-        $tellerBalance->save();
+            if ($account->status !== 'ACTIVE') {
+                throw new Exception('Customer account is not active.');
+            }
 
-        $cashLedger = CashLedger::create([
-            'reference_no'       => $tellerTransaction->transaction_no,
-            'branch_id'          => $teller->branch_id,
-            'vault_id'           => $teller->vault_id,
-            'teller_id'          => $teller->id,
-            'user_id'            => $performedBy,
-            'transaction_type'   => 'CUSTOMER_CASH_WITHDRAWAL',
-            'source_type'        => TellerTransaction::class,
-            'source_id'          => $tellerTransaction->id,
-            'entry_type'         => 'CREDIT',
-            'account_type'       => 'TELLER_CASH',
-            'account_code'       => 'TELLER_CASH',
-            'debit_account_key'  => 'CUSTOMER_WITHDRAWAL_CONTROL',
-            'credit_account_key' => 'TELLER_CASH',
-            'debit'              => 0,
-            'credit'             => $amount,
-            'running_balance'    => $tellerBalance->ledger_balance,
-            'currency'           => $tellerBalance->currency,
-            'narration'          => $narration ?? 'Customer cash withdrawal',
-            'status'             => 'PENDING',
-            'approved_by'        => null,
-            'transaction_date'   => now(),
-        ]);
+            $tellerBalance = TellerBalance::where('teller_id', $teller->id)
+                ->lockForUpdate()
+                ->first();
 
-        $tellerTransaction->update([
-            'posted' => true,
-        ]);
+            if (!$tellerBalance) {
+                throw new Exception('Teller balance not found.');
+            }
 
-        $cashLedger->update([
-            'status' => 'APPROVED',
-            'approved_by' => $performedBy,
-        ]);
+            if ($tellerBalance->available_balance < $amount) {
+                throw new Exception('Insufficient teller cash balance.');
+            }
 
-        return [
-            'customer_transaction' => $customerTransaction,
-            'teller_transaction' => $tellerTransaction->fresh(),
-            'cash_ledger' => $cashLedger->fresh(),
-        ];
-    });
-}
+            $customerTransaction = $this->customerAccountService->withdraw(
+                $account,
+                $amount,
+                $performedBy,
+                $reference,
+                $narration ?? 'Customer cash withdrawal'
+            );
 
+            $tellerTransaction = TellerTransaction::create([
+                'teller_id' => $teller->id,
+                'transaction_no' => app(\App\Services\Common\TransactionNumberService::class)->generate('TLR'),
+                'transaction_type' => 'CUSTOMER_WITHDRAWAL',
+                'amount' => $amount,
+                'currency' => $tellerBalance->currency,
+                'reference' => $reference,
+                'narration' => $narration ?? 'Customer cash withdrawal',
+                'performed_by' => $performedBy,
+                'approved_by' => null,
+                'transaction_date' => now(),
+                'posted' => false,
+            ]);
+
+            event(new FinancialTransactionCreated($tellerTransaction));
+
+            $tellerBalance->ledger_balance -= $amount;
+            $tellerBalance->available_balance -= $amount;
+            $tellerBalance->last_transaction_id = $tellerTransaction->id;
+            $tellerBalance->save();
+
+            $cashLedger = CashLedger::create([
+                'reference_no'       => $tellerTransaction->transaction_no,
+                'branch_id'          => $teller->branch_id,
+                'vault_id'           => $teller->vault_id,
+                'teller_id'          => $teller->id,
+                'user_id'            => $performedBy,
+                'transaction_type'   => 'CUSTOMER_CASH_WITHDRAWAL',
+                'source_type'        => TellerTransaction::class,
+                'source_id'          => $tellerTransaction->id,
+                'entry_type'         => 'CREDIT',
+                'account_type'       => 'TELLER_CASH',
+                'account_code'       => 'TELLER_CASH',
+                'debit_account_key'  => 'CUSTOMER_WITHDRAWAL_CONTROL',
+                'credit_account_key' => 'TELLER_CASH',
+                'debit'              => 0,
+                'credit'             => $amount,
+                'running_balance'    => $tellerBalance->ledger_balance,
+                'currency'           => $tellerBalance->currency,
+                'narration'          => $narration ?? 'Customer cash withdrawal',
+                'status'             => 'PENDING',
+                'approved_by'        => null,
+                'transaction_date'   => now(),
+            ]);
+
+            $tellerTransaction->update([
+                'posted' => true,
+            ]);
+
+            $cashLedger->update([
+                'status' => 'APPROVED',
+                'approved_by' => $performedBy,
+            ]);
+
+            event(new FinancialTransactionPosted($cashLedger));
+
+            return [
+                'customer_transaction' => $customerTransaction,
+                'teller_transaction' => $tellerTransaction->fresh(),
+                'cash_ledger' => $cashLedger->fresh(),
+            ];
+        });
+    }
 }

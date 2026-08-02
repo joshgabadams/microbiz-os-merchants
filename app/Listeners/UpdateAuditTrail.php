@@ -16,19 +16,26 @@ class UpdateAuditTrail
 
     /**
      * Registered explicitly for all three financial events in
-     * AppServiceProvider::boot() (a union-typed handle() like this one
-     * is not picked up by Laravel's listener auto-discovery, so it must
-     * be registered manually rather than relying on the type-hint alone).
+     * AppServiceProvider::boot(). The parameter is deliberately typed as
+     * plain `object`, not a union of the three event classes -- testing
+     * showed Laravel's listener auto-discovery *does* pick up the first
+     * type in a union type-hint and registers it a second time on top of
+     * our manual Event::listen() calls, causing FinancialTransactionCreated
+     * (the first type in the union) to fire this listener twice per event,
+     * while Posted/Reversed correctly fired once. Using `object` here
+     * means auto-discovery can't resolve a single event class from the
+     * signature, so only the explicit registration in AppServiceProvider
+     * applies. The instanceof checks below still work exactly as before.
      */
-    public function handle(
-        FinancialTransactionCreated|FinancialTransactionPosted|FinancialTransactionReversed $event
-    ): void {
+    public function handle(object $event): void
+    {
         $transaction = $event->transaction;
 
         $action = match (true) {
             $event instanceof FinancialTransactionCreated => 'created',
             $event instanceof FinancialTransactionPosted => 'posted',
             $event instanceof FinancialTransactionReversed => 'reversed',
+            default => 'unknown',
         };
 
         if (! is_object($transaction) || ! method_exists($transaction, 'getAttributes')) {
