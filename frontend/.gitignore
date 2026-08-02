@@ -1,0 +1,10 @@
+# Angular
+/node_modules
+/dist
+/.angular/cache
+npm-debug.log
+yarn-error.log
+
+# Editor
+.vscode/
+.idea/

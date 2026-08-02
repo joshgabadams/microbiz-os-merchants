@@ -6,12 +6,13 @@ use App\Models\Vault;
 class VaultService
 {
     public function all()
-    {
-        return Vault::with([
-            'branch',
-            'glAccount'
-        ])->get();
-    }
+{
+    return Vault::with([
+        'branch',
+        'glAccount',
+        'balance'
+    ])->get();
+}
 
     public function create(array $data)
     {
