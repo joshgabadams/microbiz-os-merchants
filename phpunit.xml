@@ -23,8 +23,26 @@
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="BROADCAST_CONNECTION" value="null"/>
         <env name="CACHE_STORE" value="array"/>
-        <env name="DB_CONNECTION" value="sqlite"/>
-        <env name="DB_DATABASE" value=":memory:"/>
+        <!--
+            Tests run against a real MySQL database, not SQLite. Several
+            migrations use raw MySQL specific SQL (ALTER TABLE, MODIFY,
+            ENUM, SET FOREIGN_KEY_CHECKS) that SQLite cannot execute at
+            all, and the original enum lists in the base migrations don't
+            match the values the actual code uses, for example
+            FLOAT_RECEIVED versus the real RECEIVE_FLOAT, so SQLite's own
+            CHECK constraint would reject real data even if the MySQL
+            only ALTER statements were skipped. Rather than retrofit every
+            migration to be cross database safe, tests use a dedicated
+            MySQL database instead.
+
+            Create it once with: mysql -u root -e "CREATE DATABASE IF NOT EXISTS microbiz_os_testing;"
+        -->
+        <env name="DB_CONNECTION" value="mysql"/>
+        <env name="DB_HOST" value="127.0.0.1"/>
+        <env name="DB_PORT" value="3306"/>
+        <env name="DB_DATABASE" value="microbiz_os_testing"/>
+        <env name="DB_USERNAME" value="root"/>
+        <env name="DB_PASSWORD" value=""/>
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
