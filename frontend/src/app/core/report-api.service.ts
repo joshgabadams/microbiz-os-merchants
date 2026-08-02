@@ -29,6 +29,29 @@ export interface CallOverReport {
   transactions: CallOverTransaction[];
 }
 
+export interface LedgerEntry {
+  id: number;
+  reference_no: string;
+  transaction_type: string;
+  narration: string | null;
+  debit: string;
+  credit: string;
+  running_balance: string;
+  status: string;
+  transaction_date: string;
+}
+
+export interface LedgerStatement {
+  teller_id?: number;
+  vault_id?: number;
+  from_date: string;
+  to_date: string;
+  opening_balance: string;
+  closing_balance: string;
+  count: number;
+  entries: LedgerEntry[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class ReportApiService {
   private readonly base = `${environment.apiUrl}/v1/reports`;
@@ -51,6 +74,26 @@ export class ReportApiService {
     to_date: string;
   }): Observable<ApiResponse<CallOverReport>> {
     return this.http.get<ApiResponse<CallOverReport>>(`${this.base}/vault-transactions`, {
+      params: params as unknown as Record<string, string | number>,
+    });
+  }
+
+  tellerLedger(params: {
+    teller_id: number;
+    from_date: string;
+    to_date: string;
+  }): Observable<ApiResponse<LedgerStatement>> {
+    return this.http.get<ApiResponse<LedgerStatement>>(`${this.base}/teller-ledger`, {
+      params: params as unknown as Record<string, string | number>,
+    });
+  }
+
+  vaultLedger(params: {
+    vault_id: number;
+    from_date: string;
+    to_date: string;
+  }): Observable<ApiResponse<LedgerStatement>> {
+    return this.http.get<ApiResponse<LedgerStatement>>(`${this.base}/vault-ledger`, {
       params: params as unknown as Record<string, string | number>,
     });
   }

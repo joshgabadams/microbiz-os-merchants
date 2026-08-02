@@ -84,6 +84,13 @@ export const routes: Routes = [
             (m) => m.CallOverReportComponent
           ),
       },
+      {
+        path: 'ledger-statement',
+        loadComponent: () =>
+          import('./features/ledger-statement/ledger-statement.component').then(
+            (m) => m.LedgerStatementComponent
+          ),
+      },
     ],
   },
   { path: '**', redirectTo: '' },

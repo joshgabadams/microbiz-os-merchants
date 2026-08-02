@@ -3,7 +3,6 @@
 namespace App\Services\Customer;
 
 use App\Events\FinancialTransactionCreated;
-use App\Events\FinancialTransactionPosted;
 use App\Models\CashLedger;
 use App\Models\CustomerAccount;
 use App\Models\Teller;
@@ -119,11 +118,17 @@ class CustomerCashService
             ]);
 
             $cashLedger->update([
-                'status' => 'APPROVED',
                 'approved_by' => $performedBy,
             ]);
 
-            event(new FinancialTransactionPosted($cashLedger));
+            // Real double-entry GL posting: creates the two GlJournal rows (debit
+            // TELLER_CASH, credit CUSTOMER_DEPOSIT_CONTROL) and fires
+            // FinancialTransactionPosted internally. Previously this method just
+            // faked the "posted" state by setting status=APPROVED directly and
+            // firing the event by hand, without ever calling this -- meaning no
+            // GlJournal rows were ever created for customer deposits, and the GL
+            // silently never balanced against real teller cash movement.
+            $this->glPostingService->postFromCashLedger($cashLedger);
 
             return [
                 'customer_transaction' => $customerTransaction,
@@ -235,11 +240,12 @@ class CustomerCashService
             ]);
 
             $cashLedger->update([
-                'status' => 'APPROVED',
                 'approved_by' => $performedBy,
             ]);
 
-            event(new FinancialTransactionPosted($cashLedger));
+            // See the matching comment in deposit() -- this now actually posts
+            // real double-entry GL journal rows instead of faking it.
+            $this->glPostingService->postFromCashLedger($cashLedger);
 
             return [
                 'customer_transaction' => $customerTransaction,

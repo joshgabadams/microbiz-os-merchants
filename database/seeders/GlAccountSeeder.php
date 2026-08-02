@@ -255,6 +255,25 @@ class GlAccountSeeder extends Seeder
                 'disabled' => false,
             ],
 
+            [
+    'fineract_gl_id' => 400180,
+    'gl_code' => '400180',
+    'name' => 'Customer Deposit Control',
+    'type' => 'LIABILITY',
+    'usage' => 'CUSTOMER_DEPOSIT_CONTROL',
+    'manual_entries_allowed' => false,
+    'disabled' => false,
+],
+[
+    'fineract_gl_id' => 400190,
+    'gl_code' => '400190',
+    'name' => 'Customer Withdrawal Control',
+    'type' => 'LIABILITY',
+    'usage' => 'CUSTOMER_WITHDRAWAL_CONTROL',
+    'manual_entries_allowed' => false,
+    'disabled' => false,
+],
+
             /*
             |--------------------------------------------------------------------------
             | EQUITY (5xxxx)

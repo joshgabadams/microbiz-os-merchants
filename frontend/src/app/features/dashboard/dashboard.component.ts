@@ -19,6 +19,7 @@ import { AuthService } from '../../core/auth.service';
           <a routerLink="/balancing" routerLinkActive="active">Balancing</a>
           <a routerLink="/branch-eod" routerLinkActive="active">Branch EOD</a>
           <a routerLink="/call-over-report" routerLinkActive="active">Call-Over Report</a>
+          <a routerLink="/ledger-statement" routerLinkActive="active">Ledger Statement</a>
           <a routerLink="/merchants" routerLinkActive="active">Merchants</a>
           <a routerLink="/wallets" routerLinkActive="active">Wallets</a>
         </nav>
