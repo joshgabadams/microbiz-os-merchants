@@ -2,6 +2,7 @@
 
 namespace App\Services\Customer;
 
+use App\Events\FinancialTransactionCreated;
 use App\Models\CustomerAccount;
 use App\Models\CustomerAccountBalance;
 use App\Models\CustomerAccountTransaction;
@@ -146,7 +147,7 @@ class CustomerAccountService
         ?string $reference,
         ?string $narration
     ): CustomerAccountTransaction {
-        return CustomerAccountTransaction::create([
+         $transaction = CustomerAccountTransaction::create([
             'customer_account_id' => $account->id,
             'transaction_no' => $this->transactionNumberService->generate('CUS'),
             'transaction_type' => $transactionType,
@@ -158,6 +159,10 @@ class CustomerAccountService
             'approved_by' => null,
             'transaction_date' => now(),
             'posted' => false,
-        ])->refresh();
+       ])->refresh();
+
+        event(new FinancialTransactionCreated($transaction));
+
+        return $transaction;
     }
 }
