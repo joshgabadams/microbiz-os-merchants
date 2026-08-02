@@ -18,6 +18,9 @@ Route::prefix('v1')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
     Route::get('/reports/teller-transactions', [ReportController::class, 'tellerTransactions']);
 Route::get('/reports/vault-transactions', [ReportController::class, 'vaultTransactions']);
+Route::get('/reports/teller-ledger', [ReportController::class, 'tellerLedger']);
+Route::get('/reports/vault-ledger', [ReportController::class, 'vaultLedger']);
+
 
 });
 

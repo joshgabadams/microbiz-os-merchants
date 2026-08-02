@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\CashLedger;
 use App\Models\TellerTransaction;
 use App\Models\VaultTransaction;
 use App\Traits\ApiResponse;
@@ -84,6 +85,84 @@ class ReportController extends Controller
                 'transactions' => $transactions,
             ],
             'Vault call-over report generated successfully.'
+        );
+    }
+
+    /**
+     * Running-balance statement for a teller, using CashLedger directly
+     * since it stores debit/credit/running_balance per entry -- unlike
+     * TellerTransaction, which has no balance snapshot at all.
+     */
+    public function tellerLedger(Request $request)
+    {
+        $validated = $request->validate([
+            'teller_id' => ['required', 'integer', 'exists:tellers,id'],
+            'from_date' => ['required', 'date'],
+            'to_date' => ['required', 'date', 'after_or_equal:from_date'],
+        ]);
+
+        $openingEntry = CashLedger::where('teller_id', $validated['teller_id'])
+            ->where('transaction_date', '<', $validated['from_date'].' 00:00:00')
+            ->orderByDesc('transaction_date')
+            ->first();
+
+        $entries = CashLedger::where('teller_id', $validated['teller_id'])
+            ->whereBetween('transaction_date', [
+                $validated['from_date'].' 00:00:00',
+                $validated['to_date'].' 23:59:59',
+            ])
+            ->orderBy('transaction_date')
+            ->get(['id', 'reference_no', 'transaction_type', 'narration', 'debit', 'credit', 'running_balance', 'status', 'transaction_date']);
+
+        return $this->success(
+            [
+                'teller_id' => $validated['teller_id'],
+                'from_date' => $validated['from_date'],
+                'to_date' => $validated['to_date'],
+                'opening_balance' => $openingEntry->running_balance ?? 0,
+                'closing_balance' => optional($entries->last())->running_balance ?? ($openingEntry->running_balance ?? 0),
+                'count' => $entries->count(),
+                'entries' => $entries,
+            ],
+            'Teller ledger statement generated successfully.'
+        );
+    }
+
+    /**
+     * Running-balance statement for a vault, same approach as tellerLedger().
+     */
+    public function vaultLedger(Request $request)
+    {
+        $validated = $request->validate([
+            'vault_id' => ['required', 'integer', 'exists:vaults,id'],
+            'from_date' => ['required', 'date'],
+            'to_date' => ['required', 'date', 'after_or_equal:from_date'],
+        ]);
+
+        $openingEntry = CashLedger::where('vault_id', $validated['vault_id'])
+            ->where('transaction_date', '<', $validated['from_date'].' 00:00:00')
+            ->orderByDesc('transaction_date')
+            ->first();
+
+        $entries = CashLedger::where('vault_id', $validated['vault_id'])
+            ->whereBetween('transaction_date', [
+                $validated['from_date'].' 00:00:00',
+                $validated['to_date'].' 23:59:59',
+            ])
+            ->orderBy('transaction_date')
+            ->get(['id', 'reference_no', 'transaction_type', 'narration', 'debit', 'credit', 'running_balance', 'status', 'transaction_date']);
+
+        return $this->success(
+            [
+                'vault_id' => $validated['vault_id'],
+                'from_date' => $validated['from_date'],
+                'to_date' => $validated['to_date'],
+                'opening_balance' => $openingEntry->running_balance ?? 0,
+                'closing_balance' => optional($entries->last())->running_balance ?? ($openingEntry->running_balance ?? 0),
+                'count' => $entries->count(),
+                'entries' => $entries,
+            ],
+            'Vault ledger statement generated successfully.'
         );
     }
 }

@@ -77,6 +77,13 @@ export const routes: Routes = [
             (m) => m.BranchEodComponent
           ),
       },
+      {
+        path: 'call-over-report',
+        loadComponent: () =>
+          import('./features/call-over-report/call-over-report.component').then(
+            (m) => m.CallOverReportComponent
+          ),
+      },
     ],
   },
   { path: '**', redirectTo: '' },
