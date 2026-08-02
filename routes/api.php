@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\CustomerCashController;
 use App\Http\Controllers\Api\BalancingController;
 use App\Http\Controllers\Api\BranchEodController;
 use App\Http\Controllers\Api\MerchantController;
+use App\Http\Controllers\Api\WalletController;
 use App\Http\Controllers\Api\AuthController;
 
 Route::prefix('v1')->group(function () {
@@ -59,5 +60,17 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::post('/merchants/settle', [MerchantController::class, 'settle'])
             ->middleware('permission:merchants.settle');
+
+        Route::get('/wallets', [WalletController::class, 'index']);
+        Route::get('/wallets/{wallet}', [WalletController::class, 'show']);
+
+        Route::post('/wallets/onboard', [WalletController::class, 'onboard'])
+            ->middleware('permission:wallets.manage');
+
+        Route::post('/wallets/topup', [WalletController::class, 'topUp'])
+            ->middleware('permission:wallets.manage');
+
+        Route::post('/wallets/transfer', [WalletController::class, 'transfer'])
+            ->middleware('permission:wallets.manage');
     });
 });
