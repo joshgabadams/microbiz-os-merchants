@@ -13,6 +13,7 @@ class Merchant extends Model
         'phone',
         'email',
         'branch_id',
+        'customer_account_id',
         'status',
         'onboarded_by',
     ];
@@ -26,6 +27,11 @@ class Merchant extends Model
     public function branch()
     {
         return $this->belongsTo(Branch::class);
+    }
+
+    public function customerAccount()
+    {
+        return $this->belongsTo(CustomerAccount::class);
     }
 
     public function onboardedBy()

@@ -56,5 +56,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::post('/merchants/collect/pos', [MerchantController::class, 'collectPos'])
             ->middleware('permission:payments.process');
+
+        Route::post('/merchants/settle', [MerchantController::class, 'settle'])
+            ->middleware('permission:merchants.settle');
     });
 });
