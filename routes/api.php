@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\BranchEodController;
 use App\Http\Controllers\Api\MerchantController;
 use App\Http\Controllers\Api\WalletController;
 use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\Api\MfaController;
 use App\Http\Controllers\Api\AuthController;
 
 Route::prefix('v1')->group(function () {
@@ -24,9 +25,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/sync/glaccounts', [GlAccountSyncController::class, 'sync'])
         ->middleware('permission:gl.sync');
 
-    // Read actions stay open to any authenticated user, matching the
-    // existing pattern for Merchants/Wallets. Only mutating actions
-    // (create/update/delete) require vaults.manage / tellers.manage.
     Route::apiResource('vaults', VaultController::class)->only(['index', 'show']);
     Route::apiResource('vaults', VaultController::class)
         ->only(['store', 'update', 'destroy'])
@@ -40,6 +38,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('v1')->group(function () {
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::get('/me', [AuthController::class, 'me']);
+
+        Route::post('/mfa/setup', [MfaController::class, 'setup']);
+        Route::post('/mfa/enable', [MfaController::class, 'enable']);
+        Route::post('/mfa/disable', [MfaController::class, 'disable']);
 
         Route::post('/teller/open', [TellerController::class, 'open'])
             ->middleware('permission:tellers.manage');
