@@ -30,6 +30,8 @@ return [
     'TELLER_OVER_SHORT'     => '400150',
     'SUSPENSE_LIABILITY'    => '400160',
     'MERCHANT_LIABILITY'    => '400170',
+    'CUSTOMER_DEPOSIT_CONTROL'    => '400180',
+'CUSTOMER_WITHDRAWAL_CONTROL' => '400190',
 
 /*
 |--------------------------------------------------------------------------

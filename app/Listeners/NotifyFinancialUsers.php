@@ -17,16 +17,21 @@ class NotifyFinancialUsers
 
     /**
      * Registered explicitly for all three financial events in
-     * AppServiceProvider::boot() (see UpdateAuditTrail for why).
+     * AppServiceProvider::boot(). See UpdateAuditTrail for why the
+     * parameter is plain `object` rather than a union of event classes --
+     * union type-hints get partially auto-discovered by Laravel on top of
+     * our manual registration, causing double-firing for the first type
+     * in the union. This listener only acts on FinancialTransactionReversed
+     * (not the first type), so the bug never caused a visible symptom
+     * here, but the same fix keeps both listeners consistent.
      *
      * Starts conservative: only notifies on reversals, since those are
      * the exception case staff most need to know about immediately.
      * Extend the match() below once deposit/withdrawal/float notification
      * templates and recipient rules are defined.
      */
-    public function handle(
-        FinancialTransactionCreated|FinancialTransactionPosted|FinancialTransactionReversed $event
-    ): void {
+    public function handle(object $event): void
+    {
         if (! $event instanceof FinancialTransactionReversed) {
             return;
         }

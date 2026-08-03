@@ -4,17 +4,11 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use App\Models\GlAccount;
-use Illuminate\Support\Facades\DB;
 
 class GlAccountSeeder extends Seeder
 {
     public function run(): void
     {
-          DB::statement('SET FOREIGN_KEY_CHECKS=0');
-
-    GlAccount::truncate();
-
-    DB::statement('SET FOREIGN_KEY_CHECKS=1');
         $accounts = [
 
             /*
@@ -260,6 +254,25 @@ class GlAccountSeeder extends Seeder
                 'manual_entries_allowed' => false,
                 'disabled' => false,
             ],
+
+            [
+    'fineract_gl_id' => 400180,
+    'gl_code' => '400180',
+    'name' => 'Customer Deposit Control',
+    'type' => 'LIABILITY',
+    'usage' => 'CUSTOMER_DEPOSIT_CONTROL',
+    'manual_entries_allowed' => false,
+    'disabled' => false,
+],
+[
+    'fineract_gl_id' => 400190,
+    'gl_code' => '400190',
+    'name' => 'Customer Withdrawal Control',
+    'type' => 'LIABILITY',
+    'usage' => 'CUSTOMER_WITHDRAWAL_CONTROL',
+    'manual_entries_allowed' => false,
+    'disabled' => false,
+],
 
             /*
             |--------------------------------------------------------------------------

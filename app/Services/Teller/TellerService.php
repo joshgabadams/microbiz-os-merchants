@@ -12,7 +12,7 @@ class TellerService
     }
 
     public function all()
-    {
-        return Teller::latest()->get();
-    }
+{
+    return Teller::with(['branch', 'vault', 'glAccount', 'balance'])->latest()->get();
+}
 }

@@ -1,8 +1,6 @@
 #!/bin/sh
 set -e
 
-# If a command was passed to `docker run` (e.g. `php artisan key:generate --show`),
-# run exactly that instead of the default startup sequence below.
 if [ "$#" -gt 0 ]; then
     exec "$@"
 fi
@@ -12,6 +10,12 @@ php artisan route:clear
 
 if [ "$RUN_MIGRATIONS" = "true" ]; then
     php artisan migrate --force
+fi
+
+if [ "$RUN_SEEDERS" = "true" ]; then
+    php artisan db:seed --class="Database\Seeders\RbacSeeder" --force
+    php artisan db:seed --class="Database\Seeders\PaymentsRbacSeeder" --force
+    php artisan db:seed --class="Database\Seeders\GlAccountSeeder" --force
 fi
 
 exec php artisan serve --host=0.0.0.0 --port="${PORT:-10000}"

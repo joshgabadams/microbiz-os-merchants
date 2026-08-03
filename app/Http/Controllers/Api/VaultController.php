@@ -28,9 +28,10 @@ class VaultController extends Controller
     public function show(Vault $vault)
     {
         return $vault->load([
-            'branch',
-            'glAccount'
-        ]);
+    'branch',
+    'glAccount',
+    'balance'
+]);
     }
 
     public function update(

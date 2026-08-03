@@ -6,9 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Merchant\CollectPosPaymentRequest;
 use App\Http\Requests\Merchant\CollectQrPaymentRequest;
 use App\Http\Requests\Merchant\OnboardMerchantRequest;
+use App\Http\Requests\Merchant\SettleMerchantRequest;
 use App\Models\Merchant;
 use App\Services\Payments\MerchantOnboardingService;
 use App\Services\Payments\MerchantPaymentService;
+use App\Services\Payments\MerchantSettlementService;
 use App\Traits\ApiResponse;
 use Exception;
 
@@ -18,7 +20,8 @@ class MerchantController extends Controller
 
     public function __construct(
         protected MerchantOnboardingService $onboardingService,
-        protected MerchantPaymentService $paymentService
+        protected MerchantPaymentService $paymentService,
+        protected MerchantSettlementService $settlementService
     ) {
     }
 
@@ -96,6 +99,29 @@ class MerchantController extends Controller
             return $this->success(
                 $result,
                 'POS payment collected successfully.'
+            );
+        } catch (Exception $e) {
+            return $this->error($e->getMessage());
+        }
+    }
+
+    public function settle(SettleMerchantRequest $request)
+    {
+        try {
+            $merchant = Merchant::findOrFail($request->merchant_id);
+
+            $result = $this->settlementService->settle(
+                $merchant,
+                (float) $request->amount,
+                (int) $request->branch_id,
+                $request->user()->id,
+                $request->reference,
+                $request->narration
+            );
+
+            return $this->success(
+                $result,
+                'Merchant settled successfully.'
             );
         } catch (Exception $e) {
             return $this->error($e->getMessage());
