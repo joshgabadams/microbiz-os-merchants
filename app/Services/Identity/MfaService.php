@@ -47,22 +47,30 @@ class MfaService
             return false;
         }
 
-        $user->update([
+        // forceFill(), not update() -- User's #[Fillable(['name', 'email',
+        // 'password'])] attribute doesn't include the mfa_* fields, so a
+        // plain update() call is silently discarded by mass-assignment
+        // protection with no error at all (confirmed: the API returned
+        // "success" while nothing actually saved). forceFill() is also
+        // the more correct choice here regardless -- these fields should
+        // never be mass-assignable via arbitrary/generic input, only
+        // settable through this specific, controlled service.
+        $user->forceFill([
             'mfa_enabled' => true,
             'mfa_secret' => encrypt($secret),
             'mfa_recovery_codes' => $this->generateRecoveryCodes(),
-        ]);
+        ])->save();
 
         return true;
     }
 
     public function disable(User $user): void
     {
-        $user->update([
+        $user->forceFill([
             'mfa_enabled' => false,
             'mfa_secret' => null,
             'mfa_recovery_codes' => null,
-        ]);
+        ])->save();
     }
 
     public function verifyCode(string $secret, string $code): bool
@@ -99,6 +107,6 @@ class MfaService
     protected function consumeRecoveryCode(User $user, string $code): void
     {
         $remaining = array_values(array_diff($user->mfa_recovery_codes ?? [], [$code]));
-        $user->update(['mfa_recovery_codes' => $remaining]);
+        $user->forceFill(['mfa_recovery_codes' => $remaining])->save();
     }
 }
