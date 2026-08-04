@@ -26,6 +26,8 @@ class BookFixedDepositRequest extends FormRequest
             'pre_liquidation_penalty_fee' => ['nullable', 'numeric', 'min:0'],
             'tenor_days' => ['required', 'integer', 'min:1'],
             'branch_id' => ['required', 'integer', 'exists:branches,id'],
+            'start_date' => ['nullable', 'date', 'before_or_equal:today'],
+            'backdate_reason' => ['nullable', 'string', 'max:1000'],
             'narration' => ['nullable', 'string'],
         ];
     }

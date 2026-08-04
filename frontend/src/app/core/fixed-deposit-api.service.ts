@@ -53,6 +53,8 @@ export class FixedDepositApiService {
     tenor_days: number;
     branch_id: number;
     narration?: string;
+    start_date?: string;
+    backdate_reason?: string;
   }): Observable<ApiResponse<FixedDeposit>> {
     return this.http.post<ApiResponse<FixedDeposit>>(`${this.base}/book`, payload);
   }

@@ -24,6 +24,7 @@ class RbacSeeder extends Seeder
             'offices.sync' => 'sync',
             'fixed_deposits.book' => 'fixed-deposit',
             'fixed_deposits.liquidate' => 'fixed-deposit',
+            'fixed_deposits.backdate' => 'fixed-deposit',
         ];
 
         foreach ($permissions as $name => $module) {
@@ -43,6 +44,10 @@ class RbacSeeder extends Seeder
             'deposit-officer' => [
                 'label' => 'Deposit Officer',
                 'permissions' => ['fixed_deposits.book', 'fixed_deposits.liquidate'],
+            ],
+            'deposit-supervisor' => [
+                'label' => 'Deposit Supervisor',
+                'permissions' => ['fixed_deposits.book', 'fixed_deposits.liquidate', 'fixed_deposits.backdate'],
             ],
             'vault-officer' => [
                 'label' => 'Vault Officer',

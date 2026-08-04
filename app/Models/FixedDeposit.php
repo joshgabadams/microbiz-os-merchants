@@ -17,6 +17,7 @@ class FixedDeposit extends Model
         'pre_liquidation_penalty_fee',
         'tenor_days',
         'start_date',
+        'backdate_reason',
         'maturity_date',
         'status',
         'booked_by',

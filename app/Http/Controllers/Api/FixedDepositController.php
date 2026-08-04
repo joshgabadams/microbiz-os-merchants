@@ -9,6 +9,7 @@ use App\Models\CustomerAccount;
 use App\Models\FixedDeposit;
 use App\Services\Deposits\FixedDepositService;
 use App\Traits\ApiResponse;
+use Carbon\Carbon;
 use Exception;
 
 class FixedDepositController extends Controller
@@ -39,6 +40,12 @@ class FixedDepositController extends Controller
     public function book(BookFixedDepositRequest $request)
     {
         try {
+            if ($request->filled('start_date') && Carbon::parse($request->start_date)->lt(Carbon::today())) {
+                if (! $request->user()->hasPermission('fixed_deposits.backdate')) {
+                    return $this->error('Missing required permission: fixed_deposits.backdate.', 403);
+                }
+            }
+
             $sourceAccount = CustomerAccount::findOrFail($request->customer_account_id);
             $settlementAccount = CustomerAccount::findOrFail($request->settlement_account_id);
 
@@ -52,7 +59,9 @@ class FixedDepositController extends Controller
                 (int) $request->tenor_days,
                 (int) $request->branch_id,
                 $request->user()->id,
-                $request->narration
+                $request->narration,
+                $request->filled('start_date') ? Carbon::parse($request->start_date) : null,
+                $request->backdate_reason
             );
 
             return $this->success($fixedDeposit, 'Fixed deposit booked successfully.', 201);

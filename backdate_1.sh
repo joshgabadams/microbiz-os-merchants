@@ -1,3 +1,130 @@
+#!/bin/sh
+set -e
+cd /Users/user/microbiz/microbiz-os
+
+cat > database/migrations/2026_08_04_000004_add_backdate_reason_to_fixed_deposits.php << 'MBOS_EOF'
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('fixed_deposits', function (Blueprint $table) {
+            $table->text('backdate_reason')->nullable()->after('start_date');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('fixed_deposits', function (Blueprint $table) {
+            $table->dropColumn('backdate_reason');
+        });
+    }
+};
+MBOS_EOF
+
+cat > config/fixed_deposit.php << 'MBOS_EOF'
+<?php
+
+return [
+
+    /*
+    |--------------------------------------------------------------------------
+    | Fixed Deposit Backdating Policy
+    |--------------------------------------------------------------------------
+    |
+    | max_backdate_days: how far into the past start_date may be set at
+    | booking time. Confirmed policy value: 30 days.
+    |
+    | min_holding_period_hours: a backdated FD cannot be liquidated until
+    | this many REAL hours have passed since the record was actually
+    | created (created_at) -- not since its backdated start_date. This
+    | closes the fraud vector where someone backdates a booking by the
+    | full max_backdate_days and immediately liquidates it to collect
+    | interest for a period the deposit never actually existed for real.
+    |
+    | The exact duration (24 hours) was not specified when this policy was
+    | confirmed -- only that SOME minimum holding period was wanted. This
+    | is a reasonable default, not a business-confirmed number; adjust
+    | here if a different value is decided.
+    |
+    */
+
+    'max_backdate_days' => 30,
+
+    'min_holding_period_hours' => 24,
+
+];
+MBOS_EOF
+
+cat > app/Models/FixedDeposit.php << 'MBOS_EOF'
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class FixedDeposit extends Model
+{
+    protected $fillable = [
+        'fd_no',
+        'customer_account_id',
+        'settlement_account_id',
+        'principal_amount',
+        'currency',
+        'interest_rate',
+        'pre_liquidation_rate',
+        'pre_liquidation_penalty_fee',
+        'tenor_days',
+        'start_date',
+        'backdate_reason',
+        'maturity_date',
+        'status',
+        'booked_by',
+        'liquidated_by',
+        'liquidated_at',
+        'interest_paid',
+        'narration',
+    ];
+
+    protected $casts = [
+        'principal_amount' => 'decimal:2',
+        'interest_rate' => 'decimal:4',
+        'pre_liquidation_rate' => 'decimal:4',
+        'pre_liquidation_penalty_fee' => 'decimal:2',
+        'interest_paid' => 'decimal:2',
+        'start_date' => 'date',
+        'maturity_date' => 'date',
+        'liquidated_at' => 'datetime',
+    ];
+
+    public function sourceAccount()
+    {
+        return $this->belongsTo(CustomerAccount::class, 'customer_account_id');
+    }
+
+    public function settlementAccount()
+    {
+        return $this->belongsTo(CustomerAccount::class, 'settlement_account_id');
+    }
+
+    public function bookedBy()
+    {
+        return $this->belongsTo(User::class, 'booked_by');
+    }
+
+    public function liquidatedBy()
+    {
+        return $this->belongsTo(User::class, 'liquidated_by');
+    }
+}
+MBOS_EOF
+
+cat > app/Services/Deposits/FixedDepositService.php << 'MBOS_EOF'
 <?php
 
 namespace App\Services\Deposits;
@@ -437,3 +564,6 @@ class FixedDepositService
         return $fdNo;
     }
 }
+MBOS_EOF
+
+echo "Backdating Part 1 of 3 applied (migration, config, model, service)."
