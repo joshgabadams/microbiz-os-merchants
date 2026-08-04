@@ -22,6 +22,8 @@ class RbacSeeder extends Seeder
             'branch_eod.close' => 'branch',
             'gl.sync' => 'gl',
             'offices.sync' => 'sync',
+            'fixed_deposits.book' => 'fixed-deposit',
+            'fixed_deposits.liquidate' => 'fixed-deposit',
         ];
 
         foreach ($permissions as $name => $module) {
@@ -37,6 +39,10 @@ class RbacSeeder extends Seeder
             'teller-officer' => [
                 'label' => 'Teller Officer',
                 'permissions' => ['tellers.manage', 'customer_cash.deposit', 'customer_cash.withdraw'],
+            ],
+            'deposit-officer' => [
+                'label' => 'Deposit Officer',
+                'permissions' => ['fixed_deposits.book', 'fixed_deposits.liquidate'],
             ],
             'vault-officer' => [
                 'label' => 'Vault Officer',
@@ -62,9 +68,6 @@ class RbacSeeder extends Seeder
             $role->permissions()->syncWithoutDetaching($permissionIds);
         }
 
-        // Attach the admin role to whichever user already exists (e.g. the
-        // "Test User" from DatabaseSeeder), rather than creating a new one,
-        // since this project already seeds its own default user.
         $firstUser = User::first();
 
         if ($firstUser) {

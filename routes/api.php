@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\MerchantController;
 use App\Http\Controllers\Api\WalletController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\MfaController;
+use App\Http\Controllers\Api\FixedDepositController;
 use App\Http\Controllers\Api\AuthController;
 
 Route::prefix('v1')->group(function () {
@@ -78,6 +79,27 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/merchants/onboard', [MerchantController::class, 'onboard'])
             ->middleware('permission:merchants.onboard');
 
+        Route::post('/merchants/{merchant}/submit', [MerchantController::class, 'submit'])
+            ->middleware('permission:merchants.submit');
+
+        Route::post('/merchants/{merchant}/approve', [MerchantController::class, 'approve'])
+            ->middleware('permission:merchants.approve');
+
+        Route::post('/merchants/{merchant}/reject', [MerchantController::class, 'reject'])
+            ->middleware('permission:merchants.reject');
+
+        Route::post('/merchants/{merchant}/activate', [MerchantController::class, 'activate'])
+            ->middleware('permission:merchants.activate');
+
+        Route::post('/merchants/{merchant}/suspend', [MerchantController::class, 'suspend'])
+            ->middleware('permission:merchants.suspend');
+
+        Route::post('/merchants/{merchant}/reactivate', [MerchantController::class, 'reactivate'])
+            ->middleware('permission:merchants.reactivate');
+
+        Route::post('/merchants/{merchant}/deactivate', [MerchantController::class, 'deactivate'])
+            ->middleware('permission:merchants.deactivate');
+
         Route::post('/merchants/collect/qr', [MerchantController::class, 'collectQr'])
             ->middleware('permission:payments.process');
 
@@ -103,5 +125,15 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/reports/vault-transactions', [ReportController::class, 'vaultTransactions']);
         Route::get('/reports/teller-ledger', [ReportController::class, 'tellerLedger']);
         Route::get('/reports/vault-ledger', [ReportController::class, 'vaultLedger']);
+
+        Route::get('/fixed-deposits', [FixedDepositController::class, 'index']);
+        Route::get('/fixed-deposits/{fixedDeposit}', [FixedDepositController::class, 'show']);
+        Route::get('/fixed-deposits/{fixedDeposit}/preview-liquidation', [FixedDepositController::class, 'previewLiquidation']);
+
+        Route::post('/fixed-deposits/book', [FixedDepositController::class, 'book'])
+            ->middleware('permission:fixed_deposits.book');
+
+        Route::post('/fixed-deposits/{fixedDeposit}/liquidate', [FixedDepositController::class, 'liquidate'])
+            ->middleware('permission:fixed_deposits.liquidate');
     });
 });

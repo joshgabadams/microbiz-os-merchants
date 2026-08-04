@@ -1,3 +1,8 @@
+#!/bin/sh
+set -e
+cd /Users/user/microbiz/microbiz-os
+
+cat > database/seeders/GlAccountSeeder.php << 'MBOS_EOF'
 <?php
 
 namespace Database\Seeders;
@@ -544,3 +549,6 @@ class GlAccountSeeder extends Seeder
         }
     }
 }
+MBOS_EOF
+
+echo "Part 2 of 4 applied (GlAccountSeeder.php)."
