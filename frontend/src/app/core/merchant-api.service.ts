@@ -27,4 +27,20 @@ export class MerchantApiService {
   }): Observable<ApiResponse<Merchant>> {
     return this.http.post<ApiResponse<Merchant>>(`${this.base}/onboard`, payload);
   }
+
+  submit(id: number): Observable<ApiResponse<Merchant>> {
+    return this.http.post<ApiResponse<Merchant>>(`${this.base}/${id}/submit`, {});
+  }
+
+  approve(id: number): Observable<ApiResponse<Merchant>> {
+    return this.http.post<ApiResponse<Merchant>>(`${this.base}/${id}/approve`, {});
+  }
+
+  reject(id: number, reason: string): Observable<ApiResponse<Merchant>> {
+    return this.http.post<ApiResponse<Merchant>>(`${this.base}/${id}/reject`, { reason });
+  }
+
+  activate(id: number): Observable<ApiResponse<Merchant>> {
+    return this.http.post<ApiResponse<Merchant>>(`${this.base}/${id}/activate`, {});
+  }
 }

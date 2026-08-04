@@ -6,13 +6,17 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Merchant\CollectPosPaymentRequest;
 use App\Http\Requests\Merchant\CollectQrPaymentRequest;
 use App\Http\Requests\Merchant\OnboardMerchantRequest;
+use App\Http\Requests\Merchant\RejectMerchantRequest;
 use App\Http\Requests\Merchant\SettleMerchantRequest;
 use App\Models\Merchant;
+use App\Services\Payments\MerchantActivationService;
+use App\Services\Payments\MerchantApprovalService;
 use App\Services\Payments\MerchantOnboardingService;
 use App\Services\Payments\MerchantPaymentService;
 use App\Services\Payments\MerchantSettlementService;
 use App\Traits\ApiResponse;
 use Exception;
+use Illuminate\Http\Request;
 
 class MerchantController extends Controller
 {
@@ -21,7 +25,9 @@ class MerchantController extends Controller
     public function __construct(
         protected MerchantOnboardingService $onboardingService,
         protected MerchantPaymentService $paymentService,
-        protected MerchantSettlementService $settlementService
+        protected MerchantSettlementService $settlementService,
+        protected MerchantApprovalService $approvalService,
+        protected MerchantActivationService $activationService
     ) {
     }
 
@@ -54,6 +60,60 @@ class MerchantController extends Controller
                 'Merchant onboarded successfully.',
                 201
             );
+        } catch (Exception $e) {
+            return $this->error($e->getMessage());
+        }
+    }
+
+    public function submit(Merchant $merchant, Request $request)
+    {
+        try {
+            $result = $this->approvalService->submit(
+                $merchant,
+                $request->user()->id
+            );
+
+            return $this->success($result, 'Merchant submitted for review.');
+        } catch (Exception $e) {
+            return $this->error($e->getMessage());
+        }
+    }
+
+    public function approve(Merchant $merchant, Request $request)
+    {
+        try {
+            $result = $this->approvalService->approve(
+                $merchant,
+                $request->user()->id
+            );
+
+            return $this->success($result, 'Merchant approved.');
+        } catch (Exception $e) {
+            return $this->error($e->getMessage());
+        }
+    }
+
+    public function reject(Merchant $merchant, RejectMerchantRequest $request)
+    {
+        try {
+            $result = $this->approvalService->reject(
+                $merchant,
+                $request->user()->id,
+                $request->reason
+            );
+
+            return $this->success($result, 'Merchant rejected.');
+        } catch (Exception $e) {
+            return $this->error($e->getMessage());
+        }
+    }
+
+    public function activate(Merchant $merchant)
+    {
+        try {
+            $result = $this->activationService->activate($merchant);
+
+            return $this->success($result, 'Merchant activated.');
         } catch (Exception $e) {
             return $this->error($e->getMessage());
         }

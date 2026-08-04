@@ -2,6 +2,7 @@
 
 namespace App\Services\Payments;
 
+use App\Domain\MPay\Enums\MerchantStatus;
 use App\Models\Merchant;
 use App\Models\MerchantBalance;
 use Illuminate\Support\Facades\DB;
@@ -20,7 +21,7 @@ class MerchantOnboardingService
                 'phone' => $data['phone'] ?? null,
                 'email' => $data['email'] ?? null,
                 'branch_id' => $data['branch_id'] ?? null,
-                'status' => 'ACTIVE',
+                'status' => MerchantStatus::DRAFT->value,
                 'onboarded_by' => $onboardedBy,
             ]);
 
@@ -35,14 +36,14 @@ class MerchantOnboardingService
 
     public function suspend(Merchant $merchant): Merchant
     {
-        $merchant->update(['status' => 'SUSPENDED']);
+        $merchant->update(['status' => MerchantStatus::SUSPENDED->value]);
 
         return $merchant->fresh();
     }
 
     public function reactivate(Merchant $merchant): Merchant
     {
-        $merchant->update(['status' => 'ACTIVE']);
+        $merchant->update(['status' => MerchantStatus::ACTIVE->value]);
 
         return $merchant->fresh();
     }

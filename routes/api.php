@@ -76,6 +76,18 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/merchants/onboard', [MerchantController::class, 'onboard'])
             ->middleware('permission:merchants.onboard');
 
+        Route::post('/merchants/{merchant}/submit', [MerchantController::class, 'submit'])
+            ->middleware('permission:merchants.submit');
+
+        Route::post('/merchants/{merchant}/approve', [MerchantController::class, 'approve'])
+            ->middleware('permission:merchants.approve');
+
+        Route::post('/merchants/{merchant}/reject', [MerchantController::class, 'reject'])
+            ->middleware('permission:merchants.reject');
+
+        Route::post('/merchants/{merchant}/activate', [MerchantController::class, 'activate'])
+            ->middleware('permission:merchants.activate');
+
         Route::post('/merchants/collect/qr', [MerchantController::class, 'collectQr'])
             ->middleware('permission:payments.process');
 
