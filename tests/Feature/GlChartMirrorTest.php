@@ -26,10 +26,10 @@ class GlChartMirrorTest extends TestCase
         $this->seed(GlAccountSeeder::class);
     }
 
-    public function test_seeder_creates_all_57_accounts_with_no_duplicate_fineract_gl_id(): void
+    public function test_seeder_creates_all_59_accounts_with_no_duplicate_fineract_gl_id(): void
     {
-        $this->assertEquals(57, GlAccount::count());
-        $this->assertEquals(57, GlAccount::distinct('fineract_gl_id')->count('fineract_gl_id'));
+        $this->assertEquals(59, GlAccount::count());
+        $this->assertEquals(59, GlAccount::distinct('fineract_gl_id')->count('fineract_gl_id'));
     }
 
     protected function makeBranch(): Branch

@@ -23,12 +23,6 @@
 | export only provides the human-readable code, not Fineract's own
 | internal numeric ID, and our fineract_gl_id column is a bigint.
 |
-| NOTE: TellerTransactionService (as it exists in the working sandbox
-| copy at time of this update) references two keys -- OPENING_CASH_CONTROL
-| and CLOSING_CASH_CONTROL -- that do NOT exist in this file as actually
-| deployed. Not added here since no real value is known; flagged
-| separately as its own finding, not guessed at.
-|
 */
 
 return [
@@ -136,6 +130,30 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | TELLER OPEN/CLOSE CONTROL ACCOUNTS
+    |--------------------------------------------------------------------------
+    |
+    | Found missing entirely while investigating a live gap:
+    | TellerTransactionService::openTeller()/closeTeller() referenced these
+    | two keys but never actually called GlPostingService::postFromCashLedger(),
+    | so no GlJournal entries were ever created for teller open/close --
+    | confirmed live via Tinker (GlJournal::count() unchanged after a real
+    | openTeller() call). Both fixed now to actually post.
+    |
+    | PLACEHOLDER, same status as CASH_CONTROL: no confident real Fineract
+    | equivalent found. Confirmed design: teller opening is a standalone
+    | declaration, NOT a vault-to-teller transfer (that's a separate,
+    | already-working flow via VaultTellerFloatService::allocateFloat()) --
+    | so the counterparty here is a control account, not VAULT_CASH
+    | directly, to avoid double-counting the same cash movement twice.
+    |
+    */
+
+    'OPENING_CASH_CONTROL' => '300180',
+    'CLOSING_CASH_CONTROL' => '300190',
+
+    /*
+    |--------------------------------------------------------------------------
     | INCOME
     |--------------------------------------------------------------------------
     */
@@ -155,7 +173,7 @@ return [
     'OFFICE_EXPENSE'        => '2-11-208',  // CONFIRMED: Office & General Expenses
     'UTILITY_EXPENSE'       => '200120',  // AMBIGUOUS: closest match "2-11-023 Utility Allowance" reads as a staff allowance, not an office utility bill -- not confirmed
     'CASH_HANDLING_EXPENSE' => '2-11-291',  // CONFIRMED: Cash Specie Expenses
-    'INTEREST_EXPENSE'      => '2-11-100',  // CONFIRMED: INTEREST EXPENSE (parent) -- generic/non-FD interest expense -- NEW this update, not previously in your file
+    'INTEREST_EXPENSE'      => '2-11-100',  // CONFIRMED: INTEREST EXPENSE (parent) -- generic/non-FD interest expense
 
     /*
     |--------------------------------------------------------------------------
