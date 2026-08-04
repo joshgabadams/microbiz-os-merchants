@@ -51,6 +51,7 @@ export class FixedDepositApiService {
     pre_liquidation_rate: number;
     pre_liquidation_penalty_fee?: number;
     tenor_days: number;
+    branch_id: number;
     narration?: string;
   }): Observable<ApiResponse<FixedDeposit>> {
     return this.http.post<ApiResponse<FixedDeposit>>(`${this.base}/book`, payload);
@@ -60,7 +61,7 @@ export class FixedDepositApiService {
     return this.http.get<ApiResponse<LiquidationCalculation>>(`${this.base}/${id}/preview-liquidation`);
   }
 
-  liquidate(id: number, narration?: string): Observable<ApiResponse<unknown>> {
-    return this.http.post<ApiResponse<unknown>>(`${this.base}/${id}/liquidate`, { narration });
+  liquidate(id: number, branchId: number, narration?: string): Observable<ApiResponse<unknown>> {
+    return this.http.post<ApiResponse<unknown>>(`${this.base}/${id}/liquidate`, { branch_id: branchId, narration });
   }
 }
