@@ -26,6 +26,20 @@ class PaymentsRbacSeeder extends Seeder
             'merchants.settle' => 'payments',
             'payments.process' => 'payments',
             'agency_banking.manage' => 'payments',
+            // Agent registry permissions (Blueprint §12) -- only the
+            // AG-01-relevant subset; kyc-review/locations/agreements/etc.
+            // belong to later sprints (AG-02/AG-03/AG-04).
+            'agents.view' => 'payments',
+            'agents.create' => 'payments',
+            'agents.edit' => 'payments',
+            'agents.submit' => 'payments',
+            'agents.approve' => 'payments',
+            'agents.reject' => 'payments',
+            'agents.activate' => 'payments',
+            'agents.restrict' => 'payments',
+            'agents.suspend' => 'payments',
+            'agents.reactivate' => 'payments',
+            'agents.terminate' => 'payments',
         ];
 
         foreach ($permissions as $name => $module) {
@@ -52,6 +66,17 @@ class PaymentsRbacSeeder extends Seeder
             'agency-banking-agent' => [
                 'label' => 'Agency Banking Agent',
                 'permissions' => ['agency_banking.manage', 'payments.process'],
+            ],
+            'agent-registration-officer' => [
+                'label' => 'Agent Registration Officer',
+                'permissions' => ['agents.view', 'agents.create', 'agents.edit', 'agents.submit'],
+            ],
+            'agent-approval-officer' => [
+                'label' => 'Agent Approval Officer',
+                'permissions' => [
+                    'agents.view', 'agents.approve', 'agents.reject', 'agents.activate',
+                    'agents.restrict', 'agents.suspend', 'agents.reactivate', 'agents.terminate',
+                ],
             ],
         ];
 

@@ -2,9 +2,9 @@
 
 | | |
 |---|---|
-| Status | Foundation in progress — Phase 1 (per the M-Pay Backend Build Guide) |
+| Status | Foundation in progress — Sprint AG-01 (Agent Registry) complete per the M-PAY Agency Banking Blueprint |
 | Location | `app/Domain/MPay/` (code) + `database/migrations/mpay/` (schema), inside the `microbiz-os` repo |
-| Last updated | 2026-07-29 |
+| Last updated | 2026-08-06 |
 | Related docs | `CHANGELOG.md` (core backend bug tracking), `AUDIT.md` (capability gap audit) |
 
 This file is a record of what's actually built and verified, not a plan of what's intended. If something below doesn't match the code, the code wins — update this file, don't trust it blindly.
@@ -60,8 +60,8 @@ engine as untested until someone runs it and confirms.
 **Code:**
 - `app/Domain/MPay/Enums/TransactionType.php` — `WALLET_TO_WALLET`, `WALLET_TO_BANK`, `POS_CASH_IN`, `POS_CASH_OUT`, `MERCHANT_PAYMENT`
 - `app/Domain/MPay/Enums/TransactionStatus.php` — the full state machine (`RECEIVED` → ... → `SUCCESSFUL`, plus `FAILED`/`REVERSED`/`EXPIRED`/`CANCELLED`) — never collapse this to just pending/success/failed
-- `app/Domain/MPay/Contracts/FineractGateway.php` — the interface any code needing FinCore data calls through. Not backed by a real implementation yet (see Section 5) — mock data is next.
-- `app/Providers/MPayServiceProvider.php` — registers the `mpay` migrations path
+- `app/Domain/MPay/Contracts/FineractGateway.php` — the interface any code needing FinCore data calls through. Two implementations exist: `App\Services\Fineract\FineractClient` (real, calls Fineract's savings-account API) and `App\Domain\MPay\Services\FakeFineractGateway` (in-memory, local/testing only). `MPayServiceProvider` binds whichever fits the current environment.
+- `app/Providers/MPayServiceProvider.php` — registers the `mpay` migrations path, the `agent` migrations path (main-database Agent registry tables), and the `FineractGateway` environment binding
 
 **Tables** (all confirmed to exist only in `mpay.sqlite`, confirmed absent from the main database):
 
@@ -78,14 +78,59 @@ engine as untested until someone runs it and confirms.
 **Money rule enforced throughout:** all amounts are stored as integers in minor units (kobo, not naira)
 plus a 3-letter currency code. No floats or decimals anywhere in this schema.
 
-## 4. Not built yet — next steps in order
+## 4. Agent module — built against the real M-PAY Agency Banking Blueprint
 
-1. `outbox_events` table — events written in the same DB transaction as the state change, so nothing gets silently lost if a crash happens between saving state and publishing an event
-2. `pos_terminals` and `pos_agents` tables — admin-created terminals, agents modeled as "cashiers" tied to a location and a terminal
-3. A simple, clearly-labeled **staging-only** authorization check for agent actions — explicitly *not* full RBAC (see Section 5)
-4. A fake `FineractGateway` implementation returning realistic mock data, so wallet balance/transaction work can proceed without real Fineract/Interswitch access
-5. The actual POS agent cash-in/cash-out endpoints
-6. The admin "create POS terminal" endpoint
+The Agent/POS work in this repo is **not** ad hoc — it's built against two real spec documents:
+`M-PAY Agency Banking Blueprint.pdf` and `M-PAY Merchant Management Services.pdf` (the latter not yet
+read/applied). See `project_agent_module_blueprint.md` in the auto-memory system for the full extracted
+directives and how to re-read the PDFs (Chrome can't render them directly here — see that memory for the
+local-http-server workaround). An earlier build pass (2026-08-05) collapsed Agent/Location/Operator/Terminal
+into a single `pos_agents` table before the Blueprint was actually read; that was reworked on 2026-08-06
+once the real spec was found, and the old design is gone (no dead files left behind).
+
+**The Blueprint's own delivery roadmap (§21) is sprint-based, and its implementation-sequence section
+(§22) is explicit: don't start with cash-in/cash-out.** The real order is:
+
+Agent governance → Agent KYC → Location verification → Agreement → Operator → Terminal and geo-fence →
+Float → Cash-in → Cash-out → Transfer and bills → Commission → Reconciliation → TESSA
+
+**Sprint AG-01 — Agent Registry: done.** Matches Blueprint §8.1 (schema) and §6 (lifecycle) exactly:
+- `agents` table (main database, `database/migrations/agent/`) — `agent_code`, `agent_type`, `legal_name`,
+  `trading_name`, `registration_number`, `tax_identification_number`, `phone`, `email`, `branch_id`
+  (real FK), `supervisor_id`, `status`, `kyc_status`, `risk_rating`, `exclusive_relationship`,
+  `principal_reference`, three limit columns, `next_review_date`, `created_by`/`approved_by` (real FKs),
+  timestamps, soft deletes
+- `App\Domain\MPay\Enums\AgentStatus` — full lifecycle: `PROSPECT, DRAFT, PENDING_KYC,
+  PENDING_LOCATION_VERIFICATION, PENDING_COMPLIANCE_REVIEW, PENDING_APPROVAL, APPROVED,
+  AGREEMENT_PENDING, TRAINING_PENDING, TERMINAL_PENDING, ACTIVE`, plus `REJECTED, RESTRICTED, SUSPENDED,
+  DORMANT, TERMINATED, EXPIRED, BLACKLISTED`
+- Services (named to match Blueprint §9): `AgentRegistrationService`, `AgentApprovalService`
+  (submit/approve/reject, maker-checker enforced), `AgentActivationService` (activate/restrict/suspend/
+  reactivate/terminate)
+- `AgentController` + routes matching Blueprint §11 exactly (`POST /api/v1/agents` for create, not
+  `/agents/onboard`), permissions matching §12 (`agents.view/create/edit/submit/approve/reject/activate/
+  restrict/suspend/reactivate/terminate`) via `PaymentsRbacSeeder`
+- Frontend test page at `frontend/src/app/features/agents/` (Angular, mirrors the existing Merchant page)
+- Verified end-to-end locally via tinker: register → submit → self-approve correctly blocked → approve
+  (different user) → activate → suspend → reactivate all work; caught and fixed a real bug in the
+  process (`approved_at`/`activated_at`/`suspended_at`/`suspension_reason` were missing from `Agent`'s
+  `$fillable`, so those fields silently failed to persist)
+
+**Not built yet, in Blueprint order** (AG-02 through AG-13 — see Blueprint §7/§21 for full field lists):
+1. **AG-02 — KYC and Approval**: identity/business docs, beneficial owners, sanctions/PEP screening —
+   currently `kyc_status` is just a column with no real workflow behind it
+2. **AG-03 — Locations and Agreements**: `agent_locations` and `agent_agreements` tables (Blueprint §8.2/§8.3)
+3. **AG-04 — Operators and Terminals**: `agent_operators` and `agent_terminals` tables (Blueprint §8.4/§8.5)
+   — note `agent_terminals`' real schema (geo-fence radius, device cert, heartbeat, etc.) is much richer
+   than the old `pos_terminals` table that was removed in the rework
+4. AG-05 (geo-fencing/security), AG-06 (float), AG-07/AG-08 (cash-in/cash-out), AG-09 (transfers/bills),
+   AG-10 (commission), AG-11 (reconciliation/EOD), AG-12 (supervision/complaints), AG-13 (TESSA)
+
+**Critical directive for when Float/Cash-in/Cash-out are eventually built (Blueprint §22):** *"The
+existing cash-control work in FINCORE360 should be reused for: Balance locking, Transaction numbering,
+Cash ledger, GL posting, Reversal, Approval, Audit, Notifications, Reconciliation. Do not build a second
+independent cash engine inside M-PAY."* Reuse `CashLedger`/`GlPostingService`/`TransactionNumberService`/
+vault-style balance locking (already used by Vault/Teller) — do not build M-Pay-specific equivalents.
 
 ## 5. Deliberate simplifications — staging only, revisit before production
 
@@ -98,14 +143,21 @@ Don't mistake any of these for "done":
   installed, no Gate/Policy classes exist). The POS module will use a deliberately simple, staging-only
   check instead of the Build Guide's `can:mpay.transfer.create`-style permission gates. "POS admin can be
   anyone for now" was an explicit, scoped decision — not an oversight.
-- **No real FinCore connection for M-Pay yet.** `FineractGateway` is an interface with no implementation.
-  Development will proceed against mock data behind that interface so it isn't blocked waiting on real
-  vendor/Interswitch access — but nothing built against the mock has been validated against a real system,
-  and that validation still has to happen before any of this touches real transactions.
+- **Real FinCore connection exists now, but only reachable in staging so far.** `FineractClient` calls the
+  actual `fincore360` Fineract instance (confirmed working over the internal Docker network on the Contabo
+  staging box). Nothing built against it has been validated in production, and the demo Fineract credentials
+  (`mifos`/`password`) are still default — must be rotated and the connection re-verified before this
+  touches real transactions.
 - **Actor identity is proven, but only for internal staff so far.** The "always derive who performed an
   action from the authenticated session, never trust a client-supplied ID" pattern (fixed this session in
   `ApprovalController`/`CustomerCashController`) is the same discipline this module must follow for agents —
   but agents are a different kind of principal than internal staff, and that extension hasn't been built yet.
+- **AgentApprovalService/AgentActivationService skip gates that don't exist yet.** `submit()` goes straight
+  DRAFT → PENDING_APPROVAL rather than stopping at PENDING_KYC (KYC review is AG-02, not built). `activate()`
+  goes straight APPROVED → ACTIVE rather than requiring AGREEMENT_PENDING/TRAINING_PENDING/TERMINAL_PENDING
+  to clear (agreements/training/terminals are AG-03/AG-04, not built). Both are flagged in code comments.
+  **Must not reach production** until AG-02–AG-04 exist and `AgentOperationGuard` (Blueprint §10) is built
+  to enforce the real gates.
 
 ## 6. Where this fits in the bigger picture
 
