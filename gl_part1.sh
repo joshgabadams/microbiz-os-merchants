@@ -1,3 +1,91 @@
+#!/bin/sh
+set -e
+cd /Users/user/microbiz/microbiz-os
+
+cat > database/migrations/2026_08_04_000003_add_product_code_to_customer_accounts.php << 'MBOS_EOF'
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('customer_accounts', function (Blueprint $table) {
+            $table->string('product_code')->nullable()->after('account_type');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('customer_accounts', function (Blueprint $table) {
+            $table->dropColumn('product_code');
+        });
+    }
+};
+MBOS_EOF
+
+cat > app/Services/Accounting/CustomerAccountGlResolver.php << 'MBOS_EOF'
+<?php
+
+namespace App\Services\Accounting;
+
+use App\Models\CustomerAccount;
+
+/**
+ * Resolves the correct GL key for a customer account, matching Fineract's
+ * real chart of accounts (General_ledger_Listing-2.xlsx), which
+ * differentiates by savings/current PRODUCT, not just account_type.
+ *
+ * Used by every service that posts to a customer's own account:
+ * CustomerCashService, MerchantSettlementService, FixedDepositService,
+ * TransactionReversalService -- kept in one place so a future product
+ * addition or GL remap only needs to change here, not four files.
+ */
+class CustomerAccountGlResolver
+{
+    protected array $savingsMap = [
+        'REGULAR' => 'CUSTOMER_SAVINGS_REGULAR',
+        'KIDS' => 'CUSTOMER_SAVINGS_KIDS',
+        'MASTA' => 'CUSTOMER_SAVINGS_MASTA',
+        'MYBIZ' => 'CUSTOMER_SAVINGS_MYBIZ',
+        'ACTIVE' => 'CUSTOMER_SAVINGS_ACTIVE',
+        'EDUCATION' => 'CUSTOMER_SAVINGS_EDUCATION',
+        'GROUP' => 'CUSTOMER_SAVINGS_GROUP',
+        'SALARY' => 'CUSTOMER_SAVINGS_SALARY',
+        'CORPORATE' => 'CUSTOMER_SAVINGS_CORPORATE',
+        'MYKONNECT' => 'CUSTOMER_SAVINGS_MYKONNECT',
+        'PEAK_DAILY' => 'CUSTOMER_SAVINGS_PEAK_DAILY',
+        'PEAK_GROUP' => 'CUSTOMER_SAVINGS_PEAK_GROUP',
+        'PEAK_SALARY' => 'CUSTOMER_SAVINGS_PEAK_SALARY',
+        'PEAK_TRADERS' => 'CUSTOMER_SAVINGS_PEAK_TRADERS',
+        'MICROFLEX' => 'CUSTOMER_SAVINGS_MICROFLEX',
+        'YES' => 'CUSTOMER_SAVINGS_YES',
+    ];
+
+    protected array $currentMap = [
+        'INDIVIDUAL' => 'CUSTOMER_CURRENT_INDIVIDUAL',
+        'CORPORATE' => 'CUSTOMER_CURRENT_CORPORATE',
+        'SALARY' => 'CUSTOMER_CURRENT_SALARY',
+        'STAFF' => 'CUSTOMER_CURRENT_STAFF',
+    ];
+
+    public function resolve(CustomerAccount $account): string
+    {
+        if ($account->account_type === 'CURRENT') {
+            return $this->currentMap[$account->product_code]
+                ?? 'CUSTOMER_CURRENT_INDIVIDUAL';
+        }
+
+        return $this->savingsMap[$account->product_code]
+            ?? 'CUSTOMER_SAVINGS_REGULAR';
+    }
+}
+MBOS_EOF
+
+cat > config/gl.php << 'MBOS_EOF'
 <?php
 
 /*
@@ -22,6 +110,12 @@
 | the dashes from the real code (e.g. "4-00-214" -> 400214), since the
 | export only provides the human-readable code, not Fineract's own
 | internal numeric ID, and our fineract_gl_id column is a bigint.
+|
+| NOTE: TellerTransactionService (as it exists in the working sandbox
+| copy at time of this update) references two keys -- OPENING_CASH_CONTROL
+| and CLOSING_CASH_CONTROL -- that do NOT exist in this file as actually
+| deployed. Not added here since no real value is known; flagged
+| separately as its own finding, not guessed at.
 |
 */
 
@@ -130,30 +224,6 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | TELLER OPEN/CLOSE CONTROL ACCOUNTS
-    |--------------------------------------------------------------------------
-    |
-    | Found missing entirely while investigating a live gap:
-    | TellerTransactionService::openTeller()/closeTeller() referenced these
-    | two keys but never actually called GlPostingService::postFromCashLedger(),
-    | so no GlJournal entries were ever created for teller open/close --
-    | confirmed live via Tinker (GlJournal::count() unchanged after a real
-    | openTeller() call). Both fixed now to actually post.
-    |
-    | PLACEHOLDER, same status as CASH_CONTROL: no confident real Fineract
-    | equivalent found. Confirmed design: teller opening is a standalone
-    | declaration, NOT a vault-to-teller transfer (that's a separate,
-    | already-working flow via VaultTellerFloatService::allocateFloat()) --
-    | so the counterparty here is a control account, not VAULT_CASH
-    | directly, to avoid double-counting the same cash movement twice.
-    |
-    */
-
-    'OPENING_CASH_CONTROL' => '300180',
-    'CLOSING_CASH_CONTROL' => '300190',
-
-    /*
-    |--------------------------------------------------------------------------
     | INCOME
     |--------------------------------------------------------------------------
     */
@@ -173,7 +243,7 @@ return [
     'OFFICE_EXPENSE'        => '2-11-208',  // CONFIRMED: Office & General Expenses
     'UTILITY_EXPENSE'       => '200120',  // AMBIGUOUS: closest match "2-11-023 Utility Allowance" reads as a staff allowance, not an office utility bill -- not confirmed
     'CASH_HANDLING_EXPENSE' => '2-11-291',  // CONFIRMED: Cash Specie Expenses
-    'INTEREST_EXPENSE'      => '2-11-100',  // CONFIRMED: INTEREST EXPENSE (parent) -- generic/non-FD interest expense
+    'INTEREST_EXPENSE'      => '2-11-100',  // CONFIRMED: INTEREST EXPENSE (parent) -- generic/non-FD interest expense -- NEW this update, not previously in your file
 
     /*
     |--------------------------------------------------------------------------
@@ -198,3 +268,6 @@ return [
     'CURRENT_YEAR_EARNINGS' => '500120',  // PLACEHOLDER: not tracked as a distinct line from Retained Earnings in export
 
 ];
+MBOS_EOF
+
+echo "Part 1 of 4 applied (migration, resolver, config/gl.php)."

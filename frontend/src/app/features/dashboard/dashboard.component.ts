@@ -21,6 +21,7 @@ import { AuthService } from '../../core/auth.service';
           <a routerLink="/call-over-report" routerLinkActive="active">Call-Over Report</a>
           <a routerLink="/ledger-statement" routerLinkActive="active">Ledger Statement</a>
           <a routerLink="/agents" routerLinkActive="active">Agents</a>
+          <a routerLink="/fixed-deposits" routerLinkActive="active">Fixed Deposits</a>
           <a routerLink="/merchants" routerLinkActive="active">Merchants</a>
           <a routerLink="/wallets" routerLinkActive="active">Wallets</a>
         </nav>

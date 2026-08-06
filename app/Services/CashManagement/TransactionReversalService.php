@@ -2,11 +2,13 @@
 
 namespace App\Services\CashManagement;
 
+use App\Events\FinancialTransactionReversed;
 use App\Models\CashLedger;
 use App\Models\CustomerAccountBalance;
 use App\Models\CustomerAccountTransaction;
 use App\Models\TellerBalance;
 use App\Models\TellerTransaction;
+use App\Services\Accounting\GlPostingService;
 use App\Services\Common\TransactionNumberService;
 use Illuminate\Support\Facades\DB;
 use Exception;
@@ -14,7 +16,8 @@ use Exception;
 class TransactionReversalService
 {
     public function __construct(
-        protected TransactionNumberService $transactionNumberService
+        protected TransactionNumberService $transactionNumberService,
+        protected GlPostingService $glPostingService
     ) {
     }
 
@@ -190,7 +193,7 @@ class TransactionReversalService
 
             $cashLedger = CashLedger::create([
                 'reference_no'       => $tellerReversal->transaction_no,
-                'branch_id'          => 1,
+                'branch_id'          => $tellerTransaction->teller->branch_id,
                 'vault_id'           => null,
                 'teller_id'          => $tellerTransaction->teller_id,
                 'user_id'            => $performedBy,
@@ -207,10 +210,17 @@ class TransactionReversalService
                 'running_balance'    => $tellerBalance->ledger_balance,
                 'currency'           => $tellerBalance->currency,
                 'narration'          => $narration,
-                'status'             => 'APPROVED',
+                'status'             => 'PENDING',
                 'approved_by'        => $performedBy,
                 'transaction_date'   => now(),
             ]);
+
+            // Real double-entry GL posting -- both reversal services
+            // previously set status=APPROVED directly and never called
+            // this, meaning no GlJournal rows were ever created for a
+            // reversal, the same class of bug fixed in CustomerCashService
+            // earlier this session.
+            $this->glPostingService->postFromCashLedger($cashLedger);
 
             $customerTransaction->update([
                 'is_reversed' => true,
@@ -218,11 +228,15 @@ class TransactionReversalService
                 'reversed_by' => $performedBy,
             ]);
 
+            event(new FinancialTransactionReversed($customerTransaction));
+
             $tellerTransaction->update([
                 'is_reversed' => true,
                 'reversed_at' => now(),
                 'reversed_by' => $performedBy,
             ]);
+
+            event(new FinancialTransactionReversed($tellerTransaction));
 
             return [
                 'customer_reversal_transaction' => $customerReversal->fresh(),

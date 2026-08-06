@@ -98,6 +98,13 @@ export const routes: Routes = [
             (m) => m.LedgerStatementComponent
           ),
       },
+      {
+        path: 'fixed-deposits',
+        loadComponent: () =>
+          import('./features/fixed-deposits/fixed-deposit-list.component').then(
+            (m) => m.FixedDepositListComponent
+          ),
+      },
     ],
   },
   { path: '**', redirectTo: '' },
