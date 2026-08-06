@@ -1,3 +1,8 @@
+#!/bin/sh
+set -e
+cd /Users/user/microbiz/microbiz-os
+
+cat > database/seeders/GlAccountSeeder.php << 'MBOS_EOF'
 <?php
 
 namespace Database\Seeders;
@@ -142,24 +147,6 @@ class GlAccountSeeder extends Seeder
                 'name' => 'Cash Control',
                 'type' => 'ASSET',
                 'usage' => 'CASH_CONTROL',
-                'manual_entries_allowed' => false,
-                'disabled' => false,
-            ],
-            [
-                'fineract_gl_id' => 300180,
-                'gl_code' => '300180',
-                'name' => 'Opening Cash Control',
-                'type' => 'ASSET',
-                'usage' => 'OPENING_CASH_CONTROL',
-                'manual_entries_allowed' => false,
-                'disabled' => false,
-            ],
-            [
-                'fineract_gl_id' => 300190,
-                'gl_code' => '300190',
-                'name' => 'Closing Cash Control',
-                'type' => 'ASSET',
-                'usage' => 'CLOSING_CASH_CONTROL',
                 'manual_entries_allowed' => false,
                 'disabled' => false,
             ],
@@ -562,3 +549,6 @@ class GlAccountSeeder extends Seeder
         }
     }
 }
+MBOS_EOF
+
+echo "Part 2 of 4 applied (GlAccountSeeder.php)."

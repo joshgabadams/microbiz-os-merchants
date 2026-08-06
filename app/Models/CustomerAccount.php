@@ -10,6 +10,7 @@ class CustomerAccount extends Model
         'customer_id',
         'account_no',
         'account_type',
+        'product_code',
         'currency',
         'gl_account_id',
         'status',

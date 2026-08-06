@@ -12,6 +12,8 @@ use App\Http\Controllers\Api\BranchEodController;
 use App\Http\Controllers\Api\MerchantController;
 use App\Http\Controllers\Api\WalletController;
 use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\Api\MfaController;
+use App\Http\Controllers\Api\FixedDepositController;
 use App\Http\Controllers\Api\AuthController;
 
 Route::prefix('v1')->group(function () {
@@ -24,9 +26,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/sync/glaccounts', [GlAccountSyncController::class, 'sync'])
         ->middleware('permission:gl.sync');
 
-    // Read actions stay open to any authenticated user, matching the
-    // existing pattern for Merchants/Wallets. Only mutating actions
-    // (create/update/delete) require vaults.manage / tellers.manage.
     Route::apiResource('vaults', VaultController::class)->only(['index', 'show']);
     Route::apiResource('vaults', VaultController::class)
         ->only(['store', 'update', 'destroy'])
@@ -40,6 +39,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('v1')->group(function () {
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::get('/me', [AuthController::class, 'me']);
+
+        Route::post('/mfa/setup', [MfaController::class, 'setup']);
+        Route::post('/mfa/enable', [MfaController::class, 'enable']);
+        Route::post('/mfa/disable', [MfaController::class, 'disable']);
 
         Route::post('/teller/open', [TellerController::class, 'open'])
             ->middleware('permission:tellers.manage');
@@ -88,6 +91,15 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/merchants/{merchant}/activate', [MerchantController::class, 'activate'])
             ->middleware('permission:merchants.activate');
 
+        Route::post('/merchants/{merchant}/suspend', [MerchantController::class, 'suspend'])
+            ->middleware('permission:merchants.suspend');
+
+        Route::post('/merchants/{merchant}/reactivate', [MerchantController::class, 'reactivate'])
+            ->middleware('permission:merchants.reactivate');
+
+        Route::post('/merchants/{merchant}/deactivate', [MerchantController::class, 'deactivate'])
+            ->middleware('permission:merchants.deactivate');
+
         Route::post('/merchants/collect/qr', [MerchantController::class, 'collectQr'])
             ->middleware('permission:payments.process');
 
@@ -113,5 +125,15 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/reports/vault-transactions', [ReportController::class, 'vaultTransactions']);
         Route::get('/reports/teller-ledger', [ReportController::class, 'tellerLedger']);
         Route::get('/reports/vault-ledger', [ReportController::class, 'vaultLedger']);
+
+        Route::get('/fixed-deposits', [FixedDepositController::class, 'index']);
+        Route::get('/fixed-deposits/{fixedDeposit}', [FixedDepositController::class, 'show']);
+        Route::get('/fixed-deposits/{fixedDeposit}/preview-liquidation', [FixedDepositController::class, 'previewLiquidation']);
+
+        Route::post('/fixed-deposits/book', [FixedDepositController::class, 'book'])
+            ->middleware('permission:fixed_deposits.book');
+
+        Route::post('/fixed-deposits/{fixedDeposit}/liquidate', [FixedDepositController::class, 'liquidate'])
+            ->middleware('permission:fixed_deposits.liquidate');
     });
 });

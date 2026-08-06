@@ -10,27 +10,17 @@ use App\Models\Merchant;
 use App\Models\MerchantBalance;
 use App\Models\MerchantTransaction;
 use App\Services\Accounting\GlPostingService;
+use App\Services\Accounting\CustomerAccountGlResolver;
 use App\Services\Common\TransactionNumberService;
 use Illuminate\Support\Facades\DB;
 use Exception;
 
-/**
- * Settles a merchant's collected balance by crediting their own
- * customer_account within the system (payout rails/scheduling are a
- * separate, not-yet-decided concern -- this is the manual/on-demand
- * core movement that any batching would eventually call).
- *
- * GL treatment: debits MERCHANT_LIABILITY (reducing what the bank owes
- * the merchant) and credits CUSTOMER_SAVINGS or CUSTOMER_CURRENT
- * (increasing what the bank owes the merchant's own account instead) --
- * an internal transfer between two liability accounts, not new cash
- * entering or leaving the bank.
- */
 class MerchantSettlementService
 {
     public function __construct(
         protected TransactionNumberService $transactionNumberService,
-        protected GlPostingService $glPostingService
+        protected GlPostingService $glPostingService,
+        protected CustomerAccountGlResolver $glResolver
     ) {
     }
 
@@ -47,6 +37,10 @@ class MerchantSettlementService
     ): array {
         if ($amount <= 0) {
             throw new Exception('Settlement amount must be greater than zero.');
+        }
+
+        if ($merchant->status !== 'ACTIVE') {
+            throw new Exception("Merchant {$merchant->merchant_code} is not active.");
         }
 
         if (! $merchant->customer_account_id) {
@@ -82,8 +76,6 @@ class MerchantSettlementService
 
             $narration = $narration ?? "Settlement payout to merchant {$merchant->merchant_code}";
 
-            // --- Merchant side: reduce balance, record the transaction ---
-
             $merchantTransaction = MerchantTransaction::create([
                 'merchant_id' => $merchant->id,
                 'transaction_no' => $this->transactionNumberService->generate('MST'),
@@ -104,13 +96,6 @@ class MerchantSettlementService
             $merchantBalance->available_balance -= $amount;
             $merchantBalance->last_transaction_id = $merchantTransaction->id;
             $merchantBalance->save();
-
-            // --- Customer account side: credit the merchant's own account ---
-            //
-            // Deliberately not using CustomerAccountService::deposit() here --
-            // it hardcodes transaction_type to CASH_DEPOSIT, which would
-            // misrepresent this as new cash entering the bank rather than an
-            // internal transfer from the merchant liability pool.
 
             $accountBalance = CustomerAccountBalance::where('customer_account_id', $account->id)
                 ->lockForUpdate()
@@ -149,11 +134,7 @@ class MerchantSettlementService
 
             $customerAccountTransaction->update(['posted' => true]);
 
-            // --- GL posting: internal transfer between two liability accounts ---
-
-            $creditKey = $account->account_type === 'CURRENT'
-                ? 'CUSTOMER_CURRENT'
-                : 'CUSTOMER_SAVINGS';
+            $creditKey = $this->glResolver->resolve($account);
 
             $cashLedger = CashLedger::create([
                 'reference_no' => $merchantTransaction->transaction_no,
@@ -181,7 +162,6 @@ class MerchantSettlementService
 
             $merchantTransaction->update(['posted' => true]);
 
-            // Fires FinancialTransactionPosted internally once the GL entry balances.
             $this->glPostingService->postFromCashLedger($cashLedger);
 
             return [
