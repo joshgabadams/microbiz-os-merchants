@@ -74,6 +74,18 @@ export interface ApprovalRequestModel {
   created_at: string;
 }
 
+export type MerchantStatus =
+  | 'DRAFT'
+  | 'PENDING_KYC'
+  | 'PENDING_REVIEW'
+  | 'APPROVED'
+  | 'ACTIVE'
+  | 'REJECTED'
+  | 'SUSPENDED'
+  | 'RESTRICTED'
+  | 'DEACTIVATED'
+  | 'CLOSED';
+
 export interface Merchant {
   id: number;
   merchant_code: string;
@@ -83,7 +95,13 @@ export interface Merchant {
   email: string | null;
   branch_id: number | null;
   customer_account_id: number | null;
-  status: 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATED';
+  status: MerchantStatus;
+  onboarded_by: number | null;
+  submitted_at: string | null;
+  approved_by: number | null;
+  approved_at: string | null;
+  rejection_reason: string | null;
+  activated_at: string | null;
   balance?: {
     ledger_balance: string;
     available_balance: string;

@@ -19,6 +19,10 @@ class PaymentsRbacSeeder extends Seeder
         $permissions = [
             'wallets.manage' => 'payments',
             'merchants.onboard' => 'payments',
+            'merchants.submit' => 'payments',
+            'merchants.approve' => 'payments',
+            'merchants.reject' => 'payments',
+            'merchants.activate' => 'payments',
             'merchants.settle' => 'payments',
             'payments.process' => 'payments',
             'agency_banking.manage' => 'payments',
@@ -35,7 +39,11 @@ class PaymentsRbacSeeder extends Seeder
             ],
             'merchant-support' => [
                 'label' => 'Merchant Support',
-                'permissions' => ['merchants.onboard', 'payments.process'],
+                'permissions' => ['merchants.onboard', 'merchants.submit', 'payments.process'],
+            ],
+            'merchant-approval-officer' => [
+                'label' => 'Merchant Approval Officer',
+                'permissions' => ['merchants.approve', 'merchants.reject', 'merchants.activate'],
             ],
             'merchant-settlement-officer' => [
                 'label' => 'Merchant Settlement Officer',
