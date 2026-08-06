@@ -15,6 +15,13 @@ export const routes: Routes = [
     children: [
       { path: '', redirectTo: 'merchants', pathMatch: 'full' },
       {
+        path: 'agents',
+        loadComponent: () =>
+          import('./features/agents/agent-list.component').then(
+            (m) => m.AgentListComponent
+          ),
+      },
+      {
         path: 'merchants',
         loadComponent: () =>
           import('./features/merchants/merchant-list.component').then(

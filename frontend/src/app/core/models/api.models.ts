@@ -110,6 +110,57 @@ export interface Merchant {
   };
 }
 
+export type AgentStatus =
+  | 'PROSPECT'
+  | 'DRAFT'
+  | 'PENDING_KYC'
+  | 'PENDING_LOCATION_VERIFICATION'
+  | 'PENDING_COMPLIANCE_REVIEW'
+  | 'PENDING_APPROVAL'
+  | 'APPROVED'
+  | 'AGREEMENT_PENDING'
+  | 'TRAINING_PENDING'
+  | 'TERMINAL_PENDING'
+  | 'ACTIVE'
+  | 'REJECTED'
+  | 'RESTRICTED'
+  | 'SUSPENDED'
+  | 'DORMANT'
+  | 'TERMINATED'
+  | 'EXPIRED'
+  | 'BLACKLISTED';
+
+export type AgentType = 'INDIVIDUAL' | 'BUSINESS' | 'CORPORATE';
+
+export interface Agent {
+  id: number;
+  agent_code: string;
+  agent_type: AgentType;
+  legal_name: string;
+  trading_name: string | null;
+  registration_number: string | null;
+  tax_identification_number: string | null;
+  phone: string;
+  email: string | null;
+  branch_id: number;
+  supervisor_id: number | null;
+  status: AgentStatus;
+  kyc_status: string;
+  risk_rating: string;
+  exclusive_relationship: boolean;
+  principal_reference: string | null;
+  daily_transaction_limit: string | null;
+  daily_cash_out_limit: string | null;
+  single_transaction_limit: string | null;
+  next_review_date: string | null;
+  created_by: number;
+  approved_by: number | null;
+  approved_at: string | null;
+  activated_at: string | null;
+  suspended_at: string | null;
+  suspension_reason: string | null;
+}
+
 export interface Wallet {
   id: number;
   wallet_no: string;

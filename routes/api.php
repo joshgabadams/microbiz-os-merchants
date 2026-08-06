@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\CustomerCashController;
 use App\Http\Controllers\Api\BalancingController;
 use App\Http\Controllers\Api\BranchEodController;
 use App\Http\Controllers\Api\MerchantController;
+use App\Http\Controllers\Api\AgentController;
 use App\Http\Controllers\Api\WalletController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\AuthController;
@@ -96,6 +97,42 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::post('/merchants/settle', [MerchantController::class, 'settle'])
             ->middleware('permission:merchants.settle');
+
+        // Agent registry (Sprint AG-01 per the M-PAY Agency Banking Blueprint).
+        // Locations/Agreements/Operators/Terminals are separate later sprints
+        // (AG-03/AG-04) -- deliberately not built yet.
+        Route::get('/agents', [AgentController::class, 'index']);
+        Route::get('/agents/{agent}', [AgentController::class, 'show']);
+
+        Route::post('/agents', [AgentController::class, 'store'])
+            ->middleware('permission:agents.create');
+
+        Route::patch('/agents/{agent}', [AgentController::class, 'update'])
+            ->middleware('permission:agents.edit');
+
+        Route::post('/agents/{agent}/submit', [AgentController::class, 'submit'])
+            ->middleware('permission:agents.submit');
+
+        Route::post('/agents/{agent}/approve', [AgentController::class, 'approve'])
+            ->middleware('permission:agents.approve');
+
+        Route::post('/agents/{agent}/reject', [AgentController::class, 'reject'])
+            ->middleware('permission:agents.reject');
+
+        Route::post('/agents/{agent}/activate', [AgentController::class, 'activate'])
+            ->middleware('permission:agents.activate');
+
+        Route::post('/agents/{agent}/restrict', [AgentController::class, 'restrict'])
+            ->middleware('permission:agents.restrict');
+
+        Route::post('/agents/{agent}/suspend', [AgentController::class, 'suspend'])
+            ->middleware('permission:agents.suspend');
+
+        Route::post('/agents/{agent}/reactivate', [AgentController::class, 'reactivate'])
+            ->middleware('permission:agents.reactivate');
+
+        Route::post('/agents/{agent}/terminate', [AgentController::class, 'terminate'])
+            ->middleware('permission:agents.terminate');
 
         Route::get('/wallets', [WalletController::class, 'index']);
         Route::get('/wallets/{wallet}', [WalletController::class, 'show']);
