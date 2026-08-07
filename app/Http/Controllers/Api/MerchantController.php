@@ -3,14 +3,18 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Merchant\AddMerchantDocumentRequest;
+use App\Http\Requests\Merchant\AddMerchantOwnerRequest;
 use App\Http\Requests\Merchant\CollectPosPaymentRequest;
 use App\Http\Requests\Merchant\CollectQrPaymentRequest;
 use App\Http\Requests\Merchant\OnboardMerchantRequest;
 use App\Http\Requests\Merchant\RejectMerchantRequest;
 use App\Http\Requests\Merchant\SettleMerchantRequest;
+use App\Http\Requests\Merchant\UpdateMerchantRequest;
 use App\Models\Merchant;
 use App\Services\Payments\MerchantActivationService;
 use App\Services\Payments\MerchantApprovalService;
+use App\Services\Payments\MerchantKycService;
 use App\Services\Payments\MerchantOnboardingService;
 use App\Services\Payments\MerchantPaymentService;
 use App\Services\Payments\MerchantSettlementService;
@@ -27,7 +31,8 @@ class MerchantController extends Controller
         protected MerchantPaymentService $paymentService,
         protected MerchantSettlementService $settlementService,
         protected MerchantApprovalService $approvalService,
-        protected MerchantActivationService $activationService
+        protected MerchantActivationService $activationService,
+        protected MerchantKycService $kycService
     ) {
     }
 
@@ -45,6 +50,13 @@ class MerchantController extends Controller
             $merchant->load('balance'),
             'Merchant retrieved successfully.'
         );
+    }
+
+    public function update(UpdateMerchantRequest $request, Merchant $merchant)
+    {
+        $merchant->update($request->validated());
+
+        return $this->success($merchant->fresh(), 'Merchant updated successfully.');
     }
 
     public function onboard(OnboardMerchantRequest $request)
@@ -119,6 +131,69 @@ class MerchantController extends Controller
         }
     }
 
+    public function suspend(Merchant $merchant, RejectMerchantRequest $request)
+    {
+        try {
+            $result = $this->onboardingService->suspend($merchant, $request->reason);
+
+            return $this->success($result, 'Merchant suspended.');
+        } catch (Exception $e) {
+            return $this->error($e->getMessage());
+        }
+    }
+
+    public function reactivate(Merchant $merchant)
+    {
+        try {
+            $result = $this->onboardingService->reactivate($merchant);
+
+            return $this->success($result, 'Merchant reactivated.');
+        } catch (Exception $e) {
+            return $this->error($e->getMessage());
+        }
+    }
+
+    public function deactivate(Merchant $merchant, RejectMerchantRequest $request)
+    {
+        try {
+            $result = $this->onboardingService->deactivate($merchant, $request->reason);
+
+            return $this->success($result, 'Merchant deactivated.');
+        } catch (Exception $e) {
+            return $this->error($e->getMessage());
+        }
+    }
+
+    public function listOwners(Merchant $merchant)
+    {
+        return $this->success(
+            $this->kycService->listOwners($merchant),
+            'Beneficial owners retrieved successfully.'
+        );
+    }
+
+    public function addOwner(Merchant $merchant, AddMerchantOwnerRequest $request)
+    {
+        $owner = $this->kycService->addOwner($merchant, $request->validated());
+
+        return $this->success($owner, 'Beneficial owner added successfully.', 201);
+    }
+
+    public function listDocuments(Merchant $merchant)
+    {
+        return $this->success(
+            $this->kycService->listDocuments($merchant),
+            'Documents retrieved successfully.'
+        );
+    }
+
+    public function addDocument(Merchant $merchant, AddMerchantDocumentRequest $request)
+    {
+        $document = $this->kycService->addDocument($merchant, $request->validated());
+
+        return $this->success($document, 'Document added successfully.', 201);
+    }
+
     public function collectQr(CollectQrPaymentRequest $request)
     {
         try {
@@ -127,7 +202,7 @@ class MerchantController extends Controller
             $result = $this->paymentService->collectQrPayment(
                 $merchant,
                 (float) $request->amount,
-                (int) $request->branch_id,
+                $request->idempotency_key,
                 $request->user()->id,
                 $request->reference,
                 $request->narration
@@ -150,7 +225,7 @@ class MerchantController extends Controller
             $result = $this->paymentService->collectPosPayment(
                 $merchant,
                 (float) $request->amount,
-                (int) $request->branch_id,
+                $request->idempotency_key,
                 $request->user()->id,
                 $request->reference,
                 $request->narration
@@ -173,7 +248,7 @@ class MerchantController extends Controller
             $result = $this->settlementService->settle(
                 $merchant,
                 (float) $request->amount,
-                (int) $request->branch_id,
+                $request->idempotency_key,
                 $request->user()->id,
                 $request->reference,
                 $request->narration

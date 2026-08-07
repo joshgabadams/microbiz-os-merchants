@@ -30,7 +30,7 @@ class MerchantSettlementService
     public function settle(
         Merchant $merchant,
         float $amount,
-        int $branchId,
+        string $idempotencyKey,
         int $performedBy,
         ?string $reference = null,
         ?string $narration = null
@@ -47,10 +47,30 @@ class MerchantSettlementService
             throw new Exception("Merchant {$merchant->merchant_code} has no linked customer account for settlement.");
         }
 
+        if (! $merchant->branch_id) {
+            throw new Exception("Merchant {$merchant->merchant_code} has no assigned branch; cannot process settlement.");
+        }
+
+        $existing = MerchantTransaction::where('idempotency_key', $idempotencyKey)->first();
+
+        if ($existing) {
+            return [
+                'merchant_transaction' => $existing,
+                'customer_account_transaction' => null,
+                'merchant_balance' => MerchantBalance::where('merchant_id', $merchant->id)
+                    ->where('currency', 'NGN')
+                    ->first(),
+                'customer_account_balance' => null,
+                'cash_ledger' => CashLedger::where('source_type', MerchantTransaction::class)
+                    ->where('source_id', $existing->id)
+                    ->first(),
+            ];
+        }
+
         return DB::transaction(function () use (
             $merchant,
             $amount,
-            $branchId,
+            $idempotencyKey,
             $performedBy,
             $reference,
             $narration
@@ -64,7 +84,10 @@ class MerchantSettlementService
                 throw new Exception("Balance record not found for merchant {$merchant->merchant_code}.");
             }
 
-            if ($merchantBalance->available_balance < $amount) {
+            // Settlement draws from locked_balance (collected, pending
+            // settlement) -- not available_balance, which stays untouched
+            // until the real hold/reserve system (Settlement module) exists.
+            if ($merchantBalance->locked_balance < $amount) {
                 throw new Exception('Insufficient merchant balance for settlement.');
             }
 
@@ -79,7 +102,9 @@ class MerchantSettlementService
             $merchantTransaction = MerchantTransaction::create([
                 'merchant_id' => $merchant->id,
                 'transaction_no' => $this->transactionNumberService->generate('MST'),
+                'idempotency_key' => $idempotencyKey,
                 'transaction_type' => 'SETTLEMENT',
+                'status' => 'INITIATED',
                 'amount' => $amount,
                 'currency' => 'NGN',
                 'reference' => $reference,
@@ -93,7 +118,7 @@ class MerchantSettlementService
             event(new FinancialTransactionCreated($merchantTransaction));
 
             $merchantBalance->ledger_balance -= $amount;
-            $merchantBalance->available_balance -= $amount;
+            $merchantBalance->locked_balance -= $amount;
             $merchantBalance->last_transaction_id = $merchantTransaction->id;
             $merchantBalance->save();
 
@@ -138,7 +163,7 @@ class MerchantSettlementService
 
             $cashLedger = CashLedger::create([
                 'reference_no' => $merchantTransaction->transaction_no,
-                'branch_id' => $branchId,
+                'branch_id' => $merchant->branch_id,
                 'vault_id' => null,
                 'teller_id' => null,
                 'user_id' => $performedBy,
@@ -160,7 +185,7 @@ class MerchantSettlementService
                 'transaction_date' => now(),
             ]);
 
-            $merchantTransaction->update(['posted' => true]);
+            $merchantTransaction->update(['posted' => true, 'status' => 'SUCCESSFUL']);
 
             $this->glPostingService->postFromCashLedger($cashLedger);
 
