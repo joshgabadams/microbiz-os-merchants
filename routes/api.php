@@ -88,6 +88,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/merchants/{merchant}/documents', [MerchantController::class, 'addDocument'])
             ->middleware('permission:merchants.documents.manage');
 
+        Route::get('/merchants/{merchant}/locations', [MerchantController::class, 'listLocations']);
+        Route::post('/merchants/{merchant}/locations', [MerchantController::class, 'addLocation'])
+            ->middleware('permission:merchants.locations.manage');
+
         Route::post('/merchants/onboard', [MerchantController::class, 'onboard'])
             ->middleware('permission:merchants.onboard');
 
