@@ -19,11 +19,17 @@ class PaymentsRbacSeeder extends Seeder
         $permissions = [
             'wallets.manage' => 'payments',
             'merchants.onboard' => 'payments',
+            'merchants.edit' => 'payments',
             'merchants.submit' => 'payments',
             'merchants.approve' => 'payments',
             'merchants.reject' => 'payments',
             'merchants.activate' => 'payments',
+            'merchants.suspend' => 'payments',
+            'merchants.reactivate' => 'payments',
+            'merchants.deactivate' => 'payments',
             'merchants.settle' => 'payments',
+            'merchants.owners.manage' => 'payments',
+            'merchants.documents.manage' => 'payments',
             'payments.process' => 'payments',
             'agency_banking.manage' => 'payments',
             // Agent registry permissions (Blueprint §12) -- only the
@@ -53,11 +59,17 @@ class PaymentsRbacSeeder extends Seeder
             ],
             'merchant-support' => [
                 'label' => 'Merchant Support',
-                'permissions' => ['merchants.onboard', 'merchants.submit', 'payments.process'],
+                'permissions' => [
+                    'merchants.onboard', 'merchants.edit', 'merchants.submit',
+                    'merchants.owners.manage', 'merchants.documents.manage', 'payments.process',
+                ],
             ],
             'merchant-approval-officer' => [
                 'label' => 'Merchant Approval Officer',
-                'permissions' => ['merchants.approve', 'merchants.reject', 'merchants.activate'],
+                'permissions' => [
+                    'merchants.approve', 'merchants.reject', 'merchants.activate',
+                    'merchants.suspend', 'merchants.reactivate', 'merchants.deactivate',
+                ],
             ],
             'merchant-settlement-officer' => [
                 'label' => 'Merchant Settlement Officer',

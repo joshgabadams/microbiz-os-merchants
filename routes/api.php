@@ -77,6 +77,17 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/merchants', [MerchantController::class, 'index']);
         Route::get('/merchants/{merchant}', [MerchantController::class, 'show']);
 
+        Route::patch('/merchants/{merchant}', [MerchantController::class, 'update'])
+            ->middleware('permission:merchants.edit');
+
+        Route::get('/merchants/{merchant}/owners', [MerchantController::class, 'listOwners']);
+        Route::post('/merchants/{merchant}/owners', [MerchantController::class, 'addOwner'])
+            ->middleware('permission:merchants.owners.manage');
+
+        Route::get('/merchants/{merchant}/documents', [MerchantController::class, 'listDocuments']);
+        Route::post('/merchants/{merchant}/documents', [MerchantController::class, 'addDocument'])
+            ->middleware('permission:merchants.documents.manage');
+
         Route::post('/merchants/onboard', [MerchantController::class, 'onboard'])
             ->middleware('permission:merchants.onboard');
 
