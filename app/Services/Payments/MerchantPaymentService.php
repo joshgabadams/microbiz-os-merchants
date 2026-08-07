@@ -40,7 +40,7 @@ class MerchantPaymentService
     public function collectQrPayment(
         Merchant $merchant,
         float $amount,
-        int $branchId,
+        string $idempotencyKey,
         int $performedBy,
         ?string $reference = null,
         ?string $narration = null
@@ -49,7 +49,7 @@ class MerchantPaymentService
             $merchant,
             $amount,
             'QR_COLLECTION',
-            $branchId,
+            $idempotencyKey,
             $performedBy,
             $reference,
             $narration
@@ -62,7 +62,7 @@ class MerchantPaymentService
     public function collectPosPayment(
         Merchant $merchant,
         float $amount,
-        int $branchId,
+        string $idempotencyKey,
         int $performedBy,
         ?string $reference = null,
         ?string $narration = null
@@ -71,7 +71,7 @@ class MerchantPaymentService
             $merchant,
             $amount,
             'POS_COLLECTION',
-            $branchId,
+            $idempotencyKey,
             $performedBy,
             $reference,
             $narration
@@ -85,7 +85,7 @@ class MerchantPaymentService
         Merchant $merchant,
         float $amount,
         string $transactionType,
-        int $branchId,
+        string $idempotencyKey,
         int $performedBy,
         ?string $reference,
         ?string $narration
@@ -98,11 +98,31 @@ class MerchantPaymentService
             throw new Exception("Merchant {$merchant->merchant_code} is not active.");
         }
 
+        if (! $merchant->branch_id) {
+            throw new Exception("Merchant {$merchant->merchant_code} has no assigned branch; cannot process payment.");
+        }
+
+        // A retry with the same key must return the original result, not
+        // create a second transaction (Blueprint 5.3).
+        $existing = MerchantTransaction::where('idempotency_key', $idempotencyKey)->first();
+
+        if ($existing) {
+            return [
+                'transaction' => $existing,
+                'balance' => MerchantBalance::where('merchant_id', $merchant->id)
+                    ->where('currency', 'NGN')
+                    ->first(),
+                'cash_ledger' => CashLedger::where('source_type', MerchantTransaction::class)
+                    ->where('source_id', $existing->id)
+                    ->first(),
+            ];
+        }
+
         return DB::transaction(function () use (
             $merchant,
             $amount,
             $transactionType,
-            $branchId,
+            $idempotencyKey,
             $performedBy,
             $reference,
             $narration
@@ -121,7 +141,9 @@ class MerchantPaymentService
             $merchantTransaction = MerchantTransaction::create([
                 'merchant_id' => $merchant->id,
                 'transaction_no' => $this->transactionNumberService->generate('MCH'),
+                'idempotency_key' => $idempotencyKey,
                 'transaction_type' => $transactionType,
+                'status' => 'INITIATED',
                 'amount' => $amount,
                 'currency' => 'NGN',
                 'reference' => $reference,
@@ -136,15 +158,23 @@ class MerchantPaymentService
 
             event(new FinancialTransactionCreated($merchantTransaction));
 
+            // Blueprint 5.4: collection makes funds owed to the merchant
+            // (ledger_balance), not immediately available for settlement --
+            // locked_balance tracks "collected, pending settlement" the same
+            // way Vault already uses it for held funds. available_balance
+            // stays untouched here; it's only meaningful once holds/reserve
+            // logic (risk holds, dispute holds -- Modules 2/10, not built
+            // yet) actually populates it, which belongs to the Settlement
+            // module (Module 8), not this collection path.
             $merchantBalance->update([
                 'ledger_balance' => $merchantBalance->ledger_balance + $amount,
-                'available_balance' => $merchantBalance->available_balance + $amount,
+                'locked_balance' => $merchantBalance->locked_balance + $amount,
                 'last_transaction_id' => $merchantTransaction->id,
             ]);
 
             $cashLedger = CashLedger::create([
                 'reference_no' => $merchantTransaction->transaction_no,
-                'branch_id' => $branchId,
+                'branch_id' => $merchant->branch_id,
                 'vault_id' => null,
                 'teller_id' => null,
                 'user_id' => $performedBy,
@@ -166,7 +196,7 @@ class MerchantPaymentService
                 'transaction_date' => now(),
             ]);
 
-            $merchantTransaction->update(['posted' => true]);
+            $merchantTransaction->update(['posted' => true, 'status' => 'SUCCESSFUL']);
 
             // Fires FinancialTransactionPosted internally once the GL entry balances.
             $this->glPostingService->postFromCashLedger($cashLedger);

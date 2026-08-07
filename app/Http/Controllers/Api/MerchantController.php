@@ -127,7 +127,7 @@ class MerchantController extends Controller
             $result = $this->paymentService->collectQrPayment(
                 $merchant,
                 (float) $request->amount,
-                (int) $request->branch_id,
+                $request->idempotency_key,
                 $request->user()->id,
                 $request->reference,
                 $request->narration
@@ -150,7 +150,7 @@ class MerchantController extends Controller
             $result = $this->paymentService->collectPosPayment(
                 $merchant,
                 (float) $request->amount,
-                (int) $request->branch_id,
+                $request->idempotency_key,
                 $request->user()->id,
                 $request->reference,
                 $request->narration
@@ -173,7 +173,7 @@ class MerchantController extends Controller
             $result = $this->settlementService->settle(
                 $merchant,
                 (float) $request->amount,
-                (int) $request->branch_id,
+                $request->idempotency_key,
                 $request->user()->id,
                 $request->reference,
                 $request->narration

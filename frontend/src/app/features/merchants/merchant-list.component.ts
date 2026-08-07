@@ -17,7 +17,13 @@ import { Merchant } from '../../core/models/api.models';
         [(ngModel)]="newBusinessName"
         [disabled]="onboarding()"
       />
-      <button (click)="onboard()" [disabled]="onboarding() || !newBusinessName().trim()">
+      <input
+        type="number"
+        placeholder="Branch ID"
+        [(ngModel)]="newBranchId"
+        [disabled]="onboarding()"
+      />
+      <button (click)="onboard()" [disabled]="onboarding() || !newBusinessName().trim() || !newBranchId()">
         {{ onboarding() ? 'Onboarding...' : '+ Onboard Merchant' }}
       </button>
     </div>
@@ -40,6 +46,7 @@ import { Merchant } from '../../core/models/api.models';
             <th>Business Name</th>
             <th>Status</th>
             <th>Ledger Balance</th>
+            <th>Locked Balance</th>
             <th>Available Balance</th>
             <th>Actions</th>
           </tr>
@@ -51,6 +58,7 @@ import { Merchant } from '../../core/models/api.models';
               <td>{{ merchant.business_name }}</td>
               <td><span class="status status-{{ merchant.status.toLowerCase() }}">{{ merchant.status }}</span></td>
               <td>{{ merchant.balance?.ledger_balance ?? '-' }}</td>
+              <td>{{ merchant.balance?.locked_balance ?? '-' }}</td>
               <td>{{ merchant.balance?.available_balance ?? '-' }}</td>
               <td class="actions">
                 @if (merchant.status === 'DRAFT') {
@@ -62,6 +70,11 @@ import { Merchant } from '../../core/models/api.models';
                 }
                 @if (merchant.status === 'APPROVED') {
                   <button (click)="activate(merchant)">Activate</button>
+                }
+                @if (merchant.status === 'ACTIVE') {
+                  <button (click)="collectQr(merchant)">Collect QR</button>
+                  <button (click)="collectPos(merchant)">Collect POS</button>
+                  <button (click)="settle(merchant)">Settle</button>
                 }
                 @if (merchant.status === 'REJECTED' && merchant.rejection_reason) {
                   <span class="rejection-reason">{{ merchant.rejection_reason }}</span>
@@ -96,6 +109,7 @@ export class MerchantListComponent implements OnInit {
   actionError = signal<string | null>(null);
 
   newBusinessName = signal('');
+  newBranchId = signal<number | null>(null);
   onboarding = signal(false);
 
   constructor(private api: MerchantApiService) {}
@@ -120,17 +134,19 @@ export class MerchantListComponent implements OnInit {
 
   onboard(): void {
     const businessName = this.newBusinessName().trim();
+    const branchId = this.newBranchId();
 
-    if (!businessName) {
+    if (!businessName || !branchId) {
       return;
     }
 
     this.onboarding.set(true);
     this.actionError.set(null);
 
-    this.api.onboard({ business_name: businessName }).subscribe({
+    this.api.onboard({ business_name: businessName, branch_id: branchId }).subscribe({
       next: () => {
         this.newBusinessName.set('');
+        this.newBranchId.set(null);
         this.onboarding.set(false);
         this.reload();
       },
@@ -181,5 +197,83 @@ export class MerchantListComponent implements OnInit {
       next: () => this.reload(),
       error: (err) => this.actionError.set(err?.error?.message ?? 'Failed to activate merchant.'),
     });
+  }
+
+  collectQr(merchant: Merchant): void {
+    const amount = this.promptAmount(`Amount to collect via QR for ${merchant.business_name}:`);
+
+    if (amount === null) {
+      return;
+    }
+
+    this.actionError.set(null);
+
+    this.api
+      .collectQr({
+        merchant_id: merchant.id,
+        amount,
+        idempotency_key: crypto.randomUUID(),
+        reference: `qr-${Date.now()}`,
+      })
+      .subscribe({
+        next: () => this.reload(),
+        error: (err) => this.actionError.set(err?.error?.message ?? 'Failed to collect QR payment.'),
+      });
+  }
+
+  collectPos(merchant: Merchant): void {
+    const amount = this.promptAmount(`Amount to collect via POS for ${merchant.business_name}:`);
+
+    if (amount === null) {
+      return;
+    }
+
+    this.actionError.set(null);
+
+    this.api
+      .collectPos({
+        merchant_id: merchant.id,
+        amount,
+        idempotency_key: crypto.randomUUID(),
+        reference: `pos-${Date.now()}`,
+      })
+      .subscribe({
+        next: () => this.reload(),
+        error: (err) => this.actionError.set(err?.error?.message ?? 'Failed to collect POS payment.'),
+      });
+  }
+
+  settle(merchant: Merchant): void {
+    const amount = this.promptAmount(`Amount to settle out for ${merchant.business_name}:`);
+
+    if (amount === null) {
+      return;
+    }
+
+    this.actionError.set(null);
+
+    this.api
+      .settle({
+        merchant_id: merchant.id,
+        amount,
+        idempotency_key: crypto.randomUUID(),
+        reference: `settle-${Date.now()}`,
+      })
+      .subscribe({
+        next: () => this.reload(),
+        error: (err) => this.actionError.set(err?.error?.message ?? 'Failed to settle merchant.'),
+      });
+  }
+
+  private promptAmount(message: string): number | null {
+    const raw = window.prompt(message);
+
+    if (!raw) {
+      return null;
+    }
+
+    const amount = Number(raw);
+
+    return Number.isFinite(amount) && amount > 0 ? amount : null;
   }
 }

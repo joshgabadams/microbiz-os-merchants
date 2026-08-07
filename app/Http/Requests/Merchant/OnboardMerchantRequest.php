@@ -22,7 +22,7 @@ class OnboardMerchantRequest extends FormRequest
             'contact_name' => ['nullable', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:20'],
             'email' => ['nullable', 'email', 'max:255'],
-            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
+            'branch_id' => ['required', 'integer', 'exists:branches,id'],
         ];
     }
 }
