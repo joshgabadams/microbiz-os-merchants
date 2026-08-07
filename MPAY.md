@@ -2,9 +2,9 @@
 
 | | |
 |---|---|
-| Status | Foundation in progress — Sprint AG-01 (Agent Registry) complete per the M-PAY Agency Banking Blueprint |
+| Status | Foundation in progress — Agent Sprint AG-01 done; Merchant registry/KYC/payment-bug-fixes done (see §4 and §8) |
 | Location | `app/Domain/MPay/` (code) + `database/migrations/mpay/` (schema), inside the `microbiz-os` repo |
-| Last updated | 2026-08-06 |
+| Last updated | 2026-08-07 |
 | Related docs | `CHANGELOG.md` (core backend bug tracking), `AUDIT.md` (capability gap audit) |
 
 This file is a record of what's actually built and verified, not a plan of what's intended. If something below doesn't match the code, the code wins — update this file, don't trust it blindly.
@@ -168,28 +168,30 @@ isolation principle this module enforces in code.
 
 ## 7. Known architectural divergence — a Merchant module already exists on `main`
 
-As of 2026-07-29, `main` has its own payment-collection feature (`app/Models/Merchant.php`,
+As of 2026-07-29, `main` gained its own payment-collection feature (`app/Models/Merchant.php`,
 `MerchantBalance.php`, `MerchantTransaction.php`, `app/Services/Payments/MerchantPaymentService.php`,
 migrations for `merchants`/`merchant_balances`/`merchant_transactions`), introduced in a commit titled
 "changes for bug fixes, and m-pay merger." This was built independently of the module described in this
 file, and the two are **not the same thing** — but they represent a real fork in direction that needs a
-decision, not silent parallel development.
+decision, not silent parallel development. **Since then (2026-08-07) this Merchant module has had real
+work done against the actual Merchant Management Services Blueprint — see §8 for current status.**
 
-**What exists on `main`, factually:**
+**What was true on `main` as of 2026-07-29** (some of this is now fixed, see §8):
 - Lives entirely in the *main* database — `merchants`/`merchant_balances`/`merchant_transactions` have real
   foreign keys straight into `branches`, `users`, and `CashLedger`. It's built as a direct extension of
-  FinCore, not an isolated payments layer.
+  FinCore, not an isolated payments layer. **Still true, and now a deliberate choice, not an oversight** —
+  matches the Agent registry's own main-database placement decided independently later.
 - Amounts are `decimal(24,2)` — actual decimals, not integer minor units. This violates the Build Guide's
-  own money rule (the same guide this feature's commit message references).
+  own money rule. **Still true, not addressed.**
 - `MerchantPaymentService::collect()` writes to `CashLedger` and calls
   `GlPostingService::postFromCashLedger()` **synchronously**, in the same request that creates the
-  transaction.
-- No idempotency handling — no replay guard against a duplicate/retried request.
+  transaction. **Still true, not addressed** — a real processor integration would need this to be async.
+- ~~No idempotency handling~~ **Fixed 2026-08-07** — see §8.
 
-**Immediate issue:** `collect()`'s synchronous GL post means every merchant collection attempt hits the
-*exact* `gl_journals` schema bug already tracked as bug #1 in `CHANGELOG.md`. This feature is not
-functional right now, for the same root cause as everything else that touches GL posting on this
-database. Fixing that bug fixes this too — it isn't a separate problem to solve twice.
+**Immediate issue, historical:** `collect()`'s synchronous GL post used to hit the `gl_journals` schema bug
+tracked as bug #1 in `CHANGELOG.md`. A fix migration for that (`add_missing_columns_to_gl_journals_table`)
+exists in the codebase now, added independently of this module's own work — verify it's actually been run
+before assuming Merchant collection posts cleanly end to end.
 
 **Long-term risk if this isn't reconciled:**
 1. **Two incompatible philosophies for handling money in the same codebase.** This module treats FinCore
@@ -212,3 +214,60 @@ database. Fixing that bug fixes this too — it isn't a separate problem to solv
 same environment and can actually see each other's work as it lands) will surface this kind of overlap
 faster in the future, which helps, but it doesn't substitute for the two builders agreeing on one direction.
 That conversation is still owed, just not blocking anything immediate.
+
+## 8. Merchant module — actual build status against the real Blueprint (2026-08-07)
+
+Like Agent, this is built against a real spec: `M-PAY Merchant Management Services.pdf`. Unlike Agent, this
+wasn't a from-scratch rework — the Merchant module already existed (§7) and this was a targeted pass to
+(a) fix real bugs the Blueprint's §5 explicitly flags as critical, and (b) build the schema/KYC fields a
+real, separately-built frontend (Peak Empowerment — a React POS Admin Console, built by another developer
+directly against this same Blueprint) is already waiting on.
+
+**Fixed — Blueprint §5 critical bugs, all in `MerchantPaymentService`/`MerchantSettlementService`:**
+- §5.2: branch was trusted from client input in collect/settle — now derived server-side from
+  `$merchant->branch_id`, with a guard that fails cleanly (not a raw DB error) if a merchant has no branch
+- §5.3: no idempotency — `idempotency_key` now required on collect/settle; a retry with the same key
+  returns the original result instead of creating a duplicate transaction
+- §5.4: collection increased `ledger_balance` and `available_balance` together — now collection increases
+  `ledger_balance` + `locked_balance` (reusing the existing, previously-unused `locked_balance` column,
+  matching Vault's own `ledger = available + locked` pattern); `available_balance` stays untouched until a
+  real hold/reserve system exists (that's Module 8/Settlement batching, still not built — see below)
+- §5.6: added a real `status` column (`INITIATED`/`SUCCESSFUL`) on `merchant_transactions`, separate from
+  `posted` (which only ever describes GL posting)
+- Also fixed opportunistically: routes for merchant `suspend`/`reactivate`/`deactivate` existed from an
+  earlier merge, but the controller methods and permissions didn't — calling them threw undefined-method
+  errors. Implemented properly with status guards, matching Agent's activation-service pattern.
+
+**Built — schema enhancement + KYC (Blueprint §8.1/8.2/8.3):** `merchants` table gained ~25 fields matching
+both the Blueprint's schema and Peak Empowerment's actual onboarding wizard (`legal_name`, `trading_name`,
+`registration_number`, `risk_rating`, `settlement_frequency`, `kyc_status`, etc.) New
+`merchant_beneficial_owners` and `merchant_documents` tables with list/add endpoints, plus
+`PATCH /merchants/:id` for edits. Verified end-to-end via curl against the real running API (onboard →
+add owner → add document → list both → update → submit → approve (different user) → activate → suspend →
+reactivate).
+
+**Module-by-module status against the Blueprint's 11 modules (§7 of the Merchant PDF):**
+
+1. **Merchant Registry** — done at the schema level. All of §8.1's fields exist except a separate `country`
+   column (minor gap). Lifecycle/maker-checker approval already matched the Blueprint before this pass.
+2. **Merchant KYC and Due Diligence** — partial. Tables and manual capture exist (owners, documents); no
+   sanctions/PEP screening *integration* (just boolean fields someone fills in by hand), no
+   `compliance-review` workflow endpoint (still on Peak Empowerment's "Awaiting Backend" list).
+3. **Merchant Locations** — not built. Still one `branch_id` field, no multi-location support.
+4. **Merchant Users** — not built. No merchant-scoped user roles.
+5. **Merchant Devices and Terminals** — not built. No terminal registry, no list endpoint.
+6. **Merchant Payments** — partial. POS/QR channels are now *correct* (all four bugs above fixed), but
+   still only 2 of 7 channels from the Blueprint's channel list exist (missing payment link, transfer
+   collection, virtual account, web checkout).
+7. **Merchant Fees and Pricing** — not built. No versioned/effective-dated pricing plans.
+8. **Merchant Settlement** — partial. `settle()` is now correct (idempotent, branch-derived, balance-safe),
+   but not the batch-generate → maker-submit → checker-approve → process workflow from §8/§14.
+9. **Reconciliation** — not built.
+10. **Disputes, Refunds and Reversals** — not built. No refund or reverse endpoints exist at all.
+11. **Merchant Risk and Compliance** — partial. `risk_rating`/`daily_limit`/`monthly_limit` fields exist on
+    the schema now, but no actual risk rules, velocity monitoring, or alerting logic runs against them.
+
+**Not built yet, roughly in Blueprint sprint order (§24, MP-02 through MP-09):** the rest of Peak
+Empowerment's "Awaiting Backend" list — locations, terminals list, transactions/settlements/disputes list
+endpoints, `compliance-review` — then pricing (MP-06), reconciliation (MP-07), disputes/refunds (MP-08),
+TESSA merchant intelligence (MP-09).
