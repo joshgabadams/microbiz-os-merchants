@@ -23,7 +23,7 @@ export class MerchantApiService {
     contact_name?: string;
     phone?: string;
     email?: string;
-    branch_id?: number;
+    branch_id: number;
   }): Observable<ApiResponse<Merchant>> {
     return this.http.post<ApiResponse<Merchant>>(`${this.base}/onboard`, payload);
   }
@@ -42,5 +42,35 @@ export class MerchantApiService {
 
   activate(id: number): Observable<ApiResponse<Merchant>> {
     return this.http.post<ApiResponse<Merchant>>(`${this.base}/${id}/activate`, {});
+  }
+
+  collectQr(payload: {
+    merchant_id: number;
+    amount: number;
+    idempotency_key: string;
+    reference?: string;
+    narration?: string;
+  }): Observable<ApiResponse<unknown>> {
+    return this.http.post<ApiResponse<unknown>>(`${this.base}/collect/qr`, payload);
+  }
+
+  collectPos(payload: {
+    merchant_id: number;
+    amount: number;
+    idempotency_key: string;
+    reference?: string;
+    narration?: string;
+  }): Observable<ApiResponse<unknown>> {
+    return this.http.post<ApiResponse<unknown>>(`${this.base}/collect/pos`, payload);
+  }
+
+  settle(payload: {
+    merchant_id: number;
+    amount: number;
+    idempotency_key: string;
+    reference?: string;
+    narration?: string;
+  }): Observable<ApiResponse<unknown>> {
+    return this.http.post<ApiResponse<unknown>>(`${this.base}/settle`, payload);
   }
 }

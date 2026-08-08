@@ -20,7 +20,7 @@ class CollectQrPaymentRequest extends FormRequest
         return [
             'merchant_id' => ['required', 'integer', 'exists:merchants,id'],
             'amount' => ['required', 'numeric', 'gt:0'],
-            'branch_id' => ['required', 'integer', 'exists:branches,id'],
+            'idempotency_key' => ['required', 'string', 'max:255'],
             'reference' => ['nullable', 'string', 'max:255'],
             'narration' => ['nullable', 'string'],
         ];
