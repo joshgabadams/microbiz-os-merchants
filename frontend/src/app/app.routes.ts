@@ -105,6 +105,13 @@ export const routes: Routes = [
             (m) => m.FixedDepositListComponent
           ),
       },
+      {
+        path: 'tessa',
+        loadComponent: () =>
+          import('./features/tessa/tessa-dashboard.component').then(
+            (m) => m.TessaDashboardComponent
+          ),
+      },
     ],
   },
   { path: '**', redirectTo: '' },

@@ -187,6 +187,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // TESSA rule-based alerts (first pass: teller variance, high
         // reversal, unusual approval -- see config/tessa.php).
+        Route::get('/tessa/summary', [TessaAlertController::class, 'summary'])
+            ->middleware('permission:tessa.view');
         Route::get('/tessa/alerts', [TessaAlertController::class, 'index'])
             ->middleware('permission:tessa.view');
         Route::get('/tessa/alerts/{tessaAlert}', [TessaAlertController::class, 'show'])

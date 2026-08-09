@@ -40,6 +40,33 @@ class TessaAlertController extends Controller
         return $this->success($tessaAlert, 'TESSA alert retrieved successfully.');
     }
 
+    /**
+     * Aggregate counts for the management dashboard -- computed
+     * server-side rather than having the frontend fetch every alert and
+     * aggregate client-side, since this is meant to scale as alert
+     * volume grows.
+     */
+    public function summary()
+    {
+        $summary = [
+            'total_open' => TessaAlert::where('status', 'OPEN')->count(),
+            'total_acknowledged' => TessaAlert::where('status', 'ACKNOWLEDGED')->count(),
+            'resolved_last_7_days' => TessaAlert::where('status', 'RESOLVED')
+                ->where('resolved_at', '>=', now()->subDays(7))
+                ->count(),
+            'open_by_severity' => TessaAlert::where('status', 'OPEN')
+                ->selectRaw('severity, COUNT(*) as count')
+                ->groupBy('severity')
+                ->pluck('count', 'severity'),
+            'open_by_type' => TessaAlert::where('status', 'OPEN')
+                ->selectRaw('alert_type, COUNT(*) as count')
+                ->groupBy('alert_type')
+                ->pluck('count', 'alert_type'),
+        ];
+
+        return $this->success($summary, 'TESSA summary retrieved successfully.');
+    }
+
     public function acknowledge(Request $request, TessaAlert $tessaAlert)
     {
         try {
