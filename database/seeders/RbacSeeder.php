@@ -27,6 +27,7 @@ class RbacSeeder extends Seeder
             'fixed_deposits.backdate' => 'fixed-deposit',
             'tessa.view' => 'tessa',
             'tessa.manage' => 'tessa',
+            'transactions.reverse' => 'cash-management',
         ];
 
         foreach ($permissions as $name => $module) {
@@ -57,11 +58,11 @@ class RbacSeeder extends Seeder
             ],
             'branch-manager' => [
                 'label' => 'Branch Manager',
-                'permissions' => ['approvals.approve', 'approvals.reject', 'branch_eod.close', 'tessa.view', 'tessa.manage'],
+                'permissions' => ['approvals.approve', 'approvals.reject', 'branch_eod.close', 'tessa.view', 'tessa.manage', 'transactions.reverse'],
             ],
             'compliance-officer' => [
                 'label' => 'Compliance Officer',
-                'permissions' => ['gl.sync', 'offices.sync', 'tessa.view', 'tessa.manage'],
+                'permissions' => ['gl.sync', 'offices.sync', 'tessa.view', 'tessa.manage', 'transactions.reverse'],
             ],
         ];
 
