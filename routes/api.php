@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\WalletController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\MfaController;
 use App\Http\Controllers\Api\FixedDepositController;
+use App\Http\Controllers\Api\TessaAlertController;
 use App\Http\Controllers\Api\AuthController;
 
 Route::prefix('v1')->group(function () {
@@ -183,5 +184,18 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::post('/fixed-deposits/{fixedDeposit}/liquidate', [FixedDepositController::class, 'liquidate'])
             ->middleware('permission:fixed_deposits.liquidate');
+
+        // TESSA rule-based alerts (first pass: teller variance, high
+        // reversal, unusual approval -- see config/tessa.php).
+        Route::get('/tessa/alerts', [TessaAlertController::class, 'index'])
+            ->middleware('permission:tessa.view');
+        Route::get('/tessa/alerts/{tessaAlert}', [TessaAlertController::class, 'show'])
+            ->middleware('permission:tessa.view');
+        Route::post('/tessa/alerts/{tessaAlert}/acknowledge', [TessaAlertController::class, 'acknowledge'])
+            ->middleware('permission:tessa.manage');
+        Route::post('/tessa/alerts/{tessaAlert}/resolve', [TessaAlertController::class, 'resolve'])
+            ->middleware('permission:tessa.manage');
+        Route::post('/tessa/detect', [TessaAlertController::class, 'detect'])
+            ->middleware('permission:tessa.manage');
     });
 });
