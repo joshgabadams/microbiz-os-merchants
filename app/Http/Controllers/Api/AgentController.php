@@ -3,11 +3,14 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Agent\AddAgentDocumentRequest;
+use App\Http\Requests\Agent\AddAgentOwnerRequest;
 use App\Http\Requests\Agent\AgentReasonRequest;
 use App\Http\Requests\Agent\OnboardAgentRequest;
 use App\Models\Agent;
 use App\Services\Payments\AgentActivationService;
 use App\Services\Payments\AgentApprovalService;
+use App\Services\Payments\AgentKycService;
 use App\Services\Payments\AgentRegistrationService;
 use App\Traits\ApiResponse;
 use Exception;
@@ -20,7 +23,8 @@ class AgentController extends Controller
     public function __construct(
         protected AgentRegistrationService $registrationService,
         protected AgentApprovalService $approvalService,
-        protected AgentActivationService $activationService
+        protected AgentActivationService $activationService,
+        protected AgentKycService $kycService
     ) {
     }
 
@@ -149,6 +153,43 @@ class AgentController extends Controller
             $result = $this->activationService->terminate($agent, $request->reason);
 
             return $this->success($result, 'Agent terminated.');
+        } catch (Exception $e) {
+            return $this->error($e->getMessage());
+        }
+    }
+
+    // ---------- AG-02: KYC & Approval ----------
+
+    public function listOwners(Agent $agent)
+    {
+        return $this->success($agent->owners, 'Agent owners retrieved successfully.');
+    }
+
+    public function addOwner(Agent $agent, AddAgentOwnerRequest $request)
+    {
+        $owner = $agent->owners()->create($request->validated());
+
+        return $this->success($owner, 'Agent owner added successfully.', 201);
+    }
+
+    public function listDocuments(Agent $agent)
+    {
+        return $this->success($agent->documents, 'Agent documents retrieved successfully.');
+    }
+
+    public function addDocument(Agent $agent, AddAgentDocumentRequest $request)
+    {
+        $document = $agent->documents()->create($request->validated());
+
+        return $this->success($document, 'Agent document added successfully.', 201);
+    }
+
+    public function completeKyc(Agent $agent, Request $request)
+    {
+        try {
+            $result = $this->kycService->completeKyc($agent, $request->user()->id);
+
+            return $this->success($result, 'Agent KYC completed; moved to location verification.');
         } catch (Exception $e) {
             return $this->error($e->getMessage());
         }

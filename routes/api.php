@@ -159,6 +159,17 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/agents/{agent}/terminate', [AgentController::class, 'terminate'])
             ->middleware('permission:agents.terminate');
 
+        Route::get('/agents/{agent}/owners', [AgentController::class, 'listOwners']);
+        Route::post('/agents/{agent}/owners', [AgentController::class, 'addOwner'])
+            ->middleware('permission:agents.owners.manage');
+
+        Route::get('/agents/{agent}/documents', [AgentController::class, 'listDocuments']);
+        Route::post('/agents/{agent}/documents', [AgentController::class, 'addDocument'])
+            ->middleware('permission:agents.documents.manage');
+
+        Route::post('/agents/{agent}/complete-kyc', [AgentController::class, 'completeKyc'])
+            ->middleware('permission:agents.kyc.review');
+
         Route::get('/wallets', [WalletController::class, 'index']);
         Route::get('/wallets/{wallet}', [WalletController::class, 'show']);
 
