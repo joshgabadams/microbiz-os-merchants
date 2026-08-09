@@ -1,3 +1,8 @@
+#!/bin/sh
+set -e
+cd /Users/user/microbiz/microbiz-os/frontend
+
+cat > src/app/features/tessa/tessa-dashboard.component.ts << 'MBOS_EOF'
 import { Component, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { SlicePipe } from '@angular/common';
@@ -306,3 +311,6 @@ export class TessaDashboardComponent implements OnInit {
     });
   }
 }
+MBOS_EOF
+
+echo "SlicePipe import fix applied."
