@@ -41,7 +41,12 @@ export class TessaApiService {
   }
 
   list(params?: { status?: string; alert_type?: string; severity?: string }): Observable<ApiResponse<TessaAlert[]>> {
-    return this.http.get<ApiResponse<TessaAlert[]>>(`${this.base}/alerts`, { params });
+    const query: Record<string, string> = {};
+    if (params?.status) query['status'] = params.status;
+    if (params?.alert_type) query['alert_type'] = params.alert_type;
+    if (params?.severity) query['severity'] = params.severity;
+
+    return this.http.get<ApiResponse<TessaAlert[]>>(`${this.base}/alerts`, { params: query });
   }
 
   acknowledge(id: number): Observable<ApiResponse<TessaAlert>> {
