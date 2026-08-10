@@ -24,6 +24,7 @@ class PaymentsRbacSeeder extends Seeder
             'merchants.settle' => 'payments',
             'merchants.owners.manage' => 'payments',
             'merchants.documents.manage' => 'payments',
+            'merchants.locations.manage' => 'payments',
             'payments.process' => 'payments',
             'agency_banking.manage' => 'payments',
             'agents.view' => 'payments',
@@ -60,7 +61,8 @@ class PaymentsRbacSeeder extends Seeder
                 'label' => 'Merchant Support',
                 'permissions' => [
                     'merchants.onboard', 'merchants.edit', 'merchants.submit',
-                    'merchants.owners.manage', 'merchants.documents.manage', 'payments.process',
+                    'merchants.owners.manage', 'merchants.documents.manage', 'merchants.locations.manage',
+                    'payments.process',
                 ],
             ],
             'merchant-approval-officer' => [

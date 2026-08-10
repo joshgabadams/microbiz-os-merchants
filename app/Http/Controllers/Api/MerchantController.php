@@ -10,11 +10,13 @@ use App\Http\Requests\Merchant\CollectQrPaymentRequest;
 use App\Http\Requests\Merchant\OnboardMerchantRequest;
 use App\Http\Requests\Merchant\RejectMerchantRequest;
 use App\Http\Requests\Merchant\SettleMerchantRequest;
+use App\Http\Requests\Merchant\AddMerchantLocationRequest;
 use App\Http\Requests\Merchant\UpdateMerchantRequest;
 use App\Models\Merchant;
 use App\Services\Payments\MerchantActivationService;
 use App\Services\Payments\MerchantApprovalService;
 use App\Services\Payments\MerchantKycService;
+use App\Services\Payments\MerchantLocationService;
 use App\Services\Payments\MerchantOnboardingService;
 use App\Services\Payments\MerchantPaymentService;
 use App\Services\Payments\MerchantSettlementService;
@@ -32,7 +34,8 @@ class MerchantController extends Controller
         protected MerchantSettlementService $settlementService,
         protected MerchantApprovalService $approvalService,
         protected MerchantActivationService $activationService,
-        protected MerchantKycService $kycService
+        protected MerchantKycService $kycService,
+        protected MerchantLocationService $locationService
     ) {
     }
 
@@ -192,6 +195,21 @@ class MerchantController extends Controller
         $document = $this->kycService->addDocument($merchant, $request->validated());
 
         return $this->success($document, 'Document added successfully.', 201);
+    }
+
+    public function listLocations(Merchant $merchant)
+    {
+        return $this->success(
+            $this->locationService->list($merchant),
+            'Locations retrieved successfully.'
+        );
+    }
+
+    public function addLocation(Merchant $merchant, AddMerchantLocationRequest $request)
+    {
+        $location = $this->locationService->add($merchant, $request->validated());
+
+        return $this->success($location, 'Location added successfully.', 201);
     }
 
     public function collectQr(CollectQrPaymentRequest $request)
