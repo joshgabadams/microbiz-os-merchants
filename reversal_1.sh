@@ -1,3 +1,115 @@
+#!/bin/sh
+set -e
+cd /Users/user/microbiz/microbiz-os
+mkdir -p app/Http/Requests/CashManagement
+
+cat > database/migrations/2026_08_09_000001_add_customer_account_transaction_id_to_teller_transactions.php << 'MBOS_EOF'
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('teller_transactions', function (Blueprint $table) {
+            $table->foreignId('customer_account_transaction_id')
+                ->nullable()
+                ->after('teller_id')
+                ->constrained('customer_account_transactions')
+                ->nullOnDelete();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('teller_transactions', function (Blueprint $table) {
+            $table->dropConstrainedForeignId('customer_account_transaction_id');
+        });
+    }
+};
+MBOS_EOF
+
+cat > app/Models/TellerTransaction.php << 'MBOS_EOF'
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class TellerTransaction extends Model
+{
+    protected $fillable = [
+
+        'teller_id',
+
+        'customer_account_transaction_id',
+
+        'transaction_no',
+
+        'transaction_type',
+
+        'amount',
+
+        'currency',
+
+        'reference',
+
+        'narration',
+
+        'performed_by',
+
+        'approved_by',
+
+        'transaction_date',
+
+        'posted',
+
+        'reversal_of_transaction_id',
+        'is_reversed',
+        'reversed_at',
+         'reversed_by',
+
+    ];
+
+    protected $casts = [
+
+        'amount' => 'decimal:2',
+
+        'transaction_date' => 'datetime',
+
+        'posted' => 'boolean',
+
+        'is_reversed' => 'boolean',
+'reversed_at' => 'datetime',
+
+    ];
+
+    public function teller()
+    {
+        return $this->belongsTo(Teller::class);
+    }
+
+    public function customerAccountTransaction()
+    {
+        return $this->belongsTo(CustomerAccountTransaction::class);
+    }
+
+    public function performer()
+    {
+        return $this->belongsTo(User::class, 'performed_by');
+    }
+
+    public function approver()
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+}
+MBOS_EOF
+
+cat > app/Services/Customer/CustomerCashService.php << 'MBOS_EOF'
 <?php
 
 namespace App\Services\Customer;
@@ -249,3 +361,91 @@ $this->glPostingService->postFromCashLedger($cashLedger);
 }
 
 }
+MBOS_EOF
+
+cat > app/Http/Requests/CashManagement/ReverseCustomerTransactionRequest.php << 'MBOS_EOF'
+<?php
+
+namespace App\Http\Requests\CashManagement;
+
+use Illuminate\Contracts\Validation\ValidationRule;
+use Illuminate\Foundation\Http\FormRequest;
+
+class ReverseCustomerTransactionRequest extends FormRequest
+{
+    public function authorize(): bool
+    {
+        return true;
+    }
+
+    /**
+     * @return array<string, ValidationRule|array<mixed>|string>
+     */
+    public function rules(): array
+    {
+        return [
+            'reference' => ['nullable', 'string'],
+            'narration' => ['nullable', 'string'],
+        ];
+    }
+}
+MBOS_EOF
+
+cat > app/Http/Controllers/Api/TransactionReversalController.php << 'MBOS_EOF'
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Http\Requests\CashManagement\ReverseCustomerTransactionRequest;
+use App\Models\CustomerAccountTransaction;
+use App\Services\CashManagement\TransactionReversalService;
+use App\Traits\ApiResponse;
+use Exception;
+
+class TransactionReversalController extends Controller
+{
+    use ApiResponse;
+
+    public function __construct(
+        protected TransactionReversalService $reversalService
+    ) {
+    }
+
+    public function reverse(ReverseCustomerTransactionRequest $request, CustomerAccountTransaction $customerAccountTransaction)
+    {
+        try {
+            $tellerTransaction = \App\Models\TellerTransaction::where(
+                'customer_account_transaction_id',
+                $customerAccountTransaction->id
+            )->firstOrFail();
+
+            $result = match ($customerAccountTransaction->transaction_type) {
+                'CASH_DEPOSIT' => $this->reversalService->reverseCustomerDeposit(
+                    $customerAccountTransaction,
+                    $tellerTransaction,
+                    $request->user()->id,
+                    $request->reference,
+                    $request->narration
+                ),
+                'CASH_WITHDRAWAL' => $this->reversalService->reverseCustomerWithdrawal(
+                    $customerAccountTransaction,
+                    $tellerTransaction,
+                    $request->user()->id,
+                    $request->reference,
+                    $request->narration
+                ),
+                default => throw new Exception(
+                    "Transaction type {$customerAccountTransaction->transaction_type} cannot be reversed via this endpoint."
+                ),
+            };
+
+            return $this->success($result, 'Transaction reversed successfully.');
+        } catch (Exception $e) {
+            return $this->error($e->getMessage());
+        }
+    }
+}
+MBOS_EOF
+
+echo "Reversal Part 1 of 2 applied (migration, model, service, request, controller)."

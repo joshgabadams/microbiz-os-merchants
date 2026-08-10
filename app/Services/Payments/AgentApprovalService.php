@@ -6,19 +6,6 @@ use App\Domain\MPay\Enums\AgentStatus;
 use App\Models\Agent;
 use Exception;
 
-/**
- * Pre-approval workflow: DRAFT -> PENDING_APPROVAL -> APPROVED / REJECTED.
- *
- * The Blueprint's real chain is DRAFT -> PENDING_KYC ->
- * PENDING_LOCATION_VERIFICATION -> PENDING_COMPLIANCE_REVIEW ->
- * PENDING_APPROVAL, each step owned by a module that doesn't exist yet
- * (KYC review is AG-02, location verification is AG-03). Submitting here
- * deliberately skips straight to PENDING_APPROVAL rather than stopping at
- * PENDING_KYC with no way to advance -- a staging-only simplification,
- * same pattern as other "module doesn't exist yet" decisions in MPAY.md.
- * AG-02/AG-03 must insert the real intermediate gates before this reaches
- * production.
- */
 class AgentApprovalService
 {
     /**
@@ -31,11 +18,48 @@ class AgentApprovalService
         }
 
         $agent->update([
-            'status' => AgentStatus::PENDING_APPROVAL->value,
+            'status' => AgentStatus::PENDING_KYC->value,
         ]);
 
         return $agent->fresh();
     }
+
+    /**
+ * Complete independent compliance review after location verification.
+ *
+ * @throws Exception
+ */
+public function completeComplianceReview(
+    Agent $agent,
+    int $reviewedBy
+): Agent {
+    if ($agent->status !== AgentStatus::PENDING_COMPLIANCE_REVIEW->value) {
+        throw new Exception(
+            "Agent {$agent->agent_code} is not pending compliance review."
+        );
+    }
+
+    if ($agent->created_by === $reviewedBy) {
+        throw new Exception(
+            'The registering officer cannot complete compliance review for their own agent.'
+        );
+    }
+
+    if (! $agent->locations()
+        ->where('verification_status', 'VERIFIED')
+        ->where('status', 'ACTIVE')
+        ->exists()) {
+        throw new Exception(
+            'Agent must have an active verified location before compliance review can be completed.'
+        );
+    }
+
+    $agent->update([
+        'status' => AgentStatus::PENDING_APPROVAL->value,
+    ]);
+
+    return $agent->fresh();
+}
 
     /**
      * @throws Exception
@@ -51,7 +75,7 @@ class AgentApprovalService
         }
 
         $agent->update([
-            'status' => AgentStatus::APPROVED->value,
+            'status' => AgentStatus::AGREEMENT_PENDING->value,
             'approved_by' => $approvedBy,
             'approved_at' => now(),
         ]);
@@ -72,9 +96,6 @@ class AgentApprovalService
             throw new Exception('The registering officer cannot reject their own agent.');
         }
 
-        // §8.1 has no dedicated rejection_reason column -- reusing
-        // suspension_reason as the general "why this negative status"
-        // field rather than adding a column outside the given schema.
         $agent->update([
             'status' => AgentStatus::REJECTED->value,
             'approved_by' => $rejectedBy,

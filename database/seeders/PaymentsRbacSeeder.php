@@ -6,12 +6,6 @@ use App\Models\Permission;
 use App\Models\Role;
 use Illuminate\Database\Seeder;
 
-/**
- * RBAC for the Payments domain (M-PAY). Kept as its own seeder, separate
- * from RbacSeeder, so each domain owns its own permissions/roles file
- * rather than one growing core seeder -- the same "domain owns its own
- * migrations/seeders" convention app/Domain/Finance already implies.
- */
 class PaymentsRbacSeeder extends Seeder
 {
     public function run(): void
@@ -33,9 +27,6 @@ class PaymentsRbacSeeder extends Seeder
             'merchants.locations.manage' => 'payments',
             'payments.process' => 'payments',
             'agency_banking.manage' => 'payments',
-            // Agent registry permissions (Blueprint §12) -- only the
-            // AG-01-relevant subset; kyc-review/locations/agreements/etc.
-            // belong to later sprints (AG-02/AG-03/AG-04).
             'agents.view' => 'payments',
             'agents.create' => 'payments',
             'agents.edit' => 'payments',
@@ -47,6 +38,14 @@ class PaymentsRbacSeeder extends Seeder
             'agents.suspend' => 'payments',
             'agents.reactivate' => 'payments',
             'agents.terminate' => 'payments',
+            'agents.owners.manage' => 'payments',
+            'agents.documents.manage' => 'payments',
+            'agents.kyc.review' => 'payments',
+            'agents.locations.create' => 'payments',
+            'agents.locations.verify' => 'payments',
+            'agents.compliance.review' => 'payments',
+            'agents.agreements.create' => 'payments',
+            'agents.agreements.execute' => 'payments',
         ];
 
         foreach ($permissions as $name => $module) {
@@ -83,8 +82,54 @@ class PaymentsRbacSeeder extends Seeder
             ],
             'agent-registration-officer' => [
                 'label' => 'Agent Registration Officer',
-                'permissions' => ['agents.view', 'agents.create', 'agents.edit', 'agents.submit'],
+                'permissions' => [
+                    'agents.view', 'agents.create', 'agents.edit', 'agents.submit',
+                    'agents.owners.manage', 'agents.documents.manage',
+                ],
             ],
+            'agent-kyc-officer' => [
+                'label' => 'Agent KYC Officer',
+                'permissions' => ['agents.view', 'agents.kyc.review'],
+            ],
+            'agent-location-officer' => [
+    'label' => 'Agent Location Officer',
+    'permissions' => [
+        'agents.view',
+        'agents.locations.create',
+    ],
+],
+
+'agent-location-verifier' => [
+    'label' => 'Agent Location Verifier',
+    'permissions' => [
+        'agents.view',
+        'agents.locations.verify',
+    ],
+],
+
+'agent-compliance-officer' => [
+    'label' => 'Agent Compliance Officer',
+    'permissions' => [
+        'agents.view',
+        'agents.compliance.review',
+    ],
+],
+
+'agent-agreement-officer' => [
+    'label' => 'Agent Agreement Officer',
+    'permissions' => [
+        'agents.view',
+        'agents.agreements.create',
+    ],
+],
+
+'agent-agreement-executor' => [
+    'label' => 'Agent Agreement Executor',
+    'permissions' => [
+        'agents.view',
+        'agents.agreements.execute',
+    ],
+],
             'agent-approval-officer' => [
                 'label' => 'Agent Approval Officer',
                 'permissions' => [

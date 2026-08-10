@@ -10,6 +10,8 @@ class TellerTransaction extends Model
 
         'teller_id',
 
+        'customer_account_transaction_id',
+
         'transaction_no',
 
         'transaction_type',
@@ -50,15 +52,14 @@ class TellerTransaction extends Model
 
     ];
 
-    /*
-    |--------------------------------------------------------------------------
-    | Relationships
-    |--------------------------------------------------------------------------
-    */
-
     public function teller()
     {
         return $this->belongsTo(Teller::class);
+    }
+
+    public function customerAccountTransaction()
+    {
+        return $this->belongsTo(CustomerAccountTransaction::class);
     }
 
     public function performer()
