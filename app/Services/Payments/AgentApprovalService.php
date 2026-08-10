@@ -25,6 +25,43 @@ class AgentApprovalService
     }
 
     /**
+ * Complete independent compliance review after location verification.
+ *
+ * @throws Exception
+ */
+public function completeComplianceReview(
+    Agent $agent,
+    int $reviewedBy
+): Agent {
+    if ($agent->status !== AgentStatus::PENDING_COMPLIANCE_REVIEW->value) {
+        throw new Exception(
+            "Agent {$agent->agent_code} is not pending compliance review."
+        );
+    }
+
+    if ($agent->created_by === $reviewedBy) {
+        throw new Exception(
+            'The registering officer cannot complete compliance review for their own agent.'
+        );
+    }
+
+    if (! $agent->locations()
+        ->where('verification_status', 'VERIFIED')
+        ->where('status', 'ACTIVE')
+        ->exists()) {
+        throw new Exception(
+            'Agent must have an active verified location before compliance review can be completed.'
+        );
+    }
+
+    $agent->update([
+        'status' => AgentStatus::PENDING_APPROVAL->value,
+    ]);
+
+    return $agent->fresh();
+}
+
+    /**
      * @throws Exception
      */
     public function approve(Agent $agent, int $approvedBy): Agent
@@ -38,7 +75,7 @@ class AgentApprovalService
         }
 
         $agent->update([
-            'status' => AgentStatus::APPROVED->value,
+            'status' => AgentStatus::AGREEMENT_PENDING->value,
             'approved_by' => $approvedBy,
             'approved_at' => now(),
         ]);

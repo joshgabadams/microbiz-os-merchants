@@ -74,4 +74,30 @@ class Agent extends Model
     {
         return $this->hasMany(AgentDocument::class);
     }
+
+
+    public function locations()
+{
+    return $this->hasMany(AgentLocation::class);
+}
+
+public function agreements()
+{
+    return $this->hasMany(AgentAgreement::class);
+}
+
+public function activeAgreement()
+{
+    return $this->hasOne(AgentAgreement::class)
+        ->where('status', 'ACTIVE')
+        ->latestOfMany();
+}
+
+public function verifiedLocations()
+{
+    return $this->hasMany(AgentLocation::class)
+        ->where('verification_status', 'VERIFIED');
+}
+
+
 }

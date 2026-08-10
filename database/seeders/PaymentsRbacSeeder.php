@@ -40,6 +40,11 @@ class PaymentsRbacSeeder extends Seeder
             'agents.owners.manage' => 'payments',
             'agents.documents.manage' => 'payments',
             'agents.kyc.review' => 'payments',
+            'agents.locations.create' => 'payments',
+            'agents.locations.verify' => 'payments',
+            'agents.compliance.review' => 'payments',
+            'agents.agreements.create' => 'payments',
+            'agents.agreements.execute' => 'payments',
         ];
 
         foreach ($permissions as $name => $module) {
@@ -84,6 +89,45 @@ class PaymentsRbacSeeder extends Seeder
                 'label' => 'Agent KYC Officer',
                 'permissions' => ['agents.view', 'agents.kyc.review'],
             ],
+            'agent-location-officer' => [
+    'label' => 'Agent Location Officer',
+    'permissions' => [
+        'agents.view',
+        'agents.locations.create',
+    ],
+],
+
+'agent-location-verifier' => [
+    'label' => 'Agent Location Verifier',
+    'permissions' => [
+        'agents.view',
+        'agents.locations.verify',
+    ],
+],
+
+'agent-compliance-officer' => [
+    'label' => 'Agent Compliance Officer',
+    'permissions' => [
+        'agents.view',
+        'agents.compliance.review',
+    ],
+],
+
+'agent-agreement-officer' => [
+    'label' => 'Agent Agreement Officer',
+    'permissions' => [
+        'agents.view',
+        'agents.agreements.create',
+    ],
+],
+
+'agent-agreement-executor' => [
+    'label' => 'Agent Agreement Executor',
+    'permissions' => [
+        'agents.view',
+        'agents.agreements.execute',
+    ],
+],
             'agent-approval-officer' => [
                 'label' => 'Agent Approval Officer',
                 'permissions' => [

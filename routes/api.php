@@ -170,6 +170,51 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/agents/{agent}/complete-kyc', [AgentController::class, 'completeKyc'])
             ->middleware('permission:agents.kyc.review');
 
+        // ---------- AG-03: Locations ----------
+
+Route::get(
+    '/agents/{agent}/locations',
+    [AgentController::class, 'listLocations']
+);
+
+Route::post(
+    '/agents/{agent}/locations',
+    [AgentController::class, 'createLocation']
+)->middleware('permission:agents.locations.create');
+
+Route::post(
+    '/agents/{agent}/locations/{location}/verify',
+    [AgentController::class, 'verifyLocation']
+)->middleware('permission:agents.locations.verify');
+
+Route::post(
+    '/agents/{agent}/locations/{location}/reject',
+    [AgentController::class, 'rejectLocation']
+)->middleware('permission:agents.locations.verify');
+
+Route::post(
+    '/agents/{agent}/complete-compliance-review',
+    [AgentController::class, 'completeComplianceReview']
+)->middleware('permission:agents.compliance.review');
+
+
+// ---------- AG-03: Agreements ----------
+
+Route::get(
+    '/agents/{agent}/agreements',
+    [AgentController::class, 'listAgreements']
+);
+
+Route::post(
+    '/agents/{agent}/agreements',
+    [AgentController::class, 'createAgreement']
+)->middleware('permission:agents.agreements.create');
+
+Route::post(
+    '/agents/{agent}/agreements/{agreement}/execute',
+    [AgentController::class, 'executeAgreement']
+)->middleware('permission:agents.agreements.execute');
+
         Route::get('/wallets', [WalletController::class, 'index']);
         Route::get('/wallets/{wallet}', [WalletController::class, 'show']);
 
