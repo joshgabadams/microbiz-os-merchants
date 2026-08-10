@@ -2,9 +2,9 @@
 
 | | |
 |---|---|
-| Status | Foundation in progress — Agent Sprint AG-01 done; Merchant registry/KYC/payment-bug-fixes done (see §4 and §8) |
+| Status | Foundation in progress — Agent AG-01 through AG-04 done (Registry/KYC/Locations/Agreements/Operators/Terminals+geo-fence); Merchant registry/KYC/locations/terminals/payment-bug-fixes done (see §4 and §8) |
 | Location | `app/Domain/MPay/` (code) + `database/migrations/mpay/` (schema), inside the `microbiz-os` repo |
-| Last updated | 2026-08-07 |
+| Last updated | 2026-08-10 |
 | Related docs | `CHANGELOG.md` (core backend bug tracking), `AUDIT.md` (capability gap audit) |
 
 This file is a record of what's actually built and verified, not a plan of what's intended. If something below doesn't match the code, the code wins — update this file, don't trust it blindly.
@@ -116,15 +116,46 @@ Float → Cash-in → Cash-out → Transfer and bills → Commission → Reconci
   process (`approved_at`/`activated_at`/`suspended_at`/`suspension_reason` were missing from `Agent`'s
   `$fillable`, so those fields silently failed to persist)
 
-**Not built yet, in Blueprint order** (AG-02 through AG-13 — see Blueprint §7/§21 for full field lists):
-1. **AG-02 — KYC and Approval**: identity/business docs, beneficial owners, sanctions/PEP screening —
-   currently `kyc_status` is just a column with no real workflow behind it
-2. **AG-03 — Locations and Agreements**: `agent_locations` and `agent_agreements` tables (Blueprint §8.2/§8.3)
-3. **AG-04 — Operators and Terminals**: `agent_operators` and `agent_terminals` tables (Blueprint §8.4/§8.5)
-   — note `agent_terminals`' real schema (geo-fence radius, device cert, heartbeat, etc.) is much richer
-   than the old `pos_terminals` table that was removed in the rework
-4. AG-05 (geo-fencing/security), AG-06 (float), AG-07/AG-08 (cash-in/cash-out), AG-09 (transfers/bills),
-   AG-10 (commission), AG-11 (reconciliation/EOD), AG-12 (supervision/complaints), AG-13 (TESSA)
+**AG-02 — KYC and Approval: done** (merged from `main`, 2026-08-09/10). `AgentKycService::completeKyc()`
+enforces real gates: agent must be `PENDING_KYC`, reviewer must differ from the registering officer
+(maker-checker), and at least one owner **and** one document must be on file before status advances to
+`PENDING_LOCATION_VERIFICATION` and `kyc_status` flips to `COMPLETED`. `agent_beneficial_owners` and
+`agent_documents` tables, list/add endpoints.
+
+**AG-03 — Locations and Agreements: done** (merged from `main`, 2026-08-09/10). `agent_locations` (address,
+GPS, `verification_status`/`status`, `verified_by`/`verified_at`) with `createLocation`/`verifyLocation`/
+`rejectLocation` in `AgentLocationService` — verification requires a different reviewer than whoever
+registered the location, and successful verification advances the agent to `PENDING_COMPLIANCE_REVIEW`.
+`AgentApprovalService::completeComplianceReview()` then requires an active verified location before moving
+to `PENDING_APPROVAL`. `agent_agreements` table + `AgentAgreementService` (create/execute).
+
+**AG-04 — Operators and Terminals: done** (built + verified 2026-08-10, this session). Two separate
+tables, matching Blueprint §8.4/§8.5 exactly:
+- `agent_operators` — links an existing platform `user_id` to a specific `agent_id` + `agent_location_id`
+  with a `role` string; unique constraint on the (agent, location, user) triple prevents duplicate
+  assignment. `AgentOperatorService` create/activate/suspend, with an ownership check (location must
+  belong to the agent) and a duplicate-assignment check.
+- `agent_terminals` — `terminal_id`/`serial_number` (unique), `registered_latitude`/`registered_longitude`/
+  `geo_fence_radius_metres` (all required, not nullable — a terminal must declare its geo-fence at creation),
+  `last_latitude`/`last_longitude`/`geo_fence_compliant`/`last_heartbeat_at`. `AgentTerminalService` adds
+  `heartbeat()` and `checkLocation()`, both running a Haversine distance calculation between the terminal's
+  registered point and its reported coordinates against `geo_fence_radius_metres` — verified correctly
+  distinguishing an ~11km-away point (non-compliant) from a ~7cm-offset point (compliant) at a 100m radius.
+  A dedicated `assign()`/`assignLocation()` endpoint handles *documented relocation* to a different location
+  under the *same* agent (Blueprint §2.3 explicitly requires relocation to be documented, not silent) —
+  moving a terminal to a different agent entirely is out of scope by design (§2.3's exclusivity rules
+  explicitly prohibit sharing terminals between unrelated agents).
+- Both verified end-to-end via live API calls (not just tinker) — full create/list/duplicate-rejection/
+  activate/re-activate-rejection/suspend/suspend-rejection/reactivate cycles, plus relocate for terminals.
+
+**Not built yet, in Blueprint order** (AG-05 through AG-13 — see Blueprint §7/§21 for full field lists):
+1. **AG-05 — Geo-Fencing and Security**: the heartbeat/location-check *mechanics* exist (built as part of
+   AG-04 above, since the schema and geo-fence math are one piece), but the broader security layer — device
+   certificates, request signing, remote-suspension-on-security-event — is not built.
+2. **AG-06 — Float**: `agent_balances` table (Blueprint §8.6) not built at all yet. **This is the first
+   module that touches real money movement — see §9 below before starting it.**
+3. AG-07/AG-08 (cash-in/cash-out), AG-09 (transfers/bills), AG-10 (commission), AG-11
+   (reconciliation/EOD), AG-12 (supervision/complaints), AG-13 (TESSA agent intelligence) — none started.
 
 **Critical directive for when Float/Cash-in/Cash-out are eventually built (Blueprint §22):** *"The
 existing cash-control work in FINCORE360 should be reused for: Balance locking, Transaction numbering,
@@ -250,12 +281,27 @@ reactivate).
 
 1. **Merchant Registry** — done at the schema level. All of §8.1's fields exist except a separate `country`
    column (minor gap). Lifecycle/maker-checker approval already matched the Blueprint before this pass.
-2. **Merchant KYC and Due Diligence** — partial. Tables and manual capture exist (owners, documents); no
-   sanctions/PEP screening *integration* (just boolean fields someone fills in by hand), no
-   `compliance-review` workflow endpoint (still on Peak Empowerment's "Awaiting Backend" list).
-3. **Merchant Locations** — not built. Still one `branch_id` field, no multi-location support.
-4. **Merchant Users** — not built. No merchant-scoped user roles.
-5. **Merchant Devices and Terminals** — not built. No terminal registry, no list endpoint.
+2. **Merchant KYC and Due Diligence** — data capture only, **no completion gate at all** (logged as a bug
+   in `CHANGELOG.md`, 2026-08-10). Owners/documents can be added, but nothing ever moves `kyc_status` off
+   `PENDING`, and `submit()`/`approve()` don't check owner/document counts — a merchant can be fully
+   approved with zero KYC data on file. Compare to Agent's `AgentKycService::completeKyc()` (§4 above),
+   which does this correctly with a real maker-checker gate. No sanctions/PEP screening integration either
+   (just boolean fields filled in by hand), no `compliance-review` endpoint.
+3. **Merchant Locations** — done (built 2026-08-07/09, part of the `main` merge). `merchant_locations`
+   table + list/add endpoints, matching the pattern later reused for Terminals below.
+4. **Merchant Users** — not built. No merchant-scoped user roles. **Flagged as needing a real access-model
+   design decision before building** (not a copy-paste of the Locations/Terminals pattern) — unlike those,
+   this introduces a *new* access-control dimension: a merchant's own staff (Owner/Admin/Finance/Cashier/
+   Viewer/Reconciliation per §Module 4) needing scoped access to only their own merchant's data, which
+   nothing else in this codebase does yet (everything else is internal-staff-facing, gated by the existing
+   RBAC system).
+5. **Merchant Devices and Terminals** — done (built + verified end-to-end 2026-08-10, this session).
+   `merchant_terminals` table (§8.5): `terminal_id`/`serial_number` (unique), `terminal_type`, `provider`,
+   `model`, `status` (default `PENDING_ACTIVATION`), `application_version`, `activated_at`/
+   `last_heartbeat_at`/`last_transaction_at`, `assigned_by`. `MerchantTerminalService` (assign/activate/
+   suspend, mirroring the same status-guard pattern used everywhere else in this codebase). Verified via
+   live API calls: assign, list, activate, re-activate rejection, suspend, suspend rejection, reactivate,
+   duplicate `terminal_id` rejection.
 6. **Merchant Payments** — partial. POS/QR channels are now *correct* (all four bugs above fixed), but
    still only 2 of 7 channels from the Blueprint's channel list exist (missing payment link, transfer
    collection, virtual account, web checkout).
@@ -267,7 +313,6 @@ reactivate).
 11. **Merchant Risk and Compliance** — partial. `risk_rating`/`daily_limit`/`monthly_limit` fields exist on
     the schema now, but no actual risk rules, velocity monitoring, or alerting logic runs against them.
 
-**Not built yet, roughly in Blueprint sprint order (§24, MP-02 through MP-09):** the rest of Peak
-Empowerment's "Awaiting Backend" list — locations, terminals list, transactions/settlements/disputes list
-endpoints, `compliance-review` — then pricing (MP-06), reconciliation (MP-07), disputes/refunds (MP-08),
-TESSA merchant intelligence (MP-09).
+**Not built yet, roughly in Blueprint sprint order (§24, MP-04 onward):** Merchant Users (MP-04, needs the
+design decision noted above), pricing (MP-06), full Settlement batch workflow (part of MP-06),
+reconciliation (MP-07), disputes/refunds (MP-08), TESSA merchant intelligence (MP-09).
