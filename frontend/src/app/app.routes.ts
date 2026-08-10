@@ -22,6 +22,14 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'agents/:id',
+        loadComponent: () =>
+          import('./features/agents/agent-detail.component').then(
+            (m) => m.AgentDetailComponent
+         ),
+      },  
+
+      {
         path: 'merchants',
         loadComponent: () =>
           import('./features/merchants/merchant-list.component').then(
@@ -103,6 +111,13 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/fixed-deposits/fixed-deposit-list.component').then(
             (m) => m.FixedDepositListComponent
+          ),
+      },
+      {
+        path: 'tessa',
+        loadComponent: () =>
+          import('./features/tessa/tessa-dashboard.component').then(
+            (m) => m.TessaDashboardComponent
           ),
       },
     ],

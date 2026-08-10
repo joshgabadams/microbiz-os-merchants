@@ -27,6 +27,20 @@ These were fixed directly in the local environment (not committed/pushed) and ve
 
 **Fix (still needed):** apply the same pattern already used correctly in `ApprovalController` and in `TellerController::open()`/`close()` — replace the client-supplied field with `$request->user()->id` in all three remaining controllers.
 
+## Critical — same MySQL-only migration bug resurfaced in newly-pulled code, blocking every migration after it (found 2026-08-10)
+
+**In plain terms:** This is the exact same problem already fixed twice before (see "Two migrations used MySQL-only syntax" above): a migration writes raw `ALTER TABLE ... MODIFY ... ENUM(...)` SQL, which is MySQL-only syntax and crashes immediately on SQLite (this project's own documented local setup). Because Laravel runs migrations in date order and stops at the first failure, every migration dated after this one is currently stuck as "Pending" and cannot run locally — that includes the tables for wallets, fixed deposits, TESSA alerts, and the new agent beneficial-owners/documents/locations/agreements tables pulled in from `origin/main`. None of that new functionality can be exercised in this environment until it's fixed.
+
+**Where:** `database/migrations/2026_07_30_000002_add_settlement_to_merchant_transaction_type_enum.php` — both `up()` and `down()` run the raw `MODIFY ... ENUM` statement unconditionally.
+
+**Fix:** Guard both methods with the same check already used correctly in the two sibling migrations (`2026_07_05_144435_update_teller_transaction_type_enum.php` and `2026_07_06_222831_update_teller_transactions_transaction_type_enum.php`):
+```php
+if (DB::connection()->getDriverName() !== 'mysql') {
+    return;
+}
+```
+**Workaround:** none — this blocks `php artisan migrate` outright on SQLite; nothing after it in the migration order can be applied until it's fixed.
+
 ## ⚠ Important caveat — the GL Journals "fix" doesn't actually apply to an existing database
 
 The repo owner's commit edited `database/migrations/2026_06_28_205601_create_gl_journals_table.php` **directly**, adding the missing columns to it, instead of writing a new migration. That only works for someone setting up the database completely from scratch. For any database that had already run this migration before the pull (including ours), Laravel sees the filename is already recorded as "done" and skips it — so the file now looks correct, but the actual table in the database is still just `id`/`created_at`/`updated_at`, and GL posting is **still broken** in practice. Bug #1 below is still open as a result — see that entry for what fixing it properly (a new migration, not an edit) would look like. Reconciliation's migration was not touched at all and remains fully broken too.

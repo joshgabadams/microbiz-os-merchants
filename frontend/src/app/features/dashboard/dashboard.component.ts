@@ -11,6 +11,7 @@ import { AuthService } from '../../core/auth.service';
       <aside class="sidebar">
         <div class="brand">MicroBiz OS</div>
         <nav>
+          <a routerLink="/tessa" routerLinkActive="active">TESSA</a>
           <a routerLink="/vaults" routerLinkActive="active">Vaults</a>
           <a routerLink="/tellers" routerLinkActive="active">Tellers</a>
           <a routerLink="/float-transfer" routerLinkActive="active">Float Transfer</a>

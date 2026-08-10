@@ -160,7 +160,55 @@ export interface Agent {
   suspended_at: string | null;
   suspension_reason: string | null;
 }
+export type AgentLocationVerificationStatus =
+  | 'PENDING'
+  | 'VERIFIED'
+  | 'REJECTED';
 
+export interface AgentLocation {
+  id: number;
+  agent_id: number;
+  address_line_1: string;
+  address_line_2?: string | null;
+  landmark?: string | null;
+  city: string;
+  local_government: string;
+  state: string;
+  latitude: string | number;
+  longitude: string | number;
+  approved_radius_metres: number;
+  verification_status: AgentLocationVerificationStatus;
+  status: string;
+  created_by: number;
+  verified_by?: number | null;
+  verified_at?: string | null;
+  verification_notes?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export type AgentAgreementStatus =
+  | 'DRAFT'
+  | 'ACTIVE'
+  | 'EXPIRED'
+  | 'SUPERSEDED';
+
+export interface AgentAgreement {
+  id: number;
+  agent_id: number;
+  version: number;
+  status: AgentAgreementStatus;
+  expiry_date?: string | null;
+  renewal_due_date?: string | null;
+  permitted_services?: string[];
+  commercial_terms?: Record<string, unknown>;
+  document_path?: string | null;
+  created_by: number;
+  executed_by?: number | null;
+  executed_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
 export interface Wallet {
   id: number;
   wallet_no: string;

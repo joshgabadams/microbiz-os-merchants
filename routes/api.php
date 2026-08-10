@@ -15,6 +15,8 @@ use App\Http\Controllers\Api\WalletController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\MfaController;
 use App\Http\Controllers\Api\FixedDepositController;
+use App\Http\Controllers\Api\TessaAlertController;
+use App\Http\Controllers\Api\TransactionReversalController;
 use App\Http\Controllers\Api\AuthController;
 
 Route::prefix('v1')->group(function () {
@@ -66,6 +68,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/customer/withdraw', [CustomerCashController::class, 'withdraw'])
             ->middleware('permission:customer_cash.withdraw');
 
+        Route::post('/customer-transactions/{customerAccountTransaction}/reverse', [TransactionReversalController::class, 'reverse'])
+            ->middleware('permission:transactions.reverse');
+
         Route::post('/teller/balance', [BalancingController::class, 'tellerBalance'])
             ->middleware('permission:tellers.manage');
         Route::post('/vault/balance', [BalancingController::class, 'vaultBalance'])
@@ -87,6 +92,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/merchants/{merchant}/documents', [MerchantController::class, 'listDocuments']);
         Route::post('/merchants/{merchant}/documents', [MerchantController::class, 'addDocument'])
             ->middleware('permission:merchants.documents.manage');
+
+        Route::get('/merchants/{merchant}/locations', [MerchantController::class, 'listLocations']);
+        Route::post('/merchants/{merchant}/locations', [MerchantController::class, 'addLocation'])
+            ->middleware('permission:merchants.locations.manage');
 
         Route::post('/merchants/onboard', [MerchantController::class, 'onboard'])
             ->middleware('permission:merchants.onboard');
@@ -121,9 +130,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/merchants/settle', [MerchantController::class, 'settle'])
             ->middleware('permission:merchants.settle');
 
-        // Agent registry (Sprint AG-01 per the M-PAY Agency Banking Blueprint).
-        // Locations/Agreements/Operators/Terminals are separate later sprints
-        // (AG-03/AG-04) -- deliberately not built yet.
         Route::get('/agents', [AgentController::class, 'index']);
         Route::get('/agents/{agent}', [AgentController::class, 'show']);
 
@@ -157,6 +163,62 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/agents/{agent}/terminate', [AgentController::class, 'terminate'])
             ->middleware('permission:agents.terminate');
 
+        Route::get('/agents/{agent}/owners', [AgentController::class, 'listOwners']);
+        Route::post('/agents/{agent}/owners', [AgentController::class, 'addOwner'])
+            ->middleware('permission:agents.owners.manage');
+
+        Route::get('/agents/{agent}/documents', [AgentController::class, 'listDocuments']);
+        Route::post('/agents/{agent}/documents', [AgentController::class, 'addDocument'])
+            ->middleware('permission:agents.documents.manage');
+
+        Route::post('/agents/{agent}/complete-kyc', [AgentController::class, 'completeKyc'])
+            ->middleware('permission:agents.kyc.review');
+
+        // ---------- AG-03: Locations ----------
+
+Route::get(
+    '/agents/{agent}/locations',
+    [AgentController::class, 'listLocations']
+);
+
+Route::post(
+    '/agents/{agent}/locations',
+    [AgentController::class, 'createLocation']
+)->middleware('permission:agents.locations.create');
+
+Route::post(
+    '/agents/{agent}/locations/{location}/verify',
+    [AgentController::class, 'verifyLocation']
+)->middleware('permission:agents.locations.verify');
+
+Route::post(
+    '/agents/{agent}/locations/{location}/reject',
+    [AgentController::class, 'rejectLocation']
+)->middleware('permission:agents.locations.verify');
+
+Route::post(
+    '/agents/{agent}/complete-compliance-review',
+    [AgentController::class, 'completeComplianceReview']
+)->middleware('permission:agents.compliance.review');
+
+
+// ---------- AG-03: Agreements ----------
+
+Route::get(
+    '/agents/{agent}/agreements',
+    [AgentController::class, 'listAgreements']
+);
+
+Route::post(
+    '/agents/{agent}/agreements',
+    [AgentController::class, 'createAgreement']
+)->middleware('permission:agents.agreements.create');
+
+Route::post(
+    '/agents/{agent}/agreements/{agreement}/execute',
+    [AgentController::class, 'executeAgreement']
+)->middleware('permission:agents.agreements.execute');
+
         Route::get('/wallets', [WalletController::class, 'index']);
         Route::get('/wallets/{wallet}', [WalletController::class, 'show']);
 
@@ -183,5 +245,18 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::post('/fixed-deposits/{fixedDeposit}/liquidate', [FixedDepositController::class, 'liquidate'])
             ->middleware('permission:fixed_deposits.liquidate');
+
+        Route::get('/tessa/summary', [TessaAlertController::class, 'summary'])
+            ->middleware('permission:tessa.view');
+        Route::get('/tessa/alerts', [TessaAlertController::class, 'index'])
+            ->middleware('permission:tessa.view');
+        Route::get('/tessa/alerts/{tessaAlert}', [TessaAlertController::class, 'show'])
+            ->middleware('permission:tessa.view');
+        Route::post('/tessa/alerts/{tessaAlert}/acknowledge', [TessaAlertController::class, 'acknowledge'])
+            ->middleware('permission:tessa.manage');
+        Route::post('/tessa/alerts/{tessaAlert}/resolve', [TessaAlertController::class, 'resolve'])
+            ->middleware('permission:tessa.manage');
+        Route::post('/tessa/detect', [TessaAlertController::class, 'detect'])
+            ->middleware('permission:tessa.manage');
     });
 });

@@ -96,4 +96,9 @@ class Merchant extends Model
     {
         return $this->hasMany(MerchantDocument::class);
     }
+
+    public function locations()
+    {
+        return $this->hasMany(MerchantLocation::class);
+    }
 }
