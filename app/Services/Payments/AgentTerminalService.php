@@ -2,6 +2,7 @@
 
 namespace App\Services\Payments;
 
+use App\Domain\MPay\Enums\AgentStatus;
 use App\Models\Agent;
 use App\Models\AgentLocation;
 use App\Models\AgentTerminal;
@@ -10,6 +11,28 @@ use Illuminate\Support\Facades\DB;
 
 class AgentTerminalService
 {
+    /**
+     * CBN's PoS geo-fencing standard as of the 29 May 2026 circular
+     * (raised from an earlier 10m standard, enforcement due 1 Aug 2026).
+     */
+    private const DEFAULT_GEO_FENCE_RADIUS_METRES = 70;
+
+    /**
+     * An agent must have cleared KYC, location verification and
+     * compliance review before a terminal can be assigned -- CBN requires
+     * due diligence before POS allocation. Terminal assignment itself is
+     * one of the ACTIVE preconditions (Blueprint §6), so ACTIVE can't be
+     * the minimum bar -- PENDING_APPROVAL onward is.
+     */
+    private const ELIGIBLE_STATUSES = [
+        AgentStatus::PENDING_APPROVAL->value,
+        AgentStatus::APPROVED->value,
+        AgentStatus::AGREEMENT_PENDING->value,
+        AgentStatus::TRAINING_PENDING->value,
+        AgentStatus::TERMINAL_PENDING->value,
+        AgentStatus::ACTIVE->value,
+    ];
+
     public function list(Agent $agent)
     {
         return $agent->terminals()->get();
@@ -20,6 +43,12 @@ class AgentTerminalService
      */
     public function create(Agent $agent, array $data, int $assignedBy): AgentTerminal
     {
+        if (! in_array($agent->status, self::ELIGIBLE_STATUSES, true)) {
+            throw new Exception(
+                "Agent {$agent->agent_code} has not cleared compliance review; cannot assign a terminal."
+            );
+        }
+
         $location = AgentLocation::findOrFail($data['agent_location_id']);
 
         if ($location->agent_id !== $agent->id) {
@@ -37,7 +66,7 @@ class AgentTerminalService
                 'status' => 'PENDING_ACTIVATION',
                 'registered_latitude' => $data['registered_latitude'],
                 'registered_longitude' => $data['registered_longitude'],
-                'geo_fence_radius_metres' => $data['geo_fence_radius_metres'],
+                'geo_fence_radius_metres' => $data['geo_fence_radius_metres'] ?? self::DEFAULT_GEO_FENCE_RADIUS_METRES,
                 'assigned_by' => $assignedBy,
             ]);
         });

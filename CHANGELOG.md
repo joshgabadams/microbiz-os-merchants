@@ -65,7 +65,7 @@ if (DB::connection()->getDriverName() !== 'mysql') {
 ```
 **Workaround:** none — this blocks `php artisan migrate` outright on SQLite; nothing after it in the migration order can be applied until it's fixed.
 
-## High — neither Agent nor Merchant captures a BVN, which CBN requires for both identity verification and terminal traceability (found 2026-08-10, via real CBN regulation, not our internal blueprints)
+## High — neither Agent nor Merchant captures a BVN, which CBN requires for both identity verification and terminal traceability (found 2026-08-10, **field added and verified 2026-08-10** — enforcement at the KYC gate still pending)
 
 **In plain terms:** CBN's Agent Banking Guidelines (6 Oct 2025) explicitly require every agent's terminal to be traceable back to that agent's BVN or TIN, and CBN's tiered-KYC/CDD framework requires BVN (and NIN, for individuals) as baseline identity fields generally. Our `agents` table has `registration_number` and `tax_identification_number`, but no `bvn` field at all. Same gap on `merchants`. This isn't a terminal-level schema problem (the terminal already correctly links to its agent) — it's that the agent/merchant record itself has nowhere to store the one identifier CBN specifically names for traceability.
 
@@ -73,7 +73,9 @@ if (DB::connection()->getDriverName() !== 'mysql') {
 
 **Fix:** Add a `bvn` field to both tables (nullable initially so it doesn't block existing test data, but should become required at the KYC-completion gate once that's built per the entry above).
 
-## Medium — `agent_terminals.geo_fence_radius_metres` has no default or validation tied to the actual current CBN standard (found 2026-08-10)
+**Status (2026-08-10):** field added to both tables (migrations, models, onboarding/update requests, registration services), verified end-to-end — a valid 11-digit BVN saves correctly on both `Agent` and `Merchant` update endpoints, a non-11-digit value is rejected. **Still open:** nothing enforces it's actually present yet — that's the KYC-completion gate, not built today.
+
+## Medium — `agent_terminals.geo_fence_radius_metres` has no default or validation tied to the actual current CBN standard (found 2026-08-10, **fixed 2026-08-10**)
 
 **In plain terms:** When we built the Agent Terminals module today, `geo_fence_radius_metres` was made a plain required integer with no default and no bounds — whoever registers a terminal can enter any number. A CBN circular dated 29 May 2026 revised the enforceable PoS geo-fence radius standard to 70 metres (up from an earlier 10-metre standard), with enforcement now due 1 August 2026. Our test data used 100m arbitrarily, with nothing in the code aware that 70m is the actual regulatory reference point.
 
@@ -81,13 +83,17 @@ if (DB::connection()->getDriverName() !== 'mysql') {
 
 **Fix:** Default new terminal registrations to 70m when not explicitly overridden, and consider flagging (not necessarily blocking) registrations that deviate significantly from that standard for a supervisor's attention. Low urgency today given enforcement isn't due until 1 August 2026, but worth fixing before then.
 
-## High — neither Terminal module blocks assignment on KYC/compliance status; CBN explicitly requires due diligence before POS allocation (found 2026-08-10)
+**Status (2026-08-10):** `AgentTerminalService::create()` now defaults `geo_fence_radius_metres` to 70 (a `DEFAULT_GEO_FENCE_RADIUS_METRES` constant) when the caller doesn't specify one; the FormRequest field is `nullable` rather than `required` for input, but the database column itself was never changed and stays `NOT NULL` — every saved row always has a real value, verified via a live API call that omitted the field and got back `"geo_fence_radius_metres":70`.
+
+## High — neither Terminal module blocks assignment on KYC/compliance status; CBN explicitly requires due diligence before POS allocation (found 2026-08-10, **Agent side fixed 2026-08-10; Merchant side still open**)
 
 **In plain terms:** Both CBN's own payments guidance and the Agent Banking Guidelines are explicit that due diligence must be complete *before* a POS terminal is allocated to a merchant or agent. Right now, neither of the Terminal modules built today checks this at all — a merchant or agent still sitting in `DRAFT` (zero KYC data on file) can have a terminal assigned to it with no error, because terminal assignment and KYC/lifecycle status are two completely disconnected pieces of code.
 
 **Where:** `app/Services/Payments/MerchantTerminalService::assign()` and `app/Services/Payments/AgentTerminalService::create()` — neither checks the merchant's/agent's `status` or `kyc_status` before creating the terminal record.
 
 **Fix:** Add a status guard to both (e.g. require the agent to be `ACTIVE`, or at minimum past compliance review; require the merchant to have completed the KYC gate once it's built per the entry above) — mirroring the same "throw a clean Exception if the precondition isn't met" pattern already used everywhere else in both modules.
+
+**Status (2026-08-10) — Agent side fixed:** `AgentTerminalService::create()` now throws unless the agent's status is one of `PENDING_APPROVAL`/`APPROVED`/`AGREEMENT_PENDING`/`TRAINING_PENDING`/`TERMINAL_PENDING`/`ACTIVE` (an allow-list, not `ACTIVE` alone — terminal assignment is itself one of the preconditions for reaching `ACTIVE` per Blueprint §6, so requiring `ACTIVE` first would be circular). Verified: a freshly-registered `DRAFT` agent is correctly blocked ("has not cleared compliance review; cannot assign a terminal"), while the existing `ACTIVE` test agent still succeeds. **Merchant side still open** — blocked on the Merchant KYC-completion gate not existing yet (same dependency as the BVN-enforcement item above); deliberately deferred, not forgotten.
 
 ## Medium — PEP and sanctions-match flags are captured but trigger nothing (found 2026-08-10)
 

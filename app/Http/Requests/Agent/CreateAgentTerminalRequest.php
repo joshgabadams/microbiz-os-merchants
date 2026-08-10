@@ -23,7 +23,10 @@ class CreateAgentTerminalRequest extends FormRequest
             'application_version' => ['nullable', 'string', 'max:255'],
             'registered_latitude' => ['required', 'numeric', 'between:-90,90'],
             'registered_longitude' => ['required', 'numeric', 'between:-180,180'],
-            'geo_fence_radius_metres' => ['required', 'integer', 'min:1'],
+            // Nullable, not required -- AgentTerminalService defaults this
+            // to 70m (CBN's current geo-fence radius standard, per the
+            // 29 May 2026 circular) when the caller doesn't specify one.
+            'geo_fence_radius_metres' => ['nullable', 'integer', 'min:1'],
         ];
     }
 }
