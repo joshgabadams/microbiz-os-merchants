@@ -230,6 +230,28 @@ Route::post(
     [AgentController::class, 'executeAgreement']
 )->middleware('permission:agents.agreements.execute');
 
+// ---------- AG-04: Operators ----------
+
+Route::get(
+    '/agents/{agent}/operators',
+    [AgentController::class, 'listOperators']
+);
+
+Route::post(
+    '/agents/{agent}/operators',
+    [AgentController::class, 'createOperator']
+)->middleware('permission:agents.operators.manage');
+
+Route::post(
+    '/agent-operators/{operator}/activate',
+    [AgentController::class, 'activateOperator']
+)->middleware('permission:agents.operators.manage');
+
+Route::post(
+    '/agent-operators/{operator}/suspend',
+    [AgentController::class, 'suspendOperator']
+)->middleware('permission:agents.operators.manage');
+
         Route::get('/wallets', [WalletController::class, 'index']);
         Route::get('/wallets/{wallet}', [WalletController::class, 'show']);
 

@@ -99,5 +99,10 @@ public function verifiedLocations()
         ->where('verification_status', 'VERIFIED');
 }
 
+public function operators()
+{
+    return $this->hasMany(AgentOperator::class);
+}
+
 
 }

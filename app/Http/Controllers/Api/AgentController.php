@@ -15,10 +15,13 @@ use App\Services\Payments\AgentRegistrationService;
 use App\Traits\ApiResponse;
 use App\Http\Requests\Agent\CreateAgentAgreementRequest;
 use App\Http\Requests\Agent\CreateAgentLocationRequest;
+use App\Http\Requests\Agent\CreateAgentOperatorRequest;
 use App\Models\AgentAgreement;
 use App\Models\AgentLocation;
+use App\Models\AgentOperator;
 use App\Services\Payments\AgentAgreementService;
 use App\Services\Payments\AgentLocationService;
+use App\Services\Payments\AgentOperatorService;
 use Exception;
 use Illuminate\Http\Request;
 
@@ -32,7 +35,8 @@ class AgentController extends Controller
         protected AgentActivationService $activationService,
         protected AgentKycService $kycService,
         protected AgentLocationService $locationService,
-        protected AgentAgreementService $agreementService
+        protected AgentAgreementService $agreementService,
+        protected AgentOperatorService $operatorService
 
     ) {
     }
@@ -349,6 +353,49 @@ public function createAgreement(
                 $result,
                 'Agent agreement executed; moved to training.'
             );
+        } catch (Exception $e) {
+            return $this->error($e->getMessage());
+        }
+    }
+
+    // ---------- AG-04: Operators ----------
+
+    public function listOperators(Agent $agent)
+    {
+        return $this->success(
+            $this->operatorService->list($agent),
+            'Agent operators retrieved successfully.'
+        );
+    }
+
+    public function createOperator(Agent $agent, CreateAgentOperatorRequest $request)
+    {
+        try {
+            $operator = $this->operatorService->create($agent, $request->validated());
+
+            return $this->success($operator, 'Agent operator assigned successfully.', 201);
+        } catch (Exception $e) {
+            return $this->error($e->getMessage());
+        }
+    }
+
+    public function activateOperator(AgentOperator $operator)
+    {
+        try {
+            $result = $this->operatorService->activate($operator);
+
+            return $this->success($result, 'Agent operator activated.');
+        } catch (Exception $e) {
+            return $this->error($e->getMessage());
+        }
+    }
+
+    public function suspendOperator(AgentOperator $operator)
+    {
+        try {
+            $result = $this->operatorService->suspend($operator);
+
+            return $this->success($result, 'Agent operator suspended.');
         } catch (Exception $e) {
             return $this->error($e->getMessage());
         }

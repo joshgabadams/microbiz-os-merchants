@@ -50,6 +50,8 @@ class PaymentsRbacSeeder extends Seeder
             'agents.compliance.review' => 'payments',
             'agents.agreements.create' => 'payments',
             'agents.agreements.execute' => 'payments',
+            'agents.operators.view' => 'payments',
+            'agents.operators.manage' => 'payments',
         ];
 
         foreach ($permissions as $name => $module) {
@@ -139,6 +141,15 @@ class PaymentsRbacSeeder extends Seeder
     'permissions' => [
         'agents.view',
         'agents.agreements.execute',
+    ],
+],
+
+'agent-operator-officer' => [
+    'label' => 'Agent Operator Officer',
+    'permissions' => [
+        'agents.view',
+        'agents.operators.view',
+        'agents.operators.manage',
     ],
 ],
             'agent-approval-officer' => [
