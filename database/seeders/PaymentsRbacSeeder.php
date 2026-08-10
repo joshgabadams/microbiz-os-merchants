@@ -52,6 +52,10 @@ class PaymentsRbacSeeder extends Seeder
             'agents.agreements.execute' => 'payments',
             'agents.operators.view' => 'payments',
             'agents.operators.manage' => 'payments',
+            'agents.terminals.view' => 'payments',
+            'agents.terminals.assign' => 'payments',
+            'agents.terminals.activate' => 'payments',
+            'agents.terminals.suspend' => 'payments',
         ];
 
         foreach ($permissions as $name => $module) {
@@ -150,6 +154,17 @@ class PaymentsRbacSeeder extends Seeder
         'agents.view',
         'agents.operators.view',
         'agents.operators.manage',
+    ],
+],
+
+'agent-terminal-officer' => [
+    'label' => 'Agent Terminal Officer',
+    'permissions' => [
+        'agents.view',
+        'agents.terminals.view',
+        'agents.terminals.assign',
+        'agents.terminals.activate',
+        'agents.terminals.suspend',
     ],
 ],
             'agent-approval-officer' => [

@@ -252,6 +252,43 @@ Route::post(
     [AgentController::class, 'suspendOperator']
 )->middleware('permission:agents.operators.manage');
 
+// ---------- AG-04: Terminals & Geo-Fence ----------
+
+Route::get(
+    '/agents/{agent}/terminals',
+    [AgentController::class, 'listTerminals']
+);
+
+Route::post(
+    '/agent-terminals',
+    [AgentController::class, 'createTerminal']
+)->middleware('permission:agents.terminals.assign');
+
+Route::post(
+    '/agent-terminals/{terminal}/assign',
+    [AgentController::class, 'assignTerminalLocation']
+)->middleware('permission:agents.terminals.assign');
+
+Route::post(
+    '/agent-terminals/{terminal}/activate',
+    [AgentController::class, 'activateTerminal']
+)->middleware('permission:agents.terminals.activate');
+
+Route::post(
+    '/agent-terminals/{terminal}/suspend',
+    [AgentController::class, 'suspendTerminal']
+)->middleware('permission:agents.terminals.suspend');
+
+Route::post(
+    '/agent-terminals/{terminal}/heartbeat',
+    [AgentController::class, 'terminalHeartbeat']
+);
+
+Route::post(
+    '/agent-terminals/{terminal}/location-check',
+    [AgentController::class, 'terminalLocationCheck']
+);
+
         Route::get('/wallets', [WalletController::class, 'index']);
         Route::get('/wallets/{wallet}', [WalletController::class, 'show']);
 

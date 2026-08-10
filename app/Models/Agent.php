@@ -104,5 +104,10 @@ public function operators()
     return $this->hasMany(AgentOperator::class);
 }
 
+public function terminals()
+{
+    return $this->hasMany(AgentTerminal::class);
+}
+
 
 }
