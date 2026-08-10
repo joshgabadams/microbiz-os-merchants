@@ -22,6 +22,14 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'agents/:id',
+        loadComponent: () =>
+          import('./features/agents/agent-detail.component').then(
+            (m) => m.AgentDetailComponent
+         ),
+      },  
+
+      {
         path: 'merchants',
         loadComponent: () =>
           import('./features/merchants/merchant-list.component').then(
