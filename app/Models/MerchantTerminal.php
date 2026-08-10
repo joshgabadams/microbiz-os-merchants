@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class MerchantTerminal extends Model
 {
+    protected $table = 'm_terminals';
+
     protected $fillable = [
         'merchant_id',
         'merchant_location_id',

@@ -37,6 +37,8 @@ These were fixed directly in the local environment (not committed/pushed) and ve
 
 **Fix:** Add a `MerchantKycService::completeKyc()` method mirroring `AgentKycService::completeKyc()` exactly (status guard, maker-checker, owner/document count checks, sets `kyc_status = 'COMPLETED'`), and gate `submit()` (or introduce the Blueprint's separate `compliance-review` step) on it being completed first. This also matches a documented gap in the Merchant blueprint itself — Module 2 (KYC) and onboarding Step 4 ("Compliance review", `POST /merchants/{merchant}/compliance-review`) are both still unbuilt.
 
+**Update (2026-08-10) — cross-checked against real CBN regulation, not just our own blueprints:** the "≥1 owner + ≥1 document" check this fix describes (and that `AgentKycService::completeKyc()` already does) isn't actually enough on its own. CBN's Customer Due Diligence Regulations 2023 require materially different documentation for an individual versus a corporate/business entity (board resolution, CAC certificate, MEMART, and a Status Report for corporate accounts, versus BVN/NIN/ID/address for an individual) — a corporate merchant or agent could satisfy our count-based check today with two arbitrary documents that aren't actually any of the CBN-required ones. Both the future Merchant gate and the existing Agent gate should become **type-aware** (branch on `business_type`/`agent_type`), not just count-based.
+
 ## Critical — a second SQLite database file the app depends on is never created anywhere, blocking wallet/payment migrations entirely on a fresh deploy (found 2026-08-10)
 
 **In plain terms:** The app actually uses two separate local database files, not one — the main one everyone knows about, and a second one called `mpay.sqlite` that the newer wallet/payment-party tables live in. Nothing in the codebase or deployment process ever creates that second file automatically — no setup script, no migration, nothing. On a developer's own laptop it can silently work if that file happens to already exist from some earlier manual step nobody documented, but on a freshly deployed or rebuilt server, the file simply isn't there, and every migration for that second database fails immediately with "Database file... does not exist."
@@ -62,6 +64,46 @@ if (DB::connection()->getDriverName() !== 'mysql') {
 }
 ```
 **Workaround:** none — this blocks `php artisan migrate` outright on SQLite; nothing after it in the migration order can be applied until it's fixed.
+
+## High — neither Agent nor Merchant captures a BVN, which CBN requires for both identity verification and terminal traceability (found 2026-08-10, via real CBN regulation, not our internal blueprints)
+
+**In plain terms:** CBN's Agent Banking Guidelines (6 Oct 2025) explicitly require every agent's terminal to be traceable back to that agent's BVN or TIN, and CBN's tiered-KYC/CDD framework requires BVN (and NIN, for individuals) as baseline identity fields generally. Our `agents` table has `registration_number` and `tax_identification_number`, but no `bvn` field at all. Same gap on `merchants`. This isn't a terminal-level schema problem (the terminal already correctly links to its agent) — it's that the agent/merchant record itself has nowhere to store the one identifier CBN specifically names for traceability.
+
+**Where:** `app/Models/Agent.php` / `database/migrations/2026_08_06_000001_create_agents_table.php`, and `app/Models/Merchant.php` / the merchants registry-fields migration — neither has a `bvn` column.
+
+**Fix:** Add a `bvn` field to both tables (nullable initially so it doesn't block existing test data, but should become required at the KYC-completion gate once that's built per the entry above).
+
+## Medium — `agent_terminals.geo_fence_radius_metres` has no default or validation tied to the actual current CBN standard (found 2026-08-10)
+
+**In plain terms:** When we built the Agent Terminals module today, `geo_fence_radius_metres` was made a plain required integer with no default and no bounds — whoever registers a terminal can enter any number. A CBN circular dated 29 May 2026 revised the enforceable PoS geo-fence radius standard to 70 metres (up from an earlier 10-metre standard), with enforcement now due 1 August 2026. Our test data used 100m arbitrarily, with nothing in the code aware that 70m is the actual regulatory reference point.
+
+**Where:** `app/Http/Requests/Agent/CreateAgentTerminalRequest.php` (`geo_fence_radius_metres` => `['required', 'integer', 'min:1']`, no default, no upper guidance).
+
+**Fix:** Default new terminal registrations to 70m when not explicitly overridden, and consider flagging (not necessarily blocking) registrations that deviate significantly from that standard for a supervisor's attention. Low urgency today given enforcement isn't due until 1 August 2026, but worth fixing before then.
+
+## High — neither Terminal module blocks assignment on KYC/compliance status; CBN explicitly requires due diligence before POS allocation (found 2026-08-10)
+
+**In plain terms:** Both CBN's own payments guidance and the Agent Banking Guidelines are explicit that due diligence must be complete *before* a POS terminal is allocated to a merchant or agent. Right now, neither of the Terminal modules built today checks this at all — a merchant or agent still sitting in `DRAFT` (zero KYC data on file) can have a terminal assigned to it with no error, because terminal assignment and KYC/lifecycle status are two completely disconnected pieces of code.
+
+**Where:** `app/Services/Payments/MerchantTerminalService::assign()` and `app/Services/Payments/AgentTerminalService::create()` — neither checks the merchant's/agent's `status` or `kyc_status` before creating the terminal record.
+
+**Fix:** Add a status guard to both (e.g. require the agent to be `ACTIVE`, or at minimum past compliance review; require the merchant to have completed the KYC gate once it's built per the entry above) — mirroring the same "throw a clean Exception if the precondition isn't met" pattern already used everywhere else in both modules.
+
+## Medium — PEP and sanctions-match flags are captured but trigger nothing (found 2026-08-10)
+
+**In plain terms:** Both `merchant_beneficial_owners` and `agent_beneficial_owners` have `is_pep`/`sanctions_match` boolean columns, and they can be set to `true` — but nothing in the code reacts to that. There's no case, no block, no review queue, no different handling at all compared to a clean owner. Setting the flag today has exactly the same practical effect as not setting it.
+
+**Where:** `app/Services/Payments/MerchantKycService.php` / `AgentKycService.php` — `addOwner()` in both just stores whatever booleans are passed, no downstream logic reads them anywhere else in the codebase.
+
+**Fix:** At minimum, the future KYC completion gates (Merchant and Agent) should refuse to complete if any owner has `sanctions_match = true` without an explicit compliance override, and should flag (not necessarily block) a `true` `is_pep` for additional review. Not urgent to build the full case-management workflow today, but the gate should at least *notice*.
+
+## Architecture — no unified identity between Agent and Merchant; the same real business can legitimately be both (raised 2026-08-10, deliberately parked, not being fixed today)
+
+**In plain terms:** A real business can be an ordinary merchant (accepting card payments for goods) *and* a banking agent (doing cash-in/cash-out on behalf of MicroBiz MFB) at the same time — these are legally and operationally distinct roles under CBN's own framework, but nothing stops the same real business from being both. Our schema has no way to represent that: `Agent` and `Merchant` are two completely separate tables, each with their own beneficial-owners, documents, and KYC status, with zero shared identity concept. If the same legal business is onboarded as both today, it would be onboarded twice, with duplicated KYC data and no linkage between the two records — the system would have no idea they're the same entity.
+
+**Where:** `app/Models/Agent.php` and `app/Models/Merchant.php` — no shared parent/identity table; `agent_beneficial_owners`/`merchant_beneficial_owners` and `agent_documents`/`merchant_documents` are fully separate, parallel schemas.
+
+**Decision needed (not made yet):** whether to introduce a shared `Customer`/identity concept that `Agent` and `Merchant` both reference (roughly: one core identity record, with a Merchant Profile and/or Agent Profile hanging off it), versus keeping them deliberately separate as a product decision. This is a real architectural fork, not a bug to just patch — **explicitly out of scope for today's work**, parked here so it doesn't get silently forgotten while the smaller KYC-gate/BVN/terminal-gating fixes above get built.
 
 ## ⚠ Important caveat — the GL Journals "fix" doesn't actually apply to an existing database
 

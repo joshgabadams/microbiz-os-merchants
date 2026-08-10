@@ -16,8 +16,8 @@ class AssignMerchantTerminalRequest extends FormRequest
         return [
             'merchant_id' => ['required', 'integer', 'exists:merchants,id'],
             'merchant_location_id' => ['nullable', 'integer', 'exists:merchant_locations,id'],
-            'terminal_id' => ['required', 'string', 'max:255', 'unique:merchant_terminals,terminal_id'],
-            'serial_number' => ['required', 'string', 'max:255', 'unique:merchant_terminals,serial_number'],
+            'terminal_id' => ['required', 'string', 'max:255', 'unique:m_terminals,terminal_id'],
+            'serial_number' => ['required', 'string', 'max:255', 'unique:m_terminals,serial_number'],
             'terminal_type' => ['required', 'string', 'max:255'],
             'provider' => ['nullable', 'string', 'max:255'],
             'model' => ['nullable', 'string', 'max:255'],

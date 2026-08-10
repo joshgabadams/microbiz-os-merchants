@@ -296,7 +296,7 @@ reactivate).
    nothing else in this codebase does yet (everything else is internal-staff-facing, gated by the existing
    RBAC system).
 5. **Merchant Devices and Terminals** — done (built + verified end-to-end 2026-08-10, this session).
-   `merchant_terminals` table (§8.5): `terminal_id`/`serial_number` (unique), `terminal_type`, `provider`,
+   `m_terminals` table (renamed from `merchant_terminals` 2026-08-10; §8.5): `terminal_id`/`serial_number` (unique), `terminal_type`, `provider`,
    `model`, `status` (default `PENDING_ACTIVATION`), `application_version`, `activated_at`/
    `last_heartbeat_at`/`last_transaction_at`, `assigned_by`. `MerchantTerminalService` (assign/activate/
    suspend, mirroring the same status-guard pattern used everywhere else in this codebase). Verified via
