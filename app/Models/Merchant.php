@@ -101,4 +101,9 @@ class Merchant extends Model
     {
         return $this->hasMany(MerchantLocation::class);
     }
+
+    public function terminals()
+    {
+        return $this->hasMany(MerchantTerminal::class);
+    }
 }

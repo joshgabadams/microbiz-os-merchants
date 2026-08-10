@@ -11,8 +11,10 @@ use App\Http\Requests\Merchant\OnboardMerchantRequest;
 use App\Http\Requests\Merchant\RejectMerchantRequest;
 use App\Http\Requests\Merchant\SettleMerchantRequest;
 use App\Http\Requests\Merchant\AddMerchantLocationRequest;
+use App\Http\Requests\Merchant\AssignMerchantTerminalRequest;
 use App\Http\Requests\Merchant\UpdateMerchantRequest;
 use App\Models\Merchant;
+use App\Models\MerchantTerminal;
 use App\Services\Payments\MerchantActivationService;
 use App\Services\Payments\MerchantApprovalService;
 use App\Services\Payments\MerchantKycService;
@@ -20,6 +22,7 @@ use App\Services\Payments\MerchantLocationService;
 use App\Services\Payments\MerchantOnboardingService;
 use App\Services\Payments\MerchantPaymentService;
 use App\Services\Payments\MerchantSettlementService;
+use App\Services\Payments\MerchantTerminalService;
 use App\Traits\ApiResponse;
 use Exception;
 use Illuminate\Http\Request;
@@ -35,7 +38,8 @@ class MerchantController extends Controller
         protected MerchantApprovalService $approvalService,
         protected MerchantActivationService $activationService,
         protected MerchantKycService $kycService,
-        protected MerchantLocationService $locationService
+        protected MerchantLocationService $locationService,
+        protected MerchantTerminalService $terminalService
     ) {
     }
 
@@ -210,6 +214,49 @@ class MerchantController extends Controller
         $location = $this->locationService->add($merchant, $request->validated());
 
         return $this->success($location, 'Location added successfully.', 201);
+    }
+
+    public function listTerminals(Merchant $merchant)
+    {
+        return $this->success(
+            $this->terminalService->list($merchant),
+            'Terminals retrieved successfully.'
+        );
+    }
+
+    public function assignTerminal(AssignMerchantTerminalRequest $request)
+    {
+        $merchant = Merchant::findOrFail($request->merchant_id);
+
+        $terminal = $this->terminalService->assign(
+            $merchant,
+            $request->validated(),
+            $request->user()->id
+        );
+
+        return $this->success($terminal, 'Terminal assigned successfully.', 201);
+    }
+
+    public function activateTerminal(MerchantTerminal $terminal)
+    {
+        try {
+            $result = $this->terminalService->activate($terminal);
+
+            return $this->success($result, 'Terminal activated.');
+        } catch (Exception $e) {
+            return $this->error($e->getMessage());
+        }
+    }
+
+    public function suspendTerminal(MerchantTerminal $terminal)
+    {
+        try {
+            $result = $this->terminalService->suspend($terminal);
+
+            return $this->success($result, 'Terminal suspended.');
+        } catch (Exception $e) {
+            return $this->error($e->getMessage());
+        }
     }
 
     public function collectQr(CollectQrPaymentRequest $request)

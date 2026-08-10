@@ -25,6 +25,10 @@ class PaymentsRbacSeeder extends Seeder
             'merchants.owners.manage' => 'payments',
             'merchants.documents.manage' => 'payments',
             'merchants.locations.manage' => 'payments',
+            'merchant-terminals.view' => 'payments',
+            'merchant-terminals.assign' => 'payments',
+            'merchant-terminals.activate' => 'payments',
+            'merchant-terminals.suspend' => 'payments',
             'payments.process' => 'payments',
             'agency_banking.manage' => 'payments',
             'agents.view' => 'payments',
@@ -75,6 +79,13 @@ class PaymentsRbacSeeder extends Seeder
             'merchant-settlement-officer' => [
                 'label' => 'Merchant Settlement Officer',
                 'permissions' => ['merchants.settle'],
+            ],
+            'merchant-terminal-officer' => [
+                'label' => 'Merchant Terminal Officer',
+                'permissions' => [
+                    'merchant-terminals.view', 'merchant-terminals.assign',
+                    'merchant-terminals.activate', 'merchant-terminals.suspend',
+                ],
             ],
             'agency-banking-agent' => [
                 'label' => 'Agency Banking Agent',

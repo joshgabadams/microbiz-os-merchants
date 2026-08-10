@@ -27,6 +27,28 @@ These were fixed directly in the local environment (not committed/pushed) and ve
 
 **Fix (still needed):** apply the same pattern already used correctly in `ApprovalController` and in `TellerController::open()`/`close()` — replace the client-supplied field with `$request->user()->id` in all three remaining controllers.
 
+## High — Merchant KYC has no completion gate at all; a merchant can be approved with zero KYC data on file (found 2026-08-10)
+
+**In plain terms:** For merchants, adding a beneficial owner or a document is just plain data entry right now — nothing ever checks that this data was actually provided, and nothing ever marks KYC as "done." A merchant can be submitted for review and fully approved with no owners and no documents recorded at all. The `kyc_status` field on a merchant's record gets set to `PENDING` once at onboarding and is never touched again by anything in the codebase.
+
+**Where this is different from the Agent module (which does it correctly):** `app/Services/Payments/AgentKycService::completeKyc()` requires the agent to be in `PENDING_KYC` status, requires the reviewer to be someone other than the person who registered the agent (maker-checker), and requires at least one owner **and** one document on file — only then does it advance the agent's status and set `kyc_status = 'COMPLETED'`. There is no equivalent method anywhere for merchants. `app/Services/Payments/MerchantApprovalService::submit()`/`approve()` don't check owner/document counts or `kyc_status` at all.
+
+**Where:** `app/Services/Payments/MerchantKycService.php` (only has `listOwners`/`addOwner`/`listDocuments`/`addDocument`, no completion method), `app/Services/Payments/MerchantApprovalService.php` (`submit`/`approve` have no KYC-completeness check).
+
+**Fix:** Add a `MerchantKycService::completeKyc()` method mirroring `AgentKycService::completeKyc()` exactly (status guard, maker-checker, owner/document count checks, sets `kyc_status = 'COMPLETED'`), and gate `submit()` (or introduce the Blueprint's separate `compliance-review` step) on it being completed first. This also matches a documented gap in the Merchant blueprint itself — Module 2 (KYC) and onboarding Step 4 ("Compliance review", `POST /merchants/{merchant}/compliance-review`) are both still unbuilt.
+
+## Critical — a second SQLite database file the app depends on is never created anywhere, blocking wallet/payment migrations entirely on a fresh deploy (found 2026-08-10)
+
+**In plain terms:** The app actually uses two separate local database files, not one — the main one everyone knows about, and a second one called `mpay.sqlite` that the newer wallet/payment-party tables live in. Nothing in the codebase or deployment process ever creates that second file automatically — no setup script, no migration, nothing. On a developer's own laptop it can silently work if that file happens to already exist from some earlier manual step nobody documented, but on a freshly deployed or rebuilt server, the file simply isn't there, and every migration for that second database fails immediately with "Database file... does not exist."
+
+**Where:** `config/database.php` — the `mpay` connection (line ~47) points at `database_path('mpay.sqlite')` by default. Migrations under `database/migrations/mpay/` (e.g. `2026_07_28_212041_create_payment_parties_table.php`) use this connection. `docker-entrypoint.sh` runs `php artisan migrate --force` on container start but never ensures this file exists first. The main database file doesn't have this problem only because it's separately bind-mounted from persistent host storage (`/home/mohammed/microbiz-storage/database.sqlite`) — no equivalent mount exists for `mpay.sqlite`.
+
+**Confirmed on Contabo (2026-08-10):** after rebuilding the `microbiz-os` container with the latest `main` (commit `e282ce1`), `php artisan migrate` failed immediately on `create_payment_parties_table` with exactly this error, blocking every wallet/payment-party migration after it.
+
+**Fix (two parts, needs a decision before applying):**
+1. Immediate unblock: create an empty file at the expected path (`touch database/mpay.sqlite` inside the container) so migrations can proceed right now. Not persistent — lost on the next container rebuild/recreate, same failure will resurface.
+2. Proper fix: create the file on persistent host storage (mirroring the existing pattern, e.g. `/home/mohammed/microbiz-storage/mpay.sqlite`) and add a matching bind mount (`-v /home/mohammed/microbiz-storage/mpay.sqlite:/var/www/database/mpay.sqlite`) to the container's run command, so it survives rebuilds like the main database does. Ideally `docker-entrypoint.sh` should also be updated to `touch` this file (and the main one) if missing, so this can't silently block a future fresh deploy again.
+
 ## Critical — same MySQL-only migration bug resurfaced in newly-pulled code, blocking every migration after it (found 2026-08-10)
 
 **In plain terms:** This is the exact same problem already fixed twice before (see "Two migrations used MySQL-only syntax" above): a migration writes raw `ALTER TABLE ... MODIFY ... ENUM(...)` SQL, which is MySQL-only syntax and crashes immediately on SQLite (this project's own documented local setup). Because Laravel runs migrations in date order and stops at the first failure, every migration dated after this one is currently stuck as "Pending" and cannot run locally — that includes the tables for wallets, fixed deposits, TESSA alerts, and the new agent beneficial-owners/documents/locations/agreements tables pulled in from `origin/main`. None of that new functionality can be exercised in this environment until it's fixed.

@@ -97,6 +97,17 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/merchants/{merchant}/locations', [MerchantController::class, 'addLocation'])
             ->middleware('permission:merchants.locations.manage');
 
+        Route::get('/merchants/{merchant}/terminals', [MerchantController::class, 'listTerminals']);
+
+        Route::post('/merchant-terminals', [MerchantController::class, 'assignTerminal'])
+            ->middleware('permission:merchant-terminals.assign');
+
+        Route::post('/merchant-terminals/{terminal}/activate', [MerchantController::class, 'activateTerminal'])
+            ->middleware('permission:merchant-terminals.activate');
+
+        Route::post('/merchant-terminals/{terminal}/suspend', [MerchantController::class, 'suspendTerminal'])
+            ->middleware('permission:merchant-terminals.suspend');
+
         Route::post('/merchants/onboard', [MerchantController::class, 'onboard'])
             ->middleware('permission:merchants.onboard');
 
