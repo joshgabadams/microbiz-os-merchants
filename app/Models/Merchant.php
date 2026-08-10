@@ -21,6 +21,7 @@ class Merchant extends Model
         'business_type',
         'registration_number',
         'tax_identification_number',
+        'bvn',
         'merchant_category_code',
         'industry',
         'website',

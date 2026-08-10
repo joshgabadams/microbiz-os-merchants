@@ -16,6 +16,7 @@ class Agent extends Model
         'trading_name',
         'registration_number',
         'tax_identification_number',
+        'bvn',
         'phone',
         'email',
         'branch_id',

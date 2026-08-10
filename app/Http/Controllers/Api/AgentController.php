@@ -81,7 +81,7 @@ class AgentController extends Controller
     public function update(Request $request, Agent $agent)
     {
         $agent->update($request->only([
-            'trading_name', 'registration_number', 'tax_identification_number',
+            'trading_name', 'registration_number', 'tax_identification_number', 'bvn',
             'phone', 'email', 'supervisor_id', 'principal_reference',
             'daily_transaction_limit', 'daily_cash_out_limit', 'single_transaction_limit',
             'next_review_date',
