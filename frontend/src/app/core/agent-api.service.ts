@@ -5,6 +5,8 @@ import { environment } from '../../environments/environment';
 import {
   Agent,
   AgentAgreement,
+  AgentBeneficialOwner,
+  AgentDocument,
   AgentLocation,
   AgentType,
   ApiResponse,
@@ -190,4 +192,69 @@ export class AgentApiService {
       {}
     );
   }
+// ---------- AG-02: KYC ----------
+
+listOwners(
+  agentId: number
+): Observable<ApiResponse<AgentBeneficialOwner[]>> {
+  return this.http.get<ApiResponse<AgentBeneficialOwner[]>>(
+    `${this.base}/${agentId}/owners`
+  );
+}
+
+addOwner(
+  agentId: number,
+  payload: {
+    full_name: string;
+    date_of_birth?: string;
+    nationality?: string;
+    identification_type?: string;
+    identification_number?: string;
+    ownership_percentage?: number;
+    is_director?: boolean;
+    is_pep?: boolean;
+    sanctions_match?: boolean;
+  }
+): Observable<ApiResponse<AgentBeneficialOwner>> {
+  return this.http.post<ApiResponse<AgentBeneficialOwner>>(
+    `${this.base}/${agentId}/owners`,
+    payload
+  );
+}
+
+listDocuments(
+  agentId: number
+): Observable<ApiResponse<AgentDocument[]>> {
+  return this.http.get<ApiResponse<AgentDocument[]>>(
+    `${this.base}/${agentId}/documents`
+  );
+}
+
+addDocument(
+  agentId: number,
+  payload: {
+    document_type: string;
+    document_number?: string;
+    storage_path?: string;
+    issued_at?: string;
+    expires_at?: string;
+  }
+): Observable<ApiResponse<AgentDocument>> {
+  return this.http.post<ApiResponse<AgentDocument>>(
+    `${this.base}/${agentId}/documents`,
+    payload
+  );
+}
+
+completeKyc(
+  agentId: number
+): Observable<ApiResponse<Agent>> {
+  return this.http.post<ApiResponse<Agent>>(
+    `${this.base}/${agentId}/complete-kyc`,
+    {}
+  );
+}
+
+
+
 }
