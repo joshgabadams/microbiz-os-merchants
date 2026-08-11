@@ -4,49 +4,12 @@ namespace App\Services\Payments;
 
 use App\Domain\MPay\Enums\AgentStatus;
 use App\Models\Agent;
+use App\Models\AgentBalance;
+use App\Models\AgentLocation;
+use App\Models\AgentOperator;
+use App\Models\AgentTerminal;
 use Exception;
 
-/**
- * Blueprint §10: Cash Transaction Guard. Every agent financial
- * transaction must pass through this guard -- "no controller should
- * independently duplicate these checks."
- *
- * The Blueprint lists 20 checks. Each real, buildable check below is
- * its own independently callable method; composite guardXOperation()
- * methods call only the subset genuinely relevant to that operation
- * type, rather than faking checks that don't apply.
- *
- * Implemented now (Blueprint §10 numbering):
- *   1.  Agent is active
- *   2.  Agreement is active
- *   3.  KYC review is valid
- *   12. Transaction limit is not exceeded
- *   17. Idempotency key is unique (general-purpose; not used by
- *       guardFloatOperation() since agent_balances has no idempotency
- *       key column -- relevant once agent_transactions exists)
- *   20. No suspension or restriction is active
- *
- * Deliberately deferred, not faked:
- *   4-9   (location/operator/terminal/heartbeat/geo-fence) -- only
- *         relevant to customer-facing terminal transactions
- *         (AgentCashInService/AgentCashOutService, AG-07/08), not float
- *         allocation, which has no terminal or device involved.
- *   10    (requested service enabled) -- needs
- *         AgentServiceConfigurationService, not built.
- *   11    (business date open) -- MicroBiz OS has no independent
- *         business-date concept of its own yet.
- *   13    (daily cumulative limit) -- needs a real per-agent
- *         transaction log to sum against; agent_transactions
- *         (Blueprint §8.7) is AG-07/08 scope, not yet built.
- *   14-16 (customer eligibility, float/physical liquidity sufficiency)
- *         -- not applicable to float allocation itself (the agent's
- *         float is increasing, not being drawn down); relevant to
- *         AgentCashOutService instead.
- *   18    (risk rules) -- needs AgentRiskService, not built.
- *   19    (required approval obtained) -- handled structurally by
- *         AgentFloatService going through the existing maker-checker
- *         approval workflow, not by this guard directly.
- */
 class AgentOperationGuard
 {
     /**
@@ -102,10 +65,48 @@ class AgentOperationGuard
     }
 
     /**
-     * General-purpose idempotency check -- not called by
-     * guardFloatOperation() (agent_balances has no idempotency key
-     * column); available for AG-07+ once agent_transactions exists.
-     *
+     * @throws Exception
+     */
+    public function checkLocationActive(AgentLocation $location): void
+    {
+        if ($location->status !== 'ACTIVE') {
+            throw new Exception("Location {$location->location_code} is not ACTIVE.");
+        }
+    }
+
+    /**
+     * @throws Exception
+     */
+    public function checkOperatorActive(AgentOperator $operator): void
+    {
+        if ($operator->status !== 'ACTIVE') {
+            throw new Exception('Operator is not ACTIVE.');
+        }
+    }
+
+    /**
+     * @throws Exception
+     */
+    public function checkTerminalActive(AgentTerminal $terminal): void
+    {
+        if ($terminal->status !== 'ACTIVE') {
+            throw new Exception("Terminal {$terminal->terminal_id} is not ACTIVE.");
+        }
+    }
+
+    /**
+     * @throws Exception
+     */
+    public function checkAgentFloatSufficient(Agent $agent, float $amount): void
+    {
+        $balance = AgentBalance::where('agent_id', $agent->id)->first();
+
+        if (! $balance || (float) $balance->available_float < $amount) {
+            throw new Exception("Agent {$agent->agent_code} has insufficient float for this transaction.");
+        }
+    }
+
+    /**
      * @throws Exception
      */
     public function checkIdempotencyKeyUnique(string $idempotencyKey, string $modelClass, string $column = 'idempotency_key'): void
@@ -116,10 +117,6 @@ class AgentOperationGuard
     }
 
     /**
-     * Composite guard for float allocation/return -- only the checks
-     * that genuinely apply to a back-office bank<->agent float
-     * movement, not customer-facing terminal transaction checks.
-     *
      * @throws Exception
      */
     public function guardFloatOperation(Agent $agent, float $amount): void
@@ -129,5 +126,26 @@ class AgentOperationGuard
         $this->checkKycValid($agent);
         $this->checkNotSuspendedOrRestricted($agent);
         $this->checkTransactionLimit($agent, $amount);
+    }
+
+    /**
+     * @throws Exception
+     */
+    public function guardCashInOperation(
+        Agent $agent,
+        AgentLocation $location,
+        AgentOperator $operator,
+        AgentTerminal $terminal,
+        float $amount
+    ): void {
+        $this->checkAgentActive($agent);
+        $this->checkAgreementActive($agent);
+        $this->checkKycValid($agent);
+        $this->checkNotSuspendedOrRestricted($agent);
+        $this->checkTransactionLimit($agent, $amount);
+        $this->checkLocationActive($location);
+        $this->checkOperatorActive($operator);
+        $this->checkTerminalActive($terminal);
+        $this->checkAgentFloatSufficient($agent, $amount);
     }
 }
