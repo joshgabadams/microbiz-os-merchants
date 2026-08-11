@@ -148,6 +148,38 @@ tables, matching Blueprint §8.4/§8.5 exactly:
 - Both verified end-to-end via live API calls (not just tinker) — full create/list/duplicate-rejection/
   activate/re-activate-rejection/suspend/suspend-rejection/reactivate cycles, plus relocate for terminals.
 
+**Agent Locator — IP-based monitoring layer (issue #10, built 2026-08-11).** Not part of the Blueprint's
+own module list — this is a GitHub-issue-driven addition, scoped after direct clarification from the issue
+author (muayyat): physical geofence *enforcement* happens on the terminal's own hardware/binary, which this
+backend never controls in real time; what we own here is a second, independent *monitoring* signal, not a
+replacement for the GPS geo-fence in AG-04 above.
+
+- `App\Services\GeoIp\GeoIpLookupService` resolves an IP to an approximate location via a local MaxMind
+  GeoLite2 database file (`geoip2/geoip2` PHP library). Private/reserved IPs (localhost, LAN ranges) are
+  filtered out before lookup and return `null` cleanly rather than throwing — verified this doesn't break
+  local dev, where every request IP is `127.0.0.1`.
+- Database files (`GeoLite2-ASN/City/Country.mmdb`, ~85MB total) are fetched via MaxMind's official
+  `geoipupdate` binary, driven by `storage/app/GeoIP.conf` — generated at `scripts/generate-geoip-conf.sh`
+  from `.env` values (`MAXMIND_ACCOUNT_ID`/`MAXMIND_LICENSE_KEY`/`MAXMIND_EDITION_IDS`/`MAXMIND_DB_PATH`),
+  never hand-edited or committed (real license key). `php artisan geoip:update` re-runs it; scheduled daily
+  in `routes/console.php` (same "needs real cron wired to `schedule:run`" caveat as the existing TESSA job).
+- `AgentTerminalService::heartbeat()`/`checkLocation()` now also accept the requesting IP, look up its
+  approximate position, and compare it against the terminal's `registered_latitude`/`registered_longitude`
+  via the same Haversine helper used for the GPS geo-fence check — but into new, separate columns
+  (`last_ip_address`, `ip_latitude`/`ip_longitude`/`ip_city`/`ip_state`/`ip_country`, `ip_location_mismatch`,
+  `ip_checked_at`) that never feed `geo_fence_compliant`. Mismatch threshold defaults to 100km
+  (`config('geoip.mismatch_threshold_km')`) — deliberately wide, since city-level IP geolocation is not
+  precise enough to be a "does this look wrong" flag at anything tighter.
+- Verified: a real public IP (`8.8.8.8`) resolving to the US against a terminal registered in Lagos
+  correctly set `ip_location_mismatch = true`; the local-dev `127.0.0.1` path correctly stored the IP and
+  timestamp but left the derived-location fields null (no crash, no false positive) since private IPs
+  can't be geolocated.
+- **Not built:** any actual alerting/case-management on top of `ip_location_mismatch` — it's a stored flag
+  today, nothing surfaces it yet (a natural fit for a future TESSA rule, matching the pattern already used
+  for teller variance/high reversal/unusual approval, but that wiring wasn't in scope for this issue).
+- Basic Auth (issue #9) is a separate, still-open item — deliberately not started, since the issue has no
+  body/detail beyond its title and scope (whole-app auth vs. a specific endpoint) hasn't been confirmed.
+
 **Not built yet, in Blueprint order** (AG-05 through AG-13 — see Blueprint §7/§21 for full field lists):
 1. **AG-05 — Geo-Fencing and Security**: the heartbeat/location-check *mechanics* exist (built as part of
    AG-04 above, since the schema and geo-fence math are one piece), but the broader security layer — device

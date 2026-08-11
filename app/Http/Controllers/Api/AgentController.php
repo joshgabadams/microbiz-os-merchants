@@ -470,7 +470,7 @@ public function createAgreement(
 
     public function terminalHeartbeat(AgentTerminal $terminal, AgentTerminalHeartbeatRequest $request)
     {
-        $result = $this->terminalService->heartbeat($terminal, $request->validated());
+        $result = $this->terminalService->heartbeat($terminal, $request->validated(), $request->ip());
 
         return $this->success($result, 'Heartbeat recorded.');
     }
@@ -480,7 +480,8 @@ public function createAgreement(
         $result = $this->terminalService->checkLocation(
             $terminal,
             (float) $request->latitude,
-            (float) $request->longitude
+            (float) $request->longitude,
+            $request->ip()
         );
 
         return $this->success($result, 'Location check completed.');

@@ -6,6 +6,7 @@ use App\Domain\MPay\Enums\AgentStatus;
 use App\Models\Agent;
 use App\Models\AgentLocation;
 use App\Models\AgentTerminal;
+use App\Services\GeoIp\GeoIpLookupService;
 use Exception;
 use Illuminate\Support\Facades\DB;
 
@@ -32,6 +33,11 @@ class AgentTerminalService
         AgentStatus::TERMINAL_PENDING->value,
         AgentStatus::ACTIVE->value,
     ];
+
+    public function __construct(
+        protected GeoIpLookupService $geoIpLookupService
+    ) {
+    }
 
     public function list(Agent $agent)
     {
@@ -127,7 +133,7 @@ class AgentTerminalService
         return $terminal->fresh();
     }
 
-    public function heartbeat(AgentTerminal $terminal, array $data): AgentTerminal
+    public function heartbeat(AgentTerminal $terminal, array $data, ?string $ipAddress = null): AgentTerminal
     {
         $updates = ['last_heartbeat_at' => now()];
 
@@ -141,20 +147,77 @@ class AgentTerminalService
             );
         }
 
+        $updates = array_merge($updates, $this->evaluateIpLocation($terminal, $ipAddress));
+
         $terminal->update($updates);
 
         return $terminal->fresh();
     }
 
-    public function checkLocation(AgentTerminal $terminal, float $latitude, float $longitude): AgentTerminal
-    {
-        $terminal->update([
+    public function checkLocation(
+        AgentTerminal $terminal,
+        float $latitude,
+        float $longitude,
+        ?string $ipAddress = null
+    ): AgentTerminal {
+        $updates = [
             'last_latitude' => $latitude,
             'last_longitude' => $longitude,
             'geo_fence_compliant' => $this->isWithinGeoFence($terminal, $latitude, $longitude),
-        ]);
+        ];
+
+        $updates = array_merge($updates, $this->evaluateIpLocation($terminal, $ipAddress));
+
+        $terminal->update($updates);
 
         return $terminal->fresh();
+    }
+
+    /**
+     * Agent Locator (issue #10) -- resolves the requesting IP to an
+     * approximate location via MaxMind GeoLite2 and flags whether it
+     * looks far from the terminal's own registered position. This is a
+     * monitoring signal only: it never feeds geo_fence_compliant and
+     * never blocks anything, since real enforcement happens on the
+     * terminal's own hardware, outside this backend's control.
+     *
+     * @return array<string, mixed>
+     */
+    private function evaluateIpLocation(AgentTerminal $terminal, ?string $ipAddress): array
+    {
+        if ($ipAddress === null) {
+            return [];
+        }
+
+        $result = $this->geoIpLookupService->lookup($ipAddress);
+
+        $updates = [
+            'last_ip_address' => $ipAddress,
+            'ip_checked_at' => now(),
+        ];
+
+        if ($result === null) {
+            return $updates;
+        }
+
+        $updates['ip_latitude'] = $result->latitude;
+        $updates['ip_longitude'] = $result->longitude;
+        $updates['ip_city'] = $result->city;
+        $updates['ip_state'] = $result->state;
+        $updates['ip_country'] = $result->country;
+
+        if ($result->latitude !== null && $result->longitude !== null) {
+            $distanceMetres = $this->haversineDistanceMetres(
+                (float) $terminal->registered_latitude,
+                (float) $terminal->registered_longitude,
+                $result->latitude,
+                $result->longitude
+            );
+
+            $updates['ip_location_mismatch'] = $distanceMetres > (config('geoip.mismatch_threshold_km') * 1000);
+        }
+
+        return $updates;
     }
 
     /**
@@ -163,19 +226,29 @@ class AgentTerminalService
      */
     private function isWithinGeoFence(AgentTerminal $terminal, float $latitude, float $longitude): bool
     {
-        $earthRadiusMetres = 6371000;
-
-        $lat1 = deg2rad((float) $terminal->registered_latitude);
-        $lat2 = deg2rad($latitude);
-        $deltaLat = deg2rad($latitude - (float) $terminal->registered_latitude);
-        $deltaLng = deg2rad($longitude - (float) $terminal->registered_longitude);
-
-        $a = sin($deltaLat / 2) ** 2
-            + cos($lat1) * cos($lat2) * sin($deltaLng / 2) ** 2;
-        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
-
-        $distanceMetres = $earthRadiusMetres * $c;
+        $distanceMetres = $this->haversineDistanceMetres(
+            (float) $terminal->registered_latitude,
+            (float) $terminal->registered_longitude,
+            $latitude,
+            $longitude
+        );
 
         return $distanceMetres <= $terminal->geo_fence_radius_metres;
+    }
+
+    private function haversineDistanceMetres(float $lat1, float $lon1, float $lat2, float $lon2): float
+    {
+        $earthRadiusMetres = 6371000;
+
+        $lat1Rad = deg2rad($lat1);
+        $lat2Rad = deg2rad($lat2);
+        $deltaLat = deg2rad($lat2 - $lat1);
+        $deltaLng = deg2rad($lon2 - $lon1);
+
+        $a = sin($deltaLat / 2) ** 2
+            + cos($lat1Rad) * cos($lat2Rad) * sin($deltaLng / 2) ** 2;
+        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+
+        return $earthRadiusMetres * $c;
     }
 }

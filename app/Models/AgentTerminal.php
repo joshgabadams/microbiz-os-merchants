@@ -25,6 +25,14 @@ class AgentTerminal extends Model
         'last_longitude',
         'geo_fence_compliant',
         'assigned_by',
+        'last_ip_address',
+        'ip_latitude',
+        'ip_longitude',
+        'ip_city',
+        'ip_state',
+        'ip_country',
+        'ip_location_mismatch',
+        'ip_checked_at',
     ];
 
     protected $casts = [
@@ -36,6 +44,10 @@ class AgentTerminal extends Model
         'activated_at' => 'datetime',
         'last_heartbeat_at' => 'datetime',
         'last_transaction_at' => 'datetime',
+        'ip_latitude' => 'decimal:7',
+        'ip_longitude' => 'decimal:7',
+        'ip_location_mismatch' => 'boolean',
+        'ip_checked_at' => 'datetime',
     ];
 
     public function agent()
