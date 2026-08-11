@@ -109,6 +109,18 @@ class AgentOperationGuard
     /**
      * @throws Exception
      */
+    public function checkAgentPhysicalLiquiditySufficient(Agent $agent, float $amount): void
+    {
+        $balance = AgentBalance::where('agent_id', $agent->id)->first();
+
+        if (! $balance || (float) $balance->declared_physical_cash < $amount) {
+            throw new Exception("Agent {$agent->agent_code} has insufficient physical cash liquidity for this transaction.");
+        }
+    }
+
+    /**
+     * @throws Exception
+     */
     public function checkIdempotencyKeyUnique(string $idempotencyKey, string $modelClass, string $column = 'idempotency_key'): void
     {
         if ($modelClass::where($column, $idempotencyKey)->exists()) {
@@ -147,5 +159,26 @@ class AgentOperationGuard
         $this->checkOperatorActive($operator);
         $this->checkTerminalActive($terminal);
         $this->checkAgentFloatSufficient($agent, $amount);
+    }
+
+    /**
+     * @throws Exception
+     */
+    public function guardCashOutOperation(
+        Agent $agent,
+        AgentLocation $location,
+        AgentOperator $operator,
+        AgentTerminal $terminal,
+        float $amount
+    ): void {
+        $this->checkAgentActive($agent);
+        $this->checkAgreementActive($agent);
+        $this->checkKycValid($agent);
+        $this->checkNotSuspendedOrRestricted($agent);
+        $this->checkTransactionLimit($agent, $amount);
+        $this->checkLocationActive($location);
+        $this->checkOperatorActive($operator);
+        $this->checkTerminalActive($terminal);
+        $this->checkAgentPhysicalLiquiditySufficient($agent, $amount);
     }
 }

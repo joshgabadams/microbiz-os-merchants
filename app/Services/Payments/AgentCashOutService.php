@@ -14,7 +14,7 @@ use App\Services\Customer\CustomerAccountService;
 use Exception;
 use Illuminate\Support\Facades\DB;
 
-class AgentCashInService
+class AgentCashOutService
 {
     public function __construct(
         protected AgentOperationGuard $guard,
@@ -27,7 +27,7 @@ class AgentCashInService
     /**
      * @throws Exception
      */
-    public function cashIn(
+    public function cashOut(
         AgentOperator $operator,
         AgentTerminal $terminal,
         CustomerAccount $customerAccount,
@@ -36,11 +36,16 @@ class AgentCashInService
         float $latitude,
         float $longitude,
         int $performedBy,
+        bool $customerAuthenticated,
         ?string $customerReference = null,
         ?string $narration = null
     ): AgentTransaction {
         if ($amount <= 0) {
-            throw new Exception('Cash-in amount must be greater than zero.');
+            throw new Exception('Cash-out amount must be greater than zero.');
+        }
+
+        if (! $customerAuthenticated) {
+            throw new Exception('Customer authentication is required before cash-out can proceed.');
         }
 
         $existing = AgentTransaction::where('idempotency_key', $idempotencyKey)->first();
@@ -60,7 +65,7 @@ class AgentCashInService
             throw new Exception("This terminal is not assigned to the operator's location.");
         }
 
-        $this->guard->guardCashInOperation($agent, $location, $operator, $terminal, $amount);
+        $this->guard->guardCashOutOperation($agent, $location, $operator, $terminal, $amount);
 
         $geoFencePassed = $this->isWithinGeoFence(
             $latitude,
@@ -97,8 +102,8 @@ class AgentCashInService
                 ->lockForUpdate()
                 ->first();
 
-            if (! $balance || (float) $balance->available_float < $amount) {
-                throw new Exception("Agent {$agent->agent_code} has insufficient float for this transaction.");
+            if (! $balance || (float) $balance->declared_physical_cash < $amount) {
+                throw new Exception("Agent {$agent->agent_code} has insufficient physical cash liquidity for this transaction.");
             }
 
             $transactionDate = now();
@@ -111,7 +116,7 @@ class AgentCashInService
                 'agent_location_id' => $location->id,
                 'agent_terminal_id' => $terminal->id,
                 'agent_operator_id' => $operator->id,
-                'transaction_type' => 'CASH_IN',
+                'transaction_type' => 'CASH_OUT',
                 'status' => 'INITIATED',
                 'amount' => $amount,
                 'currency' => $balance->currency,
@@ -124,18 +129,18 @@ class AgentCashInService
                 'performed_by' => $performedBy,
             ]);
 
-            $balance->ledger_float -= $amount;
-            $balance->available_float -= $amount;
-            $balance->declared_physical_cash += $amount;
-            $balance->save();
-
-            $this->customerAccountService->deposit(
+            $this->customerAccountService->withdraw(
                 $customerAccount,
                 $amount,
                 $performedBy,
                 $customerReference,
-                $narration ?? 'Agent cash-in'
+                $narration ?? 'Agent cash-out'
             );
+
+            $balance->ledger_float += $amount;
+            $balance->available_float += $amount;
+            $balance->declared_physical_cash -= $amount;
+            $balance->save();
 
             $cashLedger = CashLedger::create([
                 'reference_no' => $transactionNo,
@@ -143,19 +148,19 @@ class AgentCashInService
                 'vault_id' => null,
                 'teller_id' => null,
                 'user_id' => $performedBy,
-                'transaction_type' => 'AGENT_CASH_IN',
+                'transaction_type' => 'AGENT_CASH_OUT',
                 'source_type' => AgentTransaction::class,
                 'source_id' => $agentTransaction->id,
-                'entry_type' => 'DEBIT',
+                'entry_type' => 'CREDIT',
                 'account_type' => 'AGENCY_FLOAT',
                 'account_code' => 'AGENCY_FLOAT',
-                'debit_account_key' => 'AGENCY_FLOAT',
-                'credit_account_key' => 'CUSTOMER_DEPOSIT_CONTROL',
-                'debit' => $amount,
-                'credit' => 0,
+                'debit_account_key' => 'CUSTOMER_DEPOSIT_CONTROL',
+                'credit_account_key' => 'AGENCY_FLOAT',
+                'debit' => 0,
+                'credit' => $amount,
                 'running_balance' => $balance->ledger_float,
                 'currency' => $balance->currency,
-                'narration' => $narration ?? 'Agent cash-in',
+                'narration' => $narration ?? 'Agent cash-out',
                 'status' => 'PENDING',
                 'approved_by' => null,
                 'transaction_date' => $transactionDate,
