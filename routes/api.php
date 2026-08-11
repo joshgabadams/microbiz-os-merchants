@@ -57,6 +57,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/float/return/request', [ApprovalController::class, 'requestReturnFloat'])
             ->middleware('permission:approvals.create');
 
+        Route::post('/float/agent/allocate/request', [ApprovalController::class, 'requestAgentAllocateFloat'])
+            ->middleware('permission:approvals.create');
+        Route::post('/float/agent/return/request', [ApprovalController::class, 'requestAgentReturnFloat'])
+            ->middleware('permission:approvals.create');     
+
         Route::get('/approvals/pending', [ApprovalController::class, 'pending']);
         Route::post('/approvals/{id}/approve', [ApprovalController::class, 'approve'])
             ->middleware('permission:approvals.approve');

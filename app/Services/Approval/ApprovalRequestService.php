@@ -2,9 +2,11 @@
 
 namespace App\Services\Approval;
 
+use App\Models\Agent;
 use App\Models\ApprovalRequest;
 use App\Models\Teller;
 use App\Models\Vault;
+use App\Services\CashManagement\AgentFloatService;
 use App\Services\CashManagement\VaultTellerFloatService;
 use App\Services\Common\TransactionNumberService;
 use Illuminate\Support\Facades\DB;
@@ -15,13 +17,11 @@ class ApprovalRequestService
 {
     public function __construct(
         protected TransactionNumberService $transactionNumberService,
-        protected VaultTellerFloatService $vaultTellerFloatService
+        protected VaultTellerFloatService $vaultTellerFloatService,
+        protected AgentFloatService $agentFloatService
     ) {
     }
 
-    /**
-     * Create a new maker-checker approval request.
-     */
     public function createRequest(
         string $requestType,
         array $payload,
@@ -42,9 +42,6 @@ class ApprovalRequestService
         ]);
     }
 
-    /**
-     * Reject a pending approval request.
-     */
     public function reject(
         ApprovalRequest $approvalRequest,
         int $checkerId,
@@ -77,9 +74,6 @@ class ApprovalRequestService
         });
     }
 
-    /**
-     * Approve and execute a pending approval request.
-     */
     public function approve(
         ApprovalRequest $approvalRequest,
         int $checkerId,
@@ -111,6 +105,8 @@ class ApprovalRequestService
             $result = match ($approvalRequest->request_type) {
                 'ALLOCATE_FLOAT' => $this->executeAllocateFloat($payload),
                 'RETURN_FLOAT' => $this->executeReturnFloat($payload),
+                'AGENT_ALLOCATE_FLOAT' => $this->executeAgentAllocateFloat($payload),
+                'AGENT_RETURN_FLOAT' => $this->executeAgentReturnFloat($payload),
 
                 default => throw new RuntimeException(
                     "Unsupported approval request type: {$approvalRequest->request_type}."
@@ -137,9 +133,6 @@ class ApprovalRequestService
         });
     }
 
-    /**
-     * Execute an approved vault-to-teller float allocation.
-     */
     protected function executeAllocateFloat(array $payload): array
     {
         $this->validateFloatPayload($payload);
@@ -154,9 +147,6 @@ class ApprovalRequestService
         );
     }
 
-    /**
-     * Execute an approved teller-to-vault float return.
-     */
     protected function executeReturnFloat(array $payload): array
     {
         $this->validateFloatPayload($payload);
@@ -171,9 +161,34 @@ class ApprovalRequestService
         );
     }
 
-    /**
-     * Ensure the request has not already been processed.
-     */
+    protected function executeAgentAllocateFloat(array $payload): array
+    {
+        $this->validateAgentFloatPayload($payload);
+
+        return $this->agentFloatService->allocateFloat(
+            Vault::findOrFail($payload['vault_id']),
+            Agent::findOrFail($payload['agent_id']),
+            (float) $payload['amount'],
+            (int) $payload['performed_by'],
+            $payload['reference'] ?? null,
+            $payload['narration'] ?? null
+        );
+    }
+
+    protected function executeAgentReturnFloat(array $payload): array
+    {
+        $this->validateAgentFloatPayload($payload);
+
+        return $this->agentFloatService->returnFloat(
+            Vault::findOrFail($payload['vault_id']),
+            Agent::findOrFail($payload['agent_id']),
+            (float) $payload['amount'],
+            (int) $payload['performed_by'],
+            $payload['reference'] ?? null,
+            $payload['narration'] ?? null
+        );
+    }
+
     protected function ensureRequestIsPending(
         ApprovalRequest $approvalRequest
     ): void {
@@ -186,9 +201,6 @@ class ApprovalRequestService
         }
     }
 
-    /**
-     * Enforce maker-checker separation.
-     */
     protected function ensureMakerAndCheckerAreDifferent(
         ApprovalRequest $approvalRequest,
         int $checkerId
@@ -202,14 +214,35 @@ class ApprovalRequestService
         }
     }
 
-    /**
-     * Validate the stored float transaction payload.
-     */
     protected function validateFloatPayload(array $payload): void
     {
         $requiredFields = [
             'vault_id',
             'teller_id',
+            'amount',
+            'performed_by',
+        ];
+
+        foreach ($requiredFields as $field) {
+            if (!array_key_exists($field, $payload)) {
+                throw new RuntimeException(
+                    "The approval payload is missing the {$field} field."
+                );
+            }
+        }
+
+        if ((float) $payload['amount'] <= 0) {
+            throw new RuntimeException(
+                'The approval payload contains an invalid amount.'
+            );
+        }
+    }
+
+    protected function validateAgentFloatPayload(array $payload): void
+    {
+        $requiredFields = [
+            'vault_id',
+            'agent_id',
             'amount',
             'performed_by',
         ];
