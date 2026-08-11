@@ -25,6 +25,10 @@ class PaymentsRbacSeeder extends Seeder
             'merchants.owners.manage' => 'payments',
             'merchants.documents.manage' => 'payments',
             'merchants.locations.manage' => 'payments',
+            'merchant-terminals.view' => 'payments',
+            'merchant-terminals.assign' => 'payments',
+            'merchant-terminals.activate' => 'payments',
+            'merchant-terminals.suspend' => 'payments',
             'payments.process' => 'payments',
             'agency_banking.manage' => 'payments',
             'agents.view' => 'payments',
@@ -46,6 +50,12 @@ class PaymentsRbacSeeder extends Seeder
             'agents.compliance.review' => 'payments',
             'agents.agreements.create' => 'payments',
             'agents.agreements.execute' => 'payments',
+            'agents.operators.view' => 'payments',
+            'agents.operators.manage' => 'payments',
+            'agents.terminals.view' => 'payments',
+            'agents.terminals.assign' => 'payments',
+            'agents.terminals.activate' => 'payments',
+            'agents.terminals.suspend' => 'payments',
         ];
 
         foreach ($permissions as $name => $module) {
@@ -75,6 +85,13 @@ class PaymentsRbacSeeder extends Seeder
             'merchant-settlement-officer' => [
                 'label' => 'Merchant Settlement Officer',
                 'permissions' => ['merchants.settle'],
+            ],
+            'merchant-terminal-officer' => [
+                'label' => 'Merchant Terminal Officer',
+                'permissions' => [
+                    'merchant-terminals.view', 'merchant-terminals.assign',
+                    'merchant-terminals.activate', 'merchant-terminals.suspend',
+                ],
             ],
             'agency-banking-agent' => [
                 'label' => 'Agency Banking Agent',
@@ -128,6 +145,26 @@ class PaymentsRbacSeeder extends Seeder
     'permissions' => [
         'agents.view',
         'agents.agreements.execute',
+    ],
+],
+
+'agent-operator-officer' => [
+    'label' => 'Agent Operator Officer',
+    'permissions' => [
+        'agents.view',
+        'agents.operators.view',
+        'agents.operators.manage',
+    ],
+],
+
+'agent-terminal-officer' => [
+    'label' => 'Agent Terminal Officer',
+    'permissions' => [
+        'agents.view',
+        'agents.terminals.view',
+        'agents.terminals.assign',
+        'agents.terminals.activate',
+        'agents.terminals.suspend',
     ],
 ],
             'agent-approval-officer' => [

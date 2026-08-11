@@ -19,6 +19,7 @@ class OnboardAgentRequest extends FormRequest
             'trading_name' => ['nullable', 'string', 'max:255'],
             'registration_number' => ['nullable', 'string', 'max:255'],
             'tax_identification_number' => ['nullable', 'string', 'max:255'],
+            'bvn' => ['nullable', 'string', 'digits:11'],
             'phone' => ['required', 'string', 'max:20'],
             'email' => ['nullable', 'email', 'max:255'],
             'branch_id' => ['required', 'integer', 'exists:branches,id'],

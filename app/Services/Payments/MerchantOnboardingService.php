@@ -26,6 +26,7 @@ class MerchantOnboardingService
                 'business_type' => $data['business_type'] ?? null,
                 'registration_number' => $data['registration_number'] ?? null,
                 'tax_identification_number' => $data['tax_identification_number'] ?? null,
+                'bvn' => $data['bvn'] ?? null,
                 'merchant_category_code' => $data['merchant_category_code'] ?? null,
                 'industry' => $data['industry'] ?? null,
                 'website' => $data['website'] ?? null,

@@ -30,6 +30,7 @@ class OnboardMerchantRequest extends FormRequest
             'business_type' => ['nullable', 'string', 'max:255'],
             'registration_number' => ['required', 'string', 'max:255'],
             'tax_identification_number' => ['nullable', 'string', 'max:255'],
+            'bvn' => ['nullable', 'string', 'digits:11'],
             'merchant_category_code' => ['nullable', 'string', 'max:4'],
             'industry' => ['nullable', 'string', 'max:255'],
             'website' => ['nullable', 'string', 'max:255'],
