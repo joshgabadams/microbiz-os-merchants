@@ -8,6 +8,8 @@ import { AgentApiService } from '../../core/agent-api.service';
 import {
   Agent,
   AgentAgreement,
+  AgentBeneficialOwner,
+  AgentDocument,
   AgentLocation,
 } from '../../core/models/api.models';
 
@@ -17,9 +19,12 @@ import {
   imports: [CommonModule, FormsModule, RouterLink],
   template: `
     <div class="page">
+      <!-- PAGE HEADER -->
       <div class="page-header">
         <div>
-          <a routerLink="/agents" class="back-link">← Back to Agents</a>
+          <a routerLink="/agents" class="back-link">
+            ← Back to Agents
+          </a>
 
           @if (agent()) {
             <h1>{{ agent()!.legal_name }}</h1>
@@ -39,13 +44,15 @@ import {
             class="status-badge"
             [class]="statusClass(agent()!.status)"
           >
-            {{ agent()!.status }}
+            {{ displayStatus(agent()!.status) }}
           </span>
         }
       </div>
 
       @if (loading()) {
-        <p>Loading agent...</p>
+        <section class="card">
+          <p>Loading agent...</p>
+        </section>
       }
 
       @if (error()) {
@@ -55,8 +62,21 @@ import {
       }
 
       @if (!loading() && agent()) {
+        <!-- ===================================================== -->
+        <!-- LIFECYCLE -->
+        <!-- ===================================================== -->
+
         <section class="card">
-          <h2>Agent Lifecycle</h2>
+          <div class="section-header">
+            <div>
+              <h2>Agent Lifecycle</h2>
+
+              <p>
+                Controlled progression from registration to active
+                Agency Banking operations.
+              </p>
+            </div>
+          </div>
 
           <div class="lifecycle">
             @for (step of lifecycleSteps; track step.status) {
@@ -75,19 +95,36 @@ import {
                   }
                 </div>
 
-                <div>
+                <div class="step-content">
                   <strong>{{ step.label }}</strong>
-                  <div>{{ step.status }}</div>
+
+                  <span class="step-status">
+                    {{ displayStatus(step.status) }}
+                  </span>
                 </div>
               </div>
             }
           </div>
         </section>
 
+        <!-- ===================================================== -->
+        <!-- OVERVIEW -->
+        <!-- ===================================================== -->
+
         <section class="card">
           <h2>Overview</h2>
 
           <div class="details-grid">
+            <div>
+              <span class="label">Agent Code</span>
+              <strong>{{ agent()!.agent_code }}</strong>
+            </div>
+
+            <div>
+              <span class="label">Agent Type</span>
+              <strong>{{ agent()!.agent_type }}</strong>
+            </div>
+
             <div>
               <span class="label">KYC Status</span>
               <strong>{{ agent()!.kyc_status }}</strong>
@@ -105,13 +142,19 @@ import {
 
             <div>
               <span class="label">Exclusive Relationship</span>
+
               <strong>
-                {{ agent()!.exclusive_relationship ? 'YES' : 'NO' }}
+                {{
+                  agent()!.exclusive_relationship
+                    ? 'YES'
+                    : 'NO'
+                }}
               </strong>
             </div>
 
             <div>
               <span class="label">Principal Reference</span>
+
               <strong>
                 {{ agent()!.principal_reference || '—' }}
               </strong>
@@ -119,6 +162,7 @@ import {
 
             <div>
               <span class="label">Approved At</span>
+
               <strong>
                 {{ agent()!.approved_at || '—' }}
               </strong>
@@ -126,83 +170,657 @@ import {
           </div>
         </section>
 
+        <!-- ===================================================== -->
+        <!-- AG-01: DRAFT -> KYC -->
+        <!-- ===================================================== -->
+
+        @if (agent()!.status === 'DRAFT') {
+          <section class="card action-card">
+            <div class="action-heading">
+              <div class="action-number">1</div>
+
+              <div>
+                <h2>Submit Agent for KYC</h2>
+
+                <p>
+                  Registration has been created. Submit this agent
+                  into the formal KYC and due-diligence workflow.
+                </p>
+              </div>
+            </div>
+
+            <button
+              (click)="submitAgent()"
+              [disabled]="working()"
+            >
+              {{
+                working()
+                  ? 'Submitting...'
+                  : 'Submit Agent for KYC'
+              }}
+            </button>
+          </section>
+        }
+
+        <!-- ===================================================== -->
+        <!-- AG-02: KYC & DUE DILIGENCE -->
+        <!-- ===================================================== -->
+
+        @if (agent()!.status === 'PENDING_KYC') {
+          <section class="card pending-card">
+            <div class="action-heading">
+              <div class="action-number">2</div>
+
+              <div>
+                <h2>KYC & Due Diligence</h2>
+
+                <p>
+                  Capture beneficial ownership and documentary
+                  evidence before independent KYC completion.
+                </p>
+              </div>
+            </div>
+
+            <!-- KYC READINESS -->
+
+            <div class="kyc-readiness">
+              <div
+                class="readiness-item"
+                [class.ready]="owners().length > 0"
+              >
+                <strong>
+                  {{ owners().length > 0 ? '✓' : '○' }}
+                  Beneficial Owner
+                </strong>
+
+                <span>
+                  {{
+                    owners().length > 0
+                      ? owners().length + ' recorded'
+                      : 'At least one owner required'
+                  }}
+                </span>
+              </div>
+
+              <div
+                class="readiness-item"
+                [class.ready]="documents().length > 0"
+              >
+                <strong>
+                  {{ documents().length > 0 ? '✓' : '○' }}
+                  KYC Document
+                </strong>
+
+                <span>
+                  {{
+                    documents().length > 0
+                      ? documents().length + ' recorded'
+                      : 'At least one document required'
+                  }}
+                </span>
+              </div>
+            </div>
+
+            <!-- BENEFICIAL OWNERS -->
+
+            <div class="kyc-section">
+              <div class="section-header">
+                <div>
+                  <h3>Beneficial Owners</h3>
+
+                  <p>
+                    Ownership, identity and screening information
+                    for the agent.
+                  </p>
+                </div>
+
+                <button
+                  (click)="toggleOwnerForm()"
+                  [disabled]="working()"
+                >
+                  {{
+                    showOwnerForm()
+                      ? 'Cancel'
+                      : '+ Add Owner'
+                  }}
+                </button>
+              </div>
+
+              @if (showOwnerForm()) {
+                <div class="form-grid">
+                  <label>
+                    Full Name *
+                    <input
+                      [(ngModel)]="ownerFullName"
+                      placeholder="Full legal name"
+                    />
+                  </label>
+
+                  <label>
+                    Date of Birth
+                    <input
+                      type="date"
+                      [(ngModel)]="ownerDateOfBirth"
+                    />
+                  </label>
+
+                  <label>
+                    Nationality
+                    <input
+                      maxlength="2"
+                      [(ngModel)]="ownerNationality"
+                      placeholder="NG"
+                    />
+                  </label>
+
+                  <label>
+                    Identification Type
+                    <select
+                      [(ngModel)]="ownerIdentificationType"
+                    >
+                      <option value="NIN">NIN</option>
+                      <option value="BVN">BVN</option>
+                      <option value="PASSPORT">
+                        Passport
+                      </option>
+                      <option value="DRIVERS_LICENSE">
+                        Driver's Licence
+                      </option>
+                      <option value="VOTERS_CARD">
+                        Voter's Card
+                      </option>
+                      <option value="OTHER">
+                        Other
+                      </option>
+                    </select>
+                  </label>
+
+                  <label>
+                    Identification Number
+                    <input
+                      [(ngModel)]="
+                        ownerIdentificationNumber
+                      "
+                      placeholder="Identification number"
+                    />
+                  </label>
+
+                  <label>
+                    Ownership %
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      [(ngModel)]="
+                        ownerOwnershipPercentage
+                      "
+                    />
+                  </label>
+
+                  <label class="checkbox-field">
+                    <input
+                      type="checkbox"
+                      [(ngModel)]="ownerIsDirector"
+                    />
+
+                    <span>Director</span>
+                  </label>
+
+                  <label class="checkbox-field">
+                    <input
+                      type="checkbox"
+                      [(ngModel)]="ownerIsPep"
+                    />
+
+                    <span>
+                      Politically Exposed Person
+                    </span>
+                  </label>
+
+                  <label class="checkbox-field">
+                    <input
+                      type="checkbox"
+                      [(ngModel)]="ownerSanctionsMatch"
+                    />
+
+                    <span>Sanctions Match</span>
+                  </label>
+
+                  <div class="form-actions">
+                    <button
+                      (click)="addOwner()"
+                      [disabled]="working()"
+                    >
+                      {{
+                        working()
+                          ? 'Saving...'
+                          : 'Save Beneficial Owner'
+                      }}
+                    </button>
+                  </div>
+                </div>
+              }
+
+              @if (owners().length === 0) {
+                <div class="empty-state">
+                  No beneficial owners recorded.
+                </div>
+              } @else {
+                <div class="record-list">
+                  @for (owner of owners(); track owner.id) {
+                    <div class="record-card">
+                      <div>
+                        <strong>
+                          {{ owner.full_name }}
+                        </strong>
+
+                        <div class="muted">
+                          {{
+                            owner.identification_type ||
+                            'Identification'
+                          }}:
+                          {{
+                            owner.identification_number ||
+                            '—'
+                          }}
+                        </div>
+
+                        @if (owner.nationality) {
+                          <div class="muted">
+                            Nationality:
+                            {{ owner.nationality }}
+                          </div>
+                        }
+                      </div>
+
+                      <div class="record-meta">
+                        @if (
+                          owner.ownership_percentage !== null &&
+                          owner.ownership_percentage !== undefined
+                        ) {
+                          <span>
+                            Ownership:
+                            {{
+                              owner.ownership_percentage
+                            }}%
+                          </span>
+                        }
+
+                        @if (owner.is_director) {
+                          <span class="meta-pill">
+                            Director
+                          </span>
+                        }
+
+                        @if (owner.is_pep) {
+                          <span class="warning-pill">
+                            PEP
+                          </span>
+                        }
+
+                        @if (owner.sanctions_match) {
+                          <span class="danger-pill">
+                            Sanctions Match
+                          </span>
+                        }
+
+                        @if (owner.screening_status) {
+                          <span class="meta-pill">
+                            {{
+                              owner.screening_status
+                            }}
+                          </span>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+
+            <!-- DOCUMENTS -->
+
+            <div class="kyc-section">
+              <div class="section-header">
+                <div>
+                  <h3>KYC Documents</h3>
+
+                  <p>
+                    Identity and supporting documentary evidence
+                    for the agent.
+                  </p>
+                </div>
+
+                <button
+                  (click)="toggleDocumentForm()"
+                  [disabled]="working()"
+                >
+                  {{
+                    showDocumentForm()
+                      ? 'Cancel'
+                      : '+ Add Document'
+                  }}
+                </button>
+              </div>
+
+              @if (showDocumentForm()) {
+                <div class="form-grid">
+                  <label>
+                    Document Type *
+                    <select
+                      [(ngModel)]="documentType"
+                    >
+                      <option value="NATIONAL_ID">
+                        National ID
+                      </option>
+
+                      <option value="NIN_SLIP">
+                        NIN Slip
+                      </option>
+
+                      <option value="BVN_EVIDENCE">
+                        BVN Evidence
+                      </option>
+
+                      <option value="PASSPORT">
+                        Passport
+                      </option>
+
+                      <option value="DRIVERS_LICENSE">
+                        Driver's Licence
+                      </option>
+
+                      <option value="CAC_CERTIFICATE">
+                        CAC Certificate
+                      </option>
+
+                      <option value="UTILITY_BILL">
+                        Utility Bill
+                      </option>
+
+                      <option value="OTHER">
+                        Other
+                      </option>
+                    </select>
+                  </label>
+
+                  <label>
+                    Document Number
+                    <input
+                      [(ngModel)]="documentNumber"
+                      placeholder="Document number"
+                    />
+                  </label>
+
+                  <label>
+                    Storage Path
+                    <input
+                      [(ngModel)]="
+                        documentStoragePath
+                      "
+                      placeholder="agent-documents/..."
+                    />
+                  </label>
+
+                  <label>
+                    Issued At
+                    <input
+                      type="date"
+                      [(ngModel)]="documentIssuedAt"
+                    />
+                  </label>
+
+                  <label>
+                    Expires At
+                    <input
+                      type="date"
+                      [(ngModel)]="documentExpiresAt"
+                    />
+                  </label>
+
+                  <div class="form-actions">
+                    <button
+                      (click)="addDocument()"
+                      [disabled]="working()"
+                    >
+                      {{
+                        working()
+                          ? 'Saving...'
+                          : 'Save Document'
+                      }}
+                    </button>
+                  </div>
+                </div>
+              }
+
+              @if (documents().length === 0) {
+                <div class="empty-state">
+                  No KYC documents recorded.
+                </div>
+              } @else {
+                <div class="record-list">
+                  @for (
+                    document of documents();
+                    track document.id
+                  ) {
+                    <div class="record-card">
+                      <div>
+                        <strong>
+                          {{
+                            displayStatus(
+                              document.document_type
+                            )
+                          }}
+                        </strong>
+
+                        <div class="muted">
+                          Number:
+                          {{
+                            document.document_number ||
+                            '—'
+                          }}
+                        </div>
+
+                        @if (document.storage_path) {
+                          <div class="muted">
+                            File:
+                            {{
+                              document.storage_path
+                            }}
+                          </div>
+                        }
+                      </div>
+
+                      <div class="record-meta">
+                        @if (document.issued_at) {
+                          <span>
+                            Issued:
+                            {{ document.issued_at }}
+                          </span>
+                        }
+
+                        @if (document.expires_at) {
+                          <span>
+                            Expires:
+                            {{ document.expires_at }}
+                          </span>
+                        }
+
+                        <span
+                          class="meta-pill"
+                        >
+                          {{
+                            document.verification_status ||
+                            'RECORDED'
+                          }}
+                        </span>
+                      </div>
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+
+            <!-- KYC COMPLETION -->
+
+            <div class="kyc-completion">
+              <div>
+                <strong>KYC Readiness</strong>
+
+                <p>
+                  At least one beneficial owner and one document
+                  are required before the independent KYC reviewer
+                  can complete this stage.
+                </p>
+              </div>
+
+              <button
+                (click)="completeKyc()"
+                [disabled]="
+                  working() ||
+                  owners().length === 0 ||
+                  documents().length === 0
+                "
+              >
+                {{
+                  working()
+                    ? 'Processing...'
+                    : 'Complete KYC Review'
+                }}
+              </button>
+            </div>
+          </section>
+        }
+
+        <!-- ===================================================== -->
+        <!-- AG-03: LOCATIONS -->
+        <!-- ===================================================== -->
+
         <section class="card">
           <div class="section-header">
             <div>
               <h2>Locations</h2>
-              <p>Approved physical premises and GPS verification.</p>
+
+              <p>
+                Registered physical premises, GPS coordinates and
+                independent verification.
+              </p>
             </div>
 
             @if (
-              agent()!.status === 'PENDING_LOCATION_VERIFICATION'
+              agent()!.status ===
+              'PENDING_LOCATION_VERIFICATION'
             ) {
-              <button (click)="toggleLocationForm()">
-                {{ showLocationForm() ? 'Cancel' : '+ Add Location' }}
+              <button
+                (click)="toggleLocationForm()"
+                [disabled]="working()"
+              >
+                {{
+                  showLocationForm()
+                    ? 'Cancel'
+                    : '+ Add Location'
+                }}
               </button>
             }
           </div>
 
           @if (showLocationForm()) {
             <div class="form-grid">
-              <input
-                placeholder="Address line 1"
-                [(ngModel)]="locationAddress"
-              />
+              <label>
+                Address Line 1
+                <input
+                  placeholder="12 Market Road"
+                  [(ngModel)]="locationAddress"
+                />
+              </label>
 
-              <input
-                placeholder="Landmark"
-                [(ngModel)]="locationLandmark"
-              />
+              <label>
+                Landmark
+                <input
+                  placeholder="Central Market"
+                  [(ngModel)]="locationLandmark"
+                />
+              </label>
 
-              <input
-                placeholder="City"
-                [(ngModel)]="locationCity"
-              />
+              <label>
+                City
+                <input
+                  placeholder="Ikeja"
+                  [(ngModel)]="locationCity"
+                />
+              </label>
 
-              <input
-                placeholder="Local Government"
-                [(ngModel)]="locationLga"
-              />
+              <label>
+                Local Government
+                <input
+                  placeholder="Ikeja"
+                  [(ngModel)]="locationLga"
+                />
+              </label>
 
-              <input
-                placeholder="State"
-                [(ngModel)]="locationState"
-              />
+              <label>
+                State
+                <input
+                  placeholder="Lagos"
+                  [(ngModel)]="locationState"
+                />
+              </label>
 
-              <input
-                type="number"
-                placeholder="Latitude"
-                [(ngModel)]="locationLatitude"
-              />
+              <label>
+                Latitude
+                <input
+                  type="number"
+                  step="0.0000001"
+                  placeholder="6.6018000"
+                  [(ngModel)]="locationLatitude"
+                />
+              </label>
 
-              <input
-                type="number"
-                placeholder="Longitude"
-                [(ngModel)]="locationLongitude"
-              />
+              <label>
+                Longitude
+                <input
+                  type="number"
+                  step="0.0000001"
+                  placeholder="3.3515000"
+                  [(ngModel)]="locationLongitude"
+                />
+              </label>
 
-              <input
-                type="number"
-                placeholder="Radius metres"
-                [(ngModel)]="locationRadius"
-              />
+              <label>
+                Approved Radius (metres)
+                <input
+                  type="number"
+                  min="1"
+                  placeholder="10"
+                  [(ngModel)]="locationRadius"
+                />
+              </label>
 
               <div class="form-actions">
                 <button
                   (click)="createLocation()"
                   [disabled]="working()"
                 >
-                  {{ working() ? 'Saving...' : 'Save Location' }}
+                  {{
+                    working()
+                      ? 'Saving...'
+                      : 'Save Location'
+                  }}
                 </button>
               </div>
             </div>
           }
 
           @if (locations().length === 0) {
-            <p>No locations recorded.</p>
+            <div class="empty-state">
+              No locations recorded.
+            </div>
           } @else {
             <div class="location-list">
-              @for (location of locations(); track location.id) {
+              @for (
+                location of locations();
+                track location.id
+              ) {
                 <div class="location-card">
                   <div class="location-top">
                     <div>
@@ -210,23 +828,34 @@ import {
                         {{ location.address_line_1 }}
                       </strong>
 
-                      <div>
+                      <div class="muted">
                         {{ location.local_government }},
                         {{ location.state }}
                       </div>
+
+                      @if (location.landmark) {
+                        <div class="muted">
+                          Landmark:
+                          {{ location.landmark }}
+                        </div>
+                      }
                     </div>
 
                     <span
                       class="status-badge"
                       [class]="
-                        location.verification_status === 'VERIFIED'
+                        location.verification_status ===
+                        'VERIFIED'
                           ? 'status-active'
-                          : location.verification_status === 'REJECTED'
+                          : location.verification_status ===
+                              'REJECTED'
                             ? 'status-danger'
                             : 'status-pending'
                       "
                     >
-                      {{ location.verification_status }}
+                      {{
+                        location.verification_status
+                      }}
                     </span>
                   </div>
 
@@ -239,26 +868,48 @@ import {
 
                     <span>
                       Radius:
-                      {{ location.approved_radius_metres }}m
+                      {{
+                        location.approved_radius_metres
+                      }}m
+                    </span>
+
+                    <span>
+                      Status:
+                      {{ location.status }}
                     </span>
                   </div>
 
                   @if (
-                    location.verification_status === 'PENDING' &&
+                    location.verification_notes
+                  ) {
+                    <div class="verification-notes">
+                      {{
+                        location.verification_notes
+                      }}
+                    </div>
+                  }
+
+                  @if (
+                    location.verification_status ===
+                      'PENDING' &&
                     agent()!.status ===
                       'PENDING_LOCATION_VERIFICATION'
                   ) {
                     <div class="actions">
                       <button
-                        (click)="verifyLocation(location)"
+                        (click)="
+                          verifyLocation(location)
+                        "
                         [disabled]="working()"
                       >
-                        Verify
+                        Verify Location
                       </button>
 
                       <button
                         class="danger"
-                        (click)="rejectLocation(location)"
+                        (click)="
+                          rejectLocation(location)
+                        "
                         [disabled]="working()"
                       >
                         Reject
@@ -271,34 +922,61 @@ import {
           }
         </section>
 
+        <!-- ===================================================== -->
+        <!-- AG-03: COMPLIANCE -->
+        <!-- ===================================================== -->
+
         @if (
-          agent()!.status === 'PENDING_COMPLIANCE_REVIEW'
+          agent()!.status ===
+          'PENDING_COMPLIANCE_REVIEW'
         ) {
           <section class="card action-card">
-            <h2>Compliance Review</h2>
+            <div class="action-heading">
+              <div class="action-number">4</div>
 
-            <p>
-              Location verification is complete. The agent is now
-              awaiting independent compliance review.
-            </p>
+              <div>
+                <h2>Compliance Review</h2>
+
+                <p>
+                  Location verification is complete. The agent
+                  now requires independent compliance review.
+                </p>
+              </div>
+            </div>
 
             <button
               (click)="completeComplianceReview()"
               [disabled]="working()"
             >
-              Complete Compliance Review
+              {{
+                working()
+                  ? 'Processing...'
+                  : 'Complete Compliance Review'
+              }}
             </button>
           </section>
         }
 
-        @if (agent()!.status === 'PENDING_APPROVAL') {
-          <section class="card action-card">
-            <h2>Institutional Approval</h2>
+        <!-- ===================================================== -->
+        <!-- AG-03: APPROVAL -->
+        <!-- ===================================================== -->
 
-            <p>
-              Compliance review is complete. The agent is ready for
-              institutional approval.
-            </p>
+        @if (
+          agent()!.status === 'PENDING_APPROVAL'
+        ) {
+          <section class="card action-card">
+            <div class="action-heading">
+              <div class="action-number">5</div>
+
+              <div>
+                <h2>Institutional Approval</h2>
+
+                <p>
+                  KYC, location verification and compliance review
+                  are complete. The agent is ready for approval.
+                </p>
+              </div>
+            </div>
 
             <div class="actions">
               <button
@@ -319,17 +997,29 @@ import {
           </section>
         }
 
+        <!-- ===================================================== -->
+        <!-- AG-03: AGREEMENTS -->
+        <!-- ===================================================== -->
+
         <section class="card">
           <div class="section-header">
             <div>
               <h2>Agreements</h2>
+
               <p>
-                Versioned agency agreements and execution status.
+                Versioned agency agreements, commercial terms
+                and independent execution.
               </p>
             </div>
 
-            @if (agent()!.status === 'AGREEMENT_PENDING') {
-              <button (click)="toggleAgreementForm()">
+            @if (
+              agent()!.status ===
+              'AGREEMENT_PENDING'
+            ) {
+              <button
+                (click)="toggleAgreementForm()"
+                [disabled]="working()"
+              >
                 {{
                   showAgreementForm()
                     ? 'Cancel'
@@ -345,7 +1035,9 @@ import {
                 Expiry Date
                 <input
                   type="date"
-                  [(ngModel)]="agreementExpiryDate"
+                  [(ngModel)]="
+                    agreementExpiryDate
+                  "
                 />
               </label>
 
@@ -353,7 +1045,9 @@ import {
                 Renewal Due Date
                 <input
                   type="date"
-                  [(ngModel)]="agreementRenewalDate"
+                  [(ngModel)]="
+                    agreementRenewalDate
+                  "
                 />
               </label>
 
@@ -361,7 +1055,9 @@ import {
                 Document Path
                 <input
                   placeholder="agent-agreements/..."
-                  [(ngModel)]="agreementDocumentPath"
+                  [(ngModel)]="
+                    agreementDocumentPath
+                  "
                 />
               </label>
 
@@ -370,82 +1066,181 @@ import {
                   (click)="createAgreement()"
                   [disabled]="working()"
                 >
-                  Create Draft Agreement
+                  {{
+                    working()
+                      ? 'Creating...'
+                      : 'Create Draft Agreement'
+                  }}
                 </button>
               </div>
             </div>
           }
 
           @if (agreements().length === 0) {
-            <p>No agreements recorded.</p>
+            <div class="empty-state">
+              No agreements recorded.
+            </div>
           } @else {
-            <table>
-              <thead>
-                <tr>
-                  <th>Version</th>
-                  <th>Status</th>
-                  <th>Expiry</th>
-                  <th>Renewal Due</th>
-                  <th>Executed</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                @for (
-                  agreement of agreements();
-                  track agreement.id
-                ) {
+            <div class="table-wrapper">
+              <table>
+                <thead>
                   <tr>
-                    <td>V{{ agreement.version }}</td>
-                    <td>{{ agreement.status }}</td>
-                    <td>{{ agreement.expiry_date || '—' }}</td>
-                    <td>
-                      {{ agreement.renewal_due_date || '—' }}
-                    </td>
-                    <td>
-                      {{ agreement.executed_at || '—' }}
-                    </td>
-                    <td>
-                      @if (
-                        agreement.status === 'DRAFT' &&
-                        agent()!.status === 'AGREEMENT_PENDING'
-                      ) {
-                        <button
-                          (click)="executeAgreement(agreement)"
-                          [disabled]="working()"
-                        >
-                          Execute
-                        </button>
-                      }
-                    </td>
+                    <th>Version</th>
+                    <th>Status</th>
+                    <th>Expiry</th>
+                    <th>Renewal Due</th>
+                    <th>Executed</th>
+                    <th>Action</th>
                   </tr>
-                }
-              </tbody>
-            </table>
+                </thead>
+
+                <tbody>
+                  @for (
+                    agreement of agreements();
+                    track agreement.id
+                  ) {
+                    <tr>
+                      <td>
+                        <strong>
+                          V{{ agreement.version }}
+                        </strong>
+                      </td>
+
+                      <td>
+                        <span
+                          class="status-badge"
+                          [class]="
+                            agreement.status === 'ACTIVE'
+                              ? 'status-active'
+                              : agreement.status === 'DRAFT'
+                                ? 'status-pending'
+                                : 'status-neutral'
+                          "
+                        >
+                          {{ agreement.status }}
+                        </span>
+                      </td>
+
+                      <td>
+                        {{
+                          agreement.expiry_date ||
+                          '—'
+                        }}
+                      </td>
+
+                      <td>
+                        {{
+                          agreement.renewal_due_date ||
+                          '—'
+                        }}
+                      </td>
+
+                      <td>
+                        {{
+                          agreement.executed_at ||
+                          '—'
+                        }}
+                      </td>
+
+                      <td>
+                        @if (
+                          agreement.status ===
+                            'DRAFT' &&
+                          agent()!.status ===
+                            'AGREEMENT_PENDING'
+                        ) {
+                          <button
+                            (click)="
+                              executeAgreement(
+                                agreement
+                              )
+                            "
+                            [disabled]="working()"
+                          >
+                            Execute
+                          </button>
+                        }
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
           }
         </section>
 
-        @if (agent()!.status === 'TRAINING_PENDING') {
+        <!-- ===================================================== -->
+        <!-- AG-03 EXIT / AG-04 ENTRY -->
+        <!-- ===================================================== -->
+
+        @if (
+          agent()!.status === 'TRAINING_PENDING'
+        ) {
           <section class="card next-stage">
-            <h2>AG-03 Complete</h2>
+            <div class="completion-icon">
+              ✓
+            </div>
 
-            <p>
-              Registration, KYC, location verification, compliance
-              review, approval and agreement execution are complete.
-            </p>
+            <div>
+              <h2>AG-03 Complete</h2>
 
-            <strong>
-              Next stage: AG-04 Training, Operators & Terminals
-            </strong>
+              <p>
+                Registration, KYC, location verification,
+                compliance review, approval and agreement
+                execution are complete.
+              </p>
+
+              <strong>
+                Next stage: AG-04 Training, Operators &
+                Terminals
+              </strong>
+            </div>
+          </section>
+        }
+
+        @if (
+          agent()!.status === 'TERMINAL_PENDING'
+        ) {
+          <section class="card next-stage">
+            <div>
+              <h2>
+                Terminal Provisioning Pending
+              </h2>
+
+              <p>
+                Training has been completed. Terminal controls
+                belong to the AG-04 workflow.
+              </p>
+            </div>
+          </section>
+        }
+
+        @if (agent()!.status === 'ACTIVE') {
+          <section class="card active-card">
+            <div class="completion-icon">
+              ✓
+            </div>
+
+            <div>
+              <h2>Agent Active</h2>
+
+              <p>
+                This agent is currently operational in the
+                Agency Banking network.
+              </p>
+            </div>
           </section>
         }
       }
     </div>
   `,
   styles: [`
+    :host {
+      display: block;
+    }
+
     .page {
-      max-width: 1200px;
+      max-width: 1240px;
       margin: 0 auto;
     }
 
@@ -460,11 +1255,23 @@ import {
     h1 {
       margin: 6px 0 4px;
       font-size: 1.7rem;
+      color: #1e2761;
     }
 
     h2 {
-      margin-top: 0;
+      margin: 0 0 8px;
       font-size: 1.05rem;
+      color: #1e2761;
+    }
+
+    h3 {
+      margin: 0 0 5px;
+      color: #1e2761;
+      font-size: 0.95rem;
+    }
+
+    p {
+      line-height: 1.5;
     }
 
     .back-link {
@@ -475,6 +1282,7 @@ import {
 
     .agent-meta {
       display: flex;
+      flex-wrap: wrap;
       gap: 8px;
       color: #666;
       font-size: 0.88rem;
@@ -493,10 +1301,11 @@ import {
       justify-content: space-between;
       align-items: flex-start;
       gap: 16px;
+      margin-bottom: 14px;
     }
 
     .section-header p {
-      margin-top: -5px;
+      margin: 0;
       color: #666;
       font-size: 0.87rem;
     }
@@ -519,21 +1328,25 @@ import {
       color: #777;
     }
 
+    /* ---------- Lifecycle ---------- */
+
     .lifecycle {
       display: grid;
       grid-template-columns:
-        repeat(auto-fit, minmax(145px, 1fr));
-      gap: 10px;
+        repeat(auto-fit, minmax(190px, 1fr));
+      gap: 12px;
     }
 
     .lifecycle-step {
       border: 1px solid #ddd;
       border-radius: 8px;
-      padding: 10px;
+      padding: 12px;
       display: flex;
-      gap: 8px;
-      font-size: 0.75rem;
+      gap: 10px;
+      min-width: 0;
+      font-size: 0.78rem;
       color: #777;
+      background: #fafafa;
     }
 
     .lifecycle-step.complete {
@@ -546,13 +1359,36 @@ import {
       background: #fff3d5;
       border-color: #eccb77;
       color: #795900;
+      box-shadow:
+        0 0 0 1px rgba(236, 203, 119, 0.2);
     }
 
     .step-dot {
+      flex: 0 0 auto;
       font-size: 1rem;
+      line-height: 1.2;
     }
 
+    .step-content {
+      min-width: 0;
+    }
+
+    .step-content strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .step-status {
+      display: block;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      line-height: 1.25;
+    }
+
+    /* ---------- Status ---------- */
+
     .status-badge {
+      display: inline-block;
       font-size: 0.76rem;
       padding: 5px 10px;
       border-radius: 14px;
@@ -574,23 +1410,22 @@ import {
       color: #a6432f;
     }
 
+    .status-neutral {
+      background: #eef1f8;
+      color: #4d5875;
+    }
+
+    /* ---------- Forms ---------- */
+
     .form-grid {
       margin: 15px 0;
       display: grid;
       grid-template-columns:
         repeat(auto-fit, minmax(200px, 1fr));
-      gap: 10px;
+      gap: 12px;
       padding: 14px;
       background: #f8f9fc;
       border-radius: 8px;
-    }
-
-    .form-grid input {
-      box-sizing: border-box;
-      width: 100%;
-      padding: 8px 10px;
-      border: 1px solid #ccc;
-      border-radius: 5px;
     }
 
     .form-grid label {
@@ -601,12 +1436,32 @@ import {
       color: #555;
     }
 
+    .form-grid input,
+    .form-grid select {
+      box-sizing: border-box;
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      background: white;
+    }
+
     .full-width {
       grid-column: 1 / -1;
     }
 
     .form-actions {
       grid-column: 1 / -1;
+    }
+
+    .checkbox-field {
+      flex-direction: row !important;
+      align-items: center;
+      gap: 8px !important;
+    }
+
+    .checkbox-field input {
+      width: auto;
     }
 
     button {
@@ -629,9 +1484,150 @@ import {
 
     .actions {
       display: flex;
+      flex-wrap: wrap;
       gap: 8px;
       margin-top: 12px;
     }
+
+    /* ---------- Workflow ---------- */
+
+    .action-card {
+      border-left: 4px solid #1e2761;
+    }
+
+    .pending-card {
+      border-left: 4px solid #d0a22c;
+      background: #fffdf7;
+    }
+
+    .action-heading {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      margin-bottom: 12px;
+    }
+
+    .action-heading p {
+      margin: 0;
+      color: #666;
+      font-size: 0.88rem;
+    }
+
+    .action-number {
+      width: 28px;
+      height: 28px;
+      flex: 0 0 28px;
+      border-radius: 50%;
+      background: #1e2761;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+
+    /* ---------- KYC ---------- */
+
+    .kyc-readiness {
+      display: grid;
+      grid-template-columns:
+        repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+      margin: 15px 0 20px;
+    }
+
+    .readiness-item {
+      border: 1px solid #e1e5ee;
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      color: #777;
+      background: white;
+    }
+
+    .readiness-item.ready {
+      background: #e7f6ec;
+      border-color: #b9dfc7;
+      color: #26623c;
+    }
+
+    .readiness-item span {
+      font-size: 0.78rem;
+    }
+
+    .kyc-section {
+      border-top: 1px solid #eee;
+      padding-top: 18px;
+      margin-top: 18px;
+    }
+
+    .record-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .record-card {
+      border: 1px solid #e1e5ee;
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      background: white;
+    }
+
+    .record-meta {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.78rem;
+    }
+
+    .meta-pill,
+    .warning-pill,
+    .danger-pill {
+      border-radius: 12px;
+      padding: 3px 7px;
+      font-size: 0.72rem;
+    }
+
+    .meta-pill {
+      background: #eef1f8;
+      color: #4d5875;
+    }
+
+    .warning-pill {
+      background: #fff3d5;
+      color: #795900;
+    }
+
+    .danger-pill {
+      background: #f6d9d5;
+      color: #a6432f;
+    }
+
+    .kyc-completion {
+      margin-top: 20px;
+      border-top: 1px solid #eee;
+      padding-top: 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .kyc-completion p {
+      margin: 4px 0 0;
+      color: #666;
+      font-size: 0.84rem;
+    }
+
+    /* ---------- Locations ---------- */
 
     .location-list {
       display: grid;
@@ -659,6 +1655,37 @@ import {
       font-size: 0.8rem;
     }
 
+    .verification-notes {
+      margin-top: 10px;
+      padding: 8px 10px;
+      border-radius: 5px;
+      background: #f8f9fc;
+      color: #555;
+      font-size: 0.8rem;
+    }
+
+    .muted {
+      color: #777;
+      font-size: 0.82rem;
+      margin-top: 2px;
+    }
+
+    .empty-state {
+      padding: 14px;
+      border: 1px dashed #ccd3e5;
+      border-radius: 7px;
+      color: #777;
+      background: #fafbfe;
+      font-size: 0.85rem;
+    }
+
+    /* ---------- Agreements ---------- */
+
+    .table-wrapper {
+      width: 100%;
+      overflow-x: auto;
+    }
+
     table {
       width: 100%;
       border-collapse: collapse;
@@ -670,11 +1697,15 @@ import {
       border-bottom: 1px solid #eee;
       text-align: left;
       font-size: 0.83rem;
+      white-space: nowrap;
     }
 
     th {
       color: #555;
+      background: #fafbfe;
     }
+
+    /* ---------- General ---------- */
 
     .error-box {
       padding: 12px;
@@ -684,18 +1715,65 @@ import {
       margin-bottom: 15px;
     }
 
-    .action-card {
-      border-left: 4px solid #1e2761;
-    }
-
     .next-stage {
       background: #eef3ff;
       border-color: #bcccf2;
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+    }
+
+    .active-card {
+      background: #e7f6ec;
+      border-color: #b9dfc7;
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+    }
+
+    .completion-icon {
+      width: 34px;
+      height: 34px;
+      flex: 0 0 34px;
+      border-radius: 50%;
+      background: #1f6f5c;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+    }
+
+    @media (max-width: 760px) {
+      .page-header,
+      .section-header,
+      .location-top,
+      .record-card,
+      .kyc-completion {
+        flex-direction: column;
+      }
+
+      .record-meta {
+        justify-content: flex-start;
+      }
+
+      .status-badge {
+        white-space: normal;
+      }
+
+      .lifecycle {
+        grid-template-columns: 1fr;
+      }
     }
   `],
 })
 export class AgentDetailComponent implements OnInit {
+  // ---------- Core Agent State ----------
+
   agent = signal<Agent | null>(null);
+
+  owners = signal<AgentBeneficialOwner[]>([]);
+  documents = signal<AgentDocument[]>([]);
   locations = signal<AgentLocation[]>([]);
   agreements = signal<AgentAgreement[]>([]);
 
@@ -703,25 +1781,63 @@ export class AgentDetailComponent implements OnInit {
   working = signal(false);
   error = signal<string | null>(null);
 
+  // ---------- Form Visibility ----------
+
+  showOwnerForm = signal(false);
+  showDocumentForm = signal(false);
   showLocationForm = signal(false);
   showAgreementForm = signal(false);
+
+  // ---------- KYC Owner Form ----------
+
+  ownerFullName = '';
+  ownerDateOfBirth = '';
+  ownerNationality = 'NG';
+  ownerIdentificationType = 'NIN';
+  ownerIdentificationNumber = '';
+  ownerOwnershipPercentage: number | null = null;
+
+  ownerIsDirector = false;
+  ownerIsPep = false;
+  ownerSanctionsMatch = false;
+
+  // ---------- KYC Document Form ----------
+
+  documentType = 'NATIONAL_ID';
+  documentNumber = '';
+  documentStoragePath = '';
+  documentIssuedAt = '';
+  documentExpiresAt = '';
+
+  // ---------- Location Form ----------
 
   locationAddress = '';
   locationLandmark = '';
   locationCity = '';
   locationLga = '';
   locationState = '';
+
   locationLatitude: number | null = null;
   locationLongitude: number | null = null;
   locationRadius = 10;
+
+  // ---------- Agreement Form ----------
 
   agreementExpiryDate = '';
   agreementRenewalDate = '';
   agreementDocumentPath = '';
 
+  // ---------- Lifecycle ----------
+
   readonly lifecycleSteps = [
-    { label: 'Registered', status: 'DRAFT' },
-    { label: 'KYC', status: 'PENDING_KYC' },
+    {
+      label: 'Registered',
+      status: 'DRAFT',
+    },
+    {
+      label: 'KYC',
+      status: 'PENDING_KYC',
+    },
     {
       label: 'Location',
       status: 'PENDING_LOCATION_VERIFICATION',
@@ -741,6 +1857,14 @@ export class AgentDetailComponent implements OnInit {
     {
       label: 'Training',
       status: 'TRAINING_PENDING',
+    },
+    {
+      label: 'Terminal',
+      status: 'TERMINAL_PENDING',
+    },
+    {
+      label: 'Active',
+      status: 'ACTIVE',
     },
   ];
 
@@ -768,38 +1892,94 @@ export class AgentDetailComponent implements OnInit {
       this.route.snapshot.paramMap.get('id')
     );
 
+    if (!this.agentId) {
+      this.error.set(
+        'Invalid agent identifier.'
+      );
+
+      this.loading.set(false);
+      return;
+    }
+
     this.reload();
   }
+
+  // ============================================================
+  // LOAD ALL AGENT DATA
+  // ============================================================
 
   reload(): void {
     this.loading.set(true);
     this.error.set(null);
 
     forkJoin({
-      agent: this.api.show(this.agentId),
-      locations: this.api.listLocations(this.agentId),
-      agreements: this.api.listAgreements(this.agentId),
+      agent:
+        this.api.show(this.agentId),
+
+      owners:
+        this.api.listOwners(this.agentId),
+
+      documents:
+        this.api.listDocuments(this.agentId),
+
+      locations:
+        this.api.listLocations(this.agentId),
+
+      agreements:
+        this.api.listAgreements(this.agentId),
     }).subscribe({
       next: (result) => {
-        this.agent.set(result.agent.data);
-        this.locations.set(result.locations.data);
-        this.agreements.set(result.agreements.data);
+        this.agent.set(
+          result.agent.data
+        );
+
+        this.owners.set(
+          result.owners.data
+        );
+
+        this.documents.set(
+          result.documents.data
+        );
+
+        this.locations.set(
+          result.locations.data
+        );
+
+        this.agreements.set(
+          result.agreements.data
+        );
+
         this.loading.set(false);
       },
+
       error: (err) => {
         this.error.set(
-          err?.error?.message ?? 'Failed to load agent.'
+          err?.error?.message ??
+            'Failed to load agent.'
         );
+
         this.loading.set(false);
       },
     });
   }
 
+  // ============================================================
+  // DISPLAY HELPERS
+  // ============================================================
+
+  displayStatus(status: string): string {
+    return status
+      .replaceAll('_', ' ')
+      .toLowerCase()
+      .replace(
+        /\b\w/g,
+        (character) =>
+          character.toUpperCase()
+      );
+  }
+
   statusClass(status: string): string {
-    if (
-      status === 'ACTIVE' ||
-      status === 'TRAINING_PENDING'
-    ) {
+    if (status === 'ACTIVE') {
       return 'status-active';
     }
 
@@ -807,40 +1987,330 @@ export class AgentDetailComponent implements OnInit {
       status === 'REJECTED' ||
       status === 'SUSPENDED' ||
       status === 'TERMINATED' ||
-      status === 'BLACKLISTED'
+      status === 'BLACKLISTED' ||
+      status === 'EXPIRED'
     ) {
       return 'status-danger';
     }
 
-    return 'status-pending';
+    if (
+      status === 'DRAFT' ||
+      status === 'PENDING_KYC' ||
+      status ===
+        'PENDING_LOCATION_VERIFICATION' ||
+      status ===
+        'PENDING_COMPLIANCE_REVIEW' ||
+      status === 'PENDING_APPROVAL' ||
+      status === 'AGREEMENT_PENDING' ||
+      status === 'TRAINING_PENDING' ||
+      status === 'TERMINAL_PENDING'
+    ) {
+      return 'status-pending';
+    }
+
+    return 'status-neutral';
   }
 
-  isCurrentStep(status: string): boolean {
-    return this.agent()?.status === status;
+  isCurrentStep(
+    status: string
+  ): boolean {
+    return (
+      this.agent()?.status === status
+    );
   }
 
-  isStepComplete(status: string): boolean {
-    const currentStatus = this.agent()?.status;
+  isStepComplete(
+    status: string
+  ): boolean {
+    const currentStatus =
+      this.agent()?.status;
 
     if (!currentStatus) {
       return false;
     }
 
     const currentIndex =
-      this.lifecycleOrder.indexOf(currentStatus);
+      this.lifecycleOrder.indexOf(
+        currentStatus
+      );
 
     const stepIndex =
-      this.lifecycleOrder.indexOf(status);
+      this.lifecycleOrder.indexOf(
+        status
+      );
 
-    return (
-      currentIndex > stepIndex &&
-      currentIndex !== -1 &&
-      stepIndex !== -1
+    if (
+      currentIndex === -1 ||
+      stepIndex === -1
+    ) {
+      return false;
+    }
+
+    return currentIndex > stepIndex;
+  }
+
+  // ============================================================
+  // AG-01: SUBMIT FOR KYC
+  // ============================================================
+
+  submitAgent(): void {
+    this.working.set(true);
+    this.error.set(null);
+
+    this.api
+      .submit(this.agentId)
+      .subscribe({
+        next: () => {
+          this.working.set(false);
+          this.reload();
+        },
+
+        error: (err) => {
+          this.error.set(
+            err?.error?.message ??
+              'Failed to submit agent for KYC.'
+          );
+
+          this.working.set(false);
+        },
+      });
+  }
+
+  // ============================================================
+  // AG-02: KYC
+  // ============================================================
+
+  toggleOwnerForm(): void {
+    this.showOwnerForm.update(
+      (value) => !value
     );
   }
 
+  toggleDocumentForm(): void {
+    this.showDocumentForm.update(
+      (value) => !value
+    );
+  }
+
+  addOwner(): void {
+    const fullName =
+      this.ownerFullName.trim();
+
+    if (!fullName) {
+      this.error.set(
+        'Beneficial owner full name is required.'
+      );
+
+      return;
+    }
+
+    const nationality =
+      this.ownerNationality
+        .trim()
+        .toUpperCase();
+
+    if (
+      nationality &&
+      nationality.length > 2
+    ) {
+      this.error.set(
+        'Nationality must use a maximum 2-character country code.'
+      );
+
+      return;
+    }
+
+    if (
+      this.ownerOwnershipPercentage !== null &&
+      (
+        this.ownerOwnershipPercentage < 0 ||
+        this.ownerOwnershipPercentage > 100
+      )
+    ) {
+      this.error.set(
+        'Ownership percentage must be between 0 and 100.'
+      );
+
+      return;
+    }
+
+    this.working.set(true);
+    this.error.set(null);
+
+    this.api
+      .addOwner(
+        this.agentId,
+        {
+          full_name:
+            fullName,
+
+          date_of_birth:
+            this.ownerDateOfBirth ||
+            undefined,
+
+          nationality:
+            nationality ||
+            undefined,
+
+          identification_type:
+            this.ownerIdentificationType ||
+            undefined,
+
+          identification_number:
+            this.ownerIdentificationNumber
+              .trim() ||
+            undefined,
+
+          ownership_percentage:
+            this.ownerOwnershipPercentage ??
+            undefined,
+
+          is_director:
+            this.ownerIsDirector,
+
+          is_pep:
+            this.ownerIsPep,
+
+          sanctions_match:
+            this.ownerSanctionsMatch,
+        }
+      )
+      .subscribe({
+        next: () => {
+          this.resetOwnerForm();
+          this.showOwnerForm.set(false);
+          this.working.set(false);
+          this.reload();
+        },
+
+        error: (err) => {
+          this.error.set(
+            err?.error?.message ??
+              'Failed to add beneficial owner.'
+          );
+
+          this.working.set(false);
+        },
+      });
+  }
+
+  addDocument(): void {
+    const type =
+      this.documentType.trim();
+
+    if (!type) {
+      this.error.set(
+        'Document type is required.'
+      );
+
+      return;
+    }
+
+    if (
+      this.documentIssuedAt &&
+      this.documentExpiresAt &&
+      this.documentExpiresAt <
+        this.documentIssuedAt
+    ) {
+      this.error.set(
+        'Document expiry date cannot be earlier than the issue date.'
+      );
+
+      return;
+    }
+
+    this.working.set(true);
+    this.error.set(null);
+
+    this.api
+      .addDocument(
+        this.agentId,
+        {
+          document_type:
+            type,
+
+          document_number:
+            this.documentNumber
+              .trim() ||
+            undefined,
+
+          storage_path:
+            this.documentStoragePath
+              .trim() ||
+            undefined,
+
+          issued_at:
+            this.documentIssuedAt ||
+            undefined,
+
+          expires_at:
+            this.documentExpiresAt ||
+            undefined,
+        }
+      )
+      .subscribe({
+        next: () => {
+          this.resetDocumentForm();
+          this.showDocumentForm.set(false);
+          this.working.set(false);
+          this.reload();
+        },
+
+        error: (err) => {
+          this.error.set(
+            err?.error?.message ??
+              'Failed to add KYC document.'
+          );
+
+          this.working.set(false);
+        },
+      });
+  }
+
+  completeKyc(): void {
+    if (
+      this.owners().length === 0 ||
+      this.documents().length === 0
+    ) {
+      this.error.set(
+        'At least one beneficial owner and one document are required.'
+      );
+
+      return;
+    }
+
+    this.working.set(true);
+    this.error.set(null);
+
+    this.api
+      .completeKyc(
+        this.agentId
+      )
+      .subscribe({
+        next: () => {
+          this.working.set(false);
+          this.reload();
+        },
+
+        error: (err) => {
+          this.error.set(
+            err?.error?.message ??
+              'Failed to complete KYC review.'
+          );
+
+          this.working.set(false);
+        },
+      });
+  }
+
+  // ============================================================
+  // AG-03: LOCATIONS
+  // ============================================================
+
   toggleLocationForm(): void {
-    this.showLocationForm.update((value) => !value);
+    this.showLocationForm.update(
+      (value) => !value
+    );
   }
 
   createLocation(): void {
@@ -854,6 +2324,52 @@ export class AgentDetailComponent implements OnInit {
       this.error.set(
         'Address, LGA, state, latitude and longitude are required.'
       );
+
+      return;
+    }
+
+    if (
+      !Number.isFinite(
+        this.locationLatitude
+      ) ||
+      !Number.isFinite(
+        this.locationLongitude
+      )
+    ) {
+      this.error.set(
+        'Latitude and longitude must be valid numeric values.'
+      );
+
+      return;
+    }
+
+    if (
+      this.locationLatitude < -90 ||
+      this.locationLatitude > 90
+    ) {
+      this.error.set(
+        'Latitude must be between -90 and 90.'
+      );
+
+      return;
+    }
+
+    if (
+      this.locationLongitude < -180 ||
+      this.locationLongitude > 180
+    ) {
+      this.error.set(
+        'Longitude must be between -180 and 180.'
+      );
+
+      return;
+    }
+
+    if (this.locationRadius < 1) {
+      this.error.set(
+        'Approved radius must be at least 1 metre.'
+      );
+
       return;
     }
 
@@ -861,17 +2377,36 @@ export class AgentDetailComponent implements OnInit {
     this.error.set(null);
 
     this.api
-      .createLocation(this.agentId, {
-        address_line_1: this.locationAddress.trim(),
-        landmark:
-          this.locationLandmark.trim() || undefined,
-        city: this.locationCity.trim(),
-        local_government: this.locationLga.trim(),
-        state: this.locationState.trim(),
-        latitude: this.locationLatitude,
-        longitude: this.locationLongitude,
-        approved_radius_metres: this.locationRadius,
-      })
+      .createLocation(
+        this.agentId,
+        {
+          address_line_1:
+            this.locationAddress.trim(),
+
+          landmark:
+            this.locationLandmark
+              .trim() ||
+            undefined,
+
+          city:
+            this.locationCity.trim(),
+
+          local_government:
+            this.locationLga.trim(),
+
+          state:
+            this.locationState.trim(),
+
+          latitude:
+            this.locationLatitude,
+
+          longitude:
+            this.locationLongitude,
+
+          approved_radius_metres:
+            this.locationRadius,
+        }
+      )
       .subscribe({
         next: () => {
           this.showLocationForm.set(false);
@@ -879,19 +2414,25 @@ export class AgentDetailComponent implements OnInit {
           this.working.set(false);
           this.reload();
         },
+
         error: (err) => {
           this.error.set(
             err?.error?.message ??
               'Failed to create location.'
           );
+
           this.working.set(false);
         },
       });
   }
 
-  verifyLocation(location: AgentLocation): void {
+  verifyLocation(
+    location: AgentLocation
+  ): void {
     const notes =
-      window.prompt('Verification notes:') ?? '';
+      window.prompt(
+        'Verification notes:'
+      ) ?? '';
 
     this.working.set(true);
     this.error.set(null);
@@ -900,27 +2441,33 @@ export class AgentDetailComponent implements OnInit {
       .verifyLocation(
         this.agentId,
         location.id,
-        notes.trim() || undefined
+        notes.trim() ||
+          undefined
       )
       .subscribe({
         next: () => {
           this.working.set(false);
           this.reload();
         },
+
         error: (err) => {
           this.error.set(
             err?.error?.message ??
               'Failed to verify location.'
           );
+
           this.working.set(false);
         },
       });
   }
 
-  rejectLocation(location: AgentLocation): void {
-    const reason = window.prompt(
-      'Reason for rejecting this location:'
-    );
+  rejectLocation(
+    location: AgentLocation
+  ): void {
+    const reason =
+      window.prompt(
+        'Reason for rejecting this location:'
+      );
 
     if (!reason?.trim()) {
       return;
@@ -940,60 +2487,81 @@ export class AgentDetailComponent implements OnInit {
           this.working.set(false);
           this.reload();
         },
+
         error: (err) => {
           this.error.set(
             err?.error?.message ??
               'Failed to reject location.'
           );
+
           this.working.set(false);
         },
       });
   }
+
+  // ============================================================
+  // AG-03: COMPLIANCE
+  // ============================================================
 
   completeComplianceReview(): void {
     this.working.set(true);
     this.error.set(null);
 
     this.api
-      .completeComplianceReview(this.agentId)
+      .completeComplianceReview(
+        this.agentId
+      )
       .subscribe({
         next: () => {
           this.working.set(false);
           this.reload();
         },
+
         error: (err) => {
           this.error.set(
             err?.error?.message ??
               'Failed to complete compliance review.'
           );
+
           this.working.set(false);
         },
       });
   }
 
+  // ============================================================
+  // AG-03: APPROVAL
+  // ============================================================
+
   approveAgent(): void {
     this.working.set(true);
     this.error.set(null);
 
-    this.api.approve(this.agentId).subscribe({
-      next: () => {
-        this.working.set(false);
-        this.reload();
-      },
-      error: (err) => {
-        this.error.set(
-          err?.error?.message ??
-            'Failed to approve agent.'
-        );
-        this.working.set(false);
-      },
-    });
+    this.api
+      .approve(
+        this.agentId
+      )
+      .subscribe({
+        next: () => {
+          this.working.set(false);
+          this.reload();
+        },
+
+        error: (err) => {
+          this.error.set(
+            err?.error?.message ??
+              'Failed to approve agent.'
+          );
+
+          this.working.set(false);
+        },
+      });
   }
 
   rejectAgent(): void {
-    const reason = window.prompt(
-      'Reason for rejecting this agent:'
-    );
+    const reason =
+      window.prompt(
+        'Reason for rejecting this agent:'
+      );
 
     if (!reason?.trim()) {
       return;
@@ -1003,29 +2571,57 @@ export class AgentDetailComponent implements OnInit {
     this.error.set(null);
 
     this.api
-      .reject(this.agentId, reason.trim())
+      .reject(
+        this.agentId,
+        reason.trim()
+      )
       .subscribe({
         next: () => {
           this.working.set(false);
           this.reload();
         },
+
         error: (err) => {
           this.error.set(
             err?.error?.message ??
               'Failed to reject agent.'
           );
+
           this.working.set(false);
         },
       });
   }
 
+  // ============================================================
+  // AG-03: AGREEMENTS
+  // ============================================================
+
   toggleAgreementForm(): void {
-    this.showAgreementForm.update((value) => !value);
+    this.showAgreementForm.update(
+      (value) => !value
+    );
   }
 
   createAgreement(): void {
-    if (!this.agreementExpiryDate) {
-      this.error.set('Agreement expiry date is required.');
+    if (
+      !this.agreementExpiryDate
+    ) {
+      this.error.set(
+        'Agreement expiry date is required.'
+      );
+
+      return;
+    }
+
+    if (
+      this.agreementRenewalDate &&
+      this.agreementRenewalDate >
+        this.agreementExpiryDate
+    ) {
+      this.error.set(
+        'Renewal due date cannot be later than the agreement expiry date.'
+      );
+
       return;
     }
 
@@ -1033,20 +2629,32 @@ export class AgentDetailComponent implements OnInit {
     this.error.set(null);
 
     this.api
-      .createAgreement(this.agentId, {
-        expiry_date: this.agreementExpiryDate,
-        renewal_due_date:
-          this.agreementRenewalDate || undefined,
-        permitted_services: [
-          'CASH_IN',
-          'CASH_OUT',
-        ],
-        commercial_terms: {
-          commission_model: 'STANDARD',
-        },
-        document_path:
-          this.agreementDocumentPath.trim() || undefined,
-      })
+      .createAgreement(
+        this.agentId,
+        {
+          expiry_date:
+            this.agreementExpiryDate,
+
+          renewal_due_date:
+            this.agreementRenewalDate ||
+            undefined,
+
+          permitted_services: [
+            'CASH_IN',
+            'CASH_OUT',
+          ],
+
+          commercial_terms: {
+            commission_model:
+              'STANDARD',
+          },
+
+          document_path:
+            this.agreementDocumentPath
+              .trim() ||
+            undefined,
+        }
+      )
       .subscribe({
         next: () => {
           this.showAgreementForm.set(false);
@@ -1054,11 +2662,13 @@ export class AgentDetailComponent implements OnInit {
           this.working.set(false);
           this.reload();
         },
+
         error: (err) => {
           this.error.set(
             err?.error?.message ??
               'Failed to create agreement.'
           );
+
           this.working.set(false);
         },
       });
@@ -1080,14 +2690,43 @@ export class AgentDetailComponent implements OnInit {
           this.working.set(false);
           this.reload();
         },
+
         error: (err) => {
           this.error.set(
             err?.error?.message ??
               'Failed to execute agreement.'
           );
+
           this.working.set(false);
         },
       });
+  }
+
+  // ============================================================
+  // FORM RESET HELPERS
+  // ============================================================
+
+  private resetOwnerForm(): void {
+    this.ownerFullName = '';
+    this.ownerDateOfBirth = '';
+    this.ownerNationality = 'NG';
+    this.ownerIdentificationType = 'NIN';
+    this.ownerIdentificationNumber = '';
+    this.ownerOwnershipPercentage = null;
+
+    this.ownerIsDirector = false;
+    this.ownerIsPep = false;
+    this.ownerSanctionsMatch = false;
+  }
+
+  private resetDocumentForm(): void {
+    this.documentType =
+      'NATIONAL_ID';
+
+    this.documentNumber = '';
+    this.documentStoragePath = '';
+    this.documentIssuedAt = '';
+    this.documentExpiresAt = '';
   }
 
   private resetLocationForm(): void {
@@ -1096,8 +2735,10 @@ export class AgentDetailComponent implements OnInit {
     this.locationCity = '';
     this.locationLga = '';
     this.locationState = '';
+
     this.locationLatitude = null;
     this.locationLongitude = null;
+
     this.locationRadius = 10;
   }
 

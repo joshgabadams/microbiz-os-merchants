@@ -209,6 +209,38 @@ export interface AgentAgreement {
   created_at?: string;
   updated_at?: string;
 }
+
+export interface AgentBeneficialOwner {
+  id: number;
+  agent_id: number;
+  full_name: string;
+  date_of_birth?: string | null;
+  nationality?: string | null;
+  identification_type?: string | null;
+  identification_number?: string | null;
+  ownership_percentage?: number | string | null;
+  is_director?: boolean;
+  is_pep?: boolean;
+  sanctions_match?: boolean;
+  screening_status?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface AgentDocument {
+  id: number;
+  agent_id: number;
+  document_type: string;
+  document_number?: string | null;
+  storage_path?: string | null;
+  issued_at?: string | null;
+  expires_at?: string | null;
+  verification_status?: string | null;
+  verified_by?: number | null;
+  verified_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
 export interface Wallet {
   id: number;
   wallet_no: string;
