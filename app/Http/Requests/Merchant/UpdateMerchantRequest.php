@@ -18,6 +18,7 @@ class UpdateMerchantRequest extends FormRequest
             'trading_name' => ['nullable', 'string', 'max:255'],
             'business_type' => ['nullable', 'string', 'max:255'],
             'tax_identification_number' => ['nullable', 'string', 'max:255'],
+            'bvn' => ['nullable', 'string', 'digits:11'],
             'merchant_category_code' => ['nullable', 'string', 'max:4'],
             'industry' => ['nullable', 'string', 'max:255'],
             'website' => ['nullable', 'string', 'max:255'],

@@ -16,6 +16,7 @@ class Agent extends Model
         'trading_name',
         'registration_number',
         'tax_identification_number',
+        'bvn',
         'phone',
         'email',
         'branch_id',
@@ -97,6 +98,16 @@ public function verifiedLocations()
 {
     return $this->hasMany(AgentLocation::class)
         ->where('verification_status', 'VERIFIED');
+}
+
+public function operators()
+{
+    return $this->hasMany(AgentOperator::class);
+}
+
+public function terminals()
+{
+    return $this->hasMany(AgentTerminal::class);
 }
 
 

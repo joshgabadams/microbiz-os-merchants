@@ -97,6 +97,17 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/merchants/{merchant}/locations', [MerchantController::class, 'addLocation'])
             ->middleware('permission:merchants.locations.manage');
 
+        Route::get('/merchants/{merchant}/terminals', [MerchantController::class, 'listTerminals']);
+
+        Route::post('/merchant-terminals', [MerchantController::class, 'assignTerminal'])
+            ->middleware('permission:merchant-terminals.assign');
+
+        Route::post('/merchant-terminals/{terminal}/activate', [MerchantController::class, 'activateTerminal'])
+            ->middleware('permission:merchant-terminals.activate');
+
+        Route::post('/merchant-terminals/{terminal}/suspend', [MerchantController::class, 'suspendTerminal'])
+            ->middleware('permission:merchant-terminals.suspend');
+
         Route::post('/merchants/onboard', [MerchantController::class, 'onboard'])
             ->middleware('permission:merchants.onboard');
 
@@ -218,6 +229,65 @@ Route::post(
     '/agents/{agent}/agreements/{agreement}/execute',
     [AgentController::class, 'executeAgreement']
 )->middleware('permission:agents.agreements.execute');
+
+// ---------- AG-04: Operators ----------
+
+Route::get(
+    '/agents/{agent}/operators',
+    [AgentController::class, 'listOperators']
+);
+
+Route::post(
+    '/agents/{agent}/operators',
+    [AgentController::class, 'createOperator']
+)->middleware('permission:agents.operators.manage');
+
+Route::post(
+    '/agent-operators/{operator}/activate',
+    [AgentController::class, 'activateOperator']
+)->middleware('permission:agents.operators.manage');
+
+Route::post(
+    '/agent-operators/{operator}/suspend',
+    [AgentController::class, 'suspendOperator']
+)->middleware('permission:agents.operators.manage');
+
+// ---------- AG-04: Terminals & Geo-Fence ----------
+
+Route::get(
+    '/agents/{agent}/terminals',
+    [AgentController::class, 'listTerminals']
+);
+
+Route::post(
+    '/agent-terminals',
+    [AgentController::class, 'createTerminal']
+)->middleware('permission:agents.terminals.assign');
+
+Route::post(
+    '/agent-terminals/{terminal}/assign',
+    [AgentController::class, 'assignTerminalLocation']
+)->middleware('permission:agents.terminals.assign');
+
+Route::post(
+    '/agent-terminals/{terminal}/activate',
+    [AgentController::class, 'activateTerminal']
+)->middleware('permission:agents.terminals.activate');
+
+Route::post(
+    '/agent-terminals/{terminal}/suspend',
+    [AgentController::class, 'suspendTerminal']
+)->middleware('permission:agents.terminals.suspend');
+
+Route::post(
+    '/agent-terminals/{terminal}/heartbeat',
+    [AgentController::class, 'terminalHeartbeat']
+);
+
+Route::post(
+    '/agent-terminals/{terminal}/location-check',
+    [AgentController::class, 'terminalLocationCheck']
+);
 
         Route::get('/wallets', [WalletController::class, 'index']);
         Route::get('/wallets/{wallet}', [WalletController::class, 'show']);

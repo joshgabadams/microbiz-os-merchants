@@ -21,6 +21,7 @@ class Merchant extends Model
         'business_type',
         'registration_number',
         'tax_identification_number',
+        'bvn',
         'merchant_category_code',
         'industry',
         'website',
@@ -100,5 +101,10 @@ class Merchant extends Model
     public function locations()
     {
         return $this->hasMany(MerchantLocation::class);
+    }
+
+    public function terminals()
+    {
+        return $this->hasMany(MerchantTerminal::class);
     }
 }

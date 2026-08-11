@@ -19,6 +19,7 @@ class AgentRegistrationService
                 'trading_name' => $data['trading_name'] ?? null,
                 'registration_number' => $data['registration_number'] ?? null,
                 'tax_identification_number' => $data['tax_identification_number'] ?? null,
+                'bvn' => $data['bvn'] ?? null,
                 'phone' => $data['phone'],
                 'email' => $data['email'] ?? null,
                 'branch_id' => $data['branch_id'],

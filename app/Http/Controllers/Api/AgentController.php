@@ -15,10 +15,19 @@ use App\Services\Payments\AgentRegistrationService;
 use App\Traits\ApiResponse;
 use App\Http\Requests\Agent\CreateAgentAgreementRequest;
 use App\Http\Requests\Agent\CreateAgentLocationRequest;
+use App\Http\Requests\Agent\CreateAgentOperatorRequest;
+use App\Http\Requests\Agent\CreateAgentTerminalRequest;
+use App\Http\Requests\Agent\AssignAgentTerminalLocationRequest;
+use App\Http\Requests\Agent\AgentTerminalHeartbeatRequest;
+use App\Http\Requests\Agent\AgentTerminalLocationCheckRequest;
 use App\Models\AgentAgreement;
 use App\Models\AgentLocation;
+use App\Models\AgentOperator;
+use App\Models\AgentTerminal;
 use App\Services\Payments\AgentAgreementService;
 use App\Services\Payments\AgentLocationService;
+use App\Services\Payments\AgentOperatorService;
+use App\Services\Payments\AgentTerminalService;
 use Exception;
 use Illuminate\Http\Request;
 
@@ -32,7 +41,9 @@ class AgentController extends Controller
         protected AgentActivationService $activationService,
         protected AgentKycService $kycService,
         protected AgentLocationService $locationService,
-        protected AgentAgreementService $agreementService
+        protected AgentAgreementService $agreementService,
+        protected AgentOperatorService $operatorService,
+        protected AgentTerminalService $terminalService
 
     ) {
     }
@@ -70,7 +81,7 @@ class AgentController extends Controller
     public function update(Request $request, Agent $agent)
     {
         $agent->update($request->only([
-            'trading_name', 'registration_number', 'tax_identification_number',
+            'trading_name', 'registration_number', 'tax_identification_number', 'bvn',
             'phone', 'email', 'supervisor_id', 'principal_reference',
             'daily_transaction_limit', 'daily_cash_out_limit', 'single_transaction_limit',
             'next_review_date',
@@ -352,5 +363,127 @@ public function createAgreement(
         } catch (Exception $e) {
             return $this->error($e->getMessage());
         }
+    }
+
+    // ---------- AG-04: Operators ----------
+
+    public function listOperators(Agent $agent)
+    {
+        return $this->success(
+            $this->operatorService->list($agent),
+            'Agent operators retrieved successfully.'
+        );
+    }
+
+    public function createOperator(Agent $agent, CreateAgentOperatorRequest $request)
+    {
+        try {
+            $operator = $this->operatorService->create($agent, $request->validated());
+
+            return $this->success($operator, 'Agent operator assigned successfully.', 201);
+        } catch (Exception $e) {
+            return $this->error($e->getMessage());
+        }
+    }
+
+    public function activateOperator(AgentOperator $operator)
+    {
+        try {
+            $result = $this->operatorService->activate($operator);
+
+            return $this->success($result, 'Agent operator activated.');
+        } catch (Exception $e) {
+            return $this->error($e->getMessage());
+        }
+    }
+
+    public function suspendOperator(AgentOperator $operator)
+    {
+        try {
+            $result = $this->operatorService->suspend($operator);
+
+            return $this->success($result, 'Agent operator suspended.');
+        } catch (Exception $e) {
+            return $this->error($e->getMessage());
+        }
+    }
+
+    // ---------- AG-04: Terminals & Geo-Fence ----------
+
+    public function listTerminals(Agent $agent)
+    {
+        return $this->success(
+            $this->terminalService->list($agent),
+            'Agent terminals retrieved successfully.'
+        );
+    }
+
+    public function createTerminal(CreateAgentTerminalRequest $request)
+    {
+        try {
+            $agent = Agent::findOrFail($request->agent_id);
+
+            $terminal = $this->terminalService->create(
+                $agent,
+                $request->validated(),
+                $request->user()->id
+            );
+
+            return $this->success($terminal, 'Agent terminal registered successfully.', 201);
+        } catch (Exception $e) {
+            return $this->error($e->getMessage());
+        }
+    }
+
+    public function assignTerminalLocation(AgentTerminal $terminal, AssignAgentTerminalLocationRequest $request)
+    {
+        try {
+            $result = $this->terminalService->assignLocation($terminal, $request->agent_location_id);
+
+            return $this->success($result, 'Agent terminal relocated successfully.');
+        } catch (Exception $e) {
+            return $this->error($e->getMessage());
+        }
+    }
+
+    public function activateTerminal(AgentTerminal $terminal)
+    {
+        try {
+            $result = $this->terminalService->activate($terminal);
+
+            return $this->success($result, 'Agent terminal activated.');
+        } catch (Exception $e) {
+            return $this->error($e->getMessage());
+        }
+    }
+
+    public function suspendTerminal(AgentTerminal $terminal)
+    {
+        try {
+            $result = $this->terminalService->suspend($terminal);
+
+            return $this->success($result, 'Agent terminal suspended.');
+        } catch (Exception $e) {
+            return $this->error($e->getMessage());
+        }
+    }
+
+    public function terminalHeartbeat(AgentTerminal $terminal, AgentTerminalHeartbeatRequest $request)
+    {
+        $result = $this->terminalService->heartbeat($terminal, $request->validated(), $request->ip());
+
+        return $this->success($result, 'Heartbeat recorded.');
+    }
+
+    public function terminalLocationCheck(AgentTerminal $terminal, AgentTerminalLocationCheckRequest $request)
+    {
+        $result = $this->terminalService->checkLocation(
+            $terminal,
+            (float) $request->latitude,
+            (float) $request->longitude,
+            $request->ip()
+        );
+
+        return $this->success($result, 'Location check completed.');
     }
 }
