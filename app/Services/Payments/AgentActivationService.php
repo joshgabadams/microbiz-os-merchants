@@ -7,24 +7,75 @@ use App\Models\Agent;
 use Exception;
 
 /**
- * Post-approval lifecycle: activate, restrict, suspend, reactivate, terminate.
+ * Post-approval agent lifecycle management.
  *
- * activate() is a staging-only simplification: the Blueprint's real gate
- * (§6) requires AGREEMENT_PENDING -> TRAINING_PENDING -> TERMINAL_PENDING
- * to all clear first, each owned by a module that doesn't exist yet
- * (agreements/training/terminals are AG-03/AG-04). Going straight from
- * APPROVED to ACTIVE skips those checks -- must not reach production
- * before AG-03/AG-04 land and AgentOperationGuard (§10) is built.
+ * Primary onboarding path:
+ *
+ * APPROVED
+ *   -> AGREEMENT_PENDING
+ *   -> TRAINING_PENDING
+ *   -> TERMINAL_PENDING
+ *   -> ACTIVE
+ *
+ * Activation is the final onboarding gate. An agent may become ACTIVE only
+ * after the agreement, training, location, operator and terminal requirements
+ * have all been satisfied.
  */
 class AgentActivationService
 {
     /**
+     * Activate an agent after all onboarding prerequisites have cleared.
+     *
      * @throws Exception
      */
     public function activate(Agent $agent): Agent
     {
-        if ($agent->status !== AgentStatus::APPROVED->value) {
-            throw new Exception("Agent {$agent->agent_code} must be APPROVED before it can be activated.");
+        if ($agent->status !== AgentStatus::TERMINAL_PENDING->value) {
+            throw new Exception(
+                "Agent {$agent->agent_code} must be TERMINAL_PENDING before it can be activated."
+            );
+        }
+
+        if (! $agent->agreements()
+            ->where('status', 'ACTIVE')
+            ->exists()) {
+            throw new Exception(
+                "Agent {$agent->agent_code} has no active agreement."
+            );
+        }
+
+        if (! $agent->trainingRecords()
+            ->whereNull('operator_id')
+            ->whereNotNull('acknowledged_at')
+            ->exists()) {
+            throw new Exception(
+                "Agent {$agent->agent_code} has not completed mandatory training."
+            );
+        }
+
+        if (! $agent->locations()
+            ->where('verification_status', 'VERIFIED')
+            ->where('status', 'ACTIVE')
+            ->exists()) {
+            throw new Exception(
+                "Agent {$agent->agent_code} has no active verified location."
+            );
+        }
+
+        if (! $agent->operators()
+            ->where('status', 'ACTIVE')
+            ->exists()) {
+            throw new Exception(
+                "Agent {$agent->agent_code} has no active operator."
+            );
+        }
+
+        if (! $agent->terminals()
+            ->where('status', 'ACTIVE')
+            ->exists()) {
+            throw new Exception(
+                "Agent {$agent->agent_code} has no active terminal."
+            );
         }
 
         $agent->update([
@@ -41,7 +92,9 @@ class AgentActivationService
     public function restrict(Agent $agent, string $reason): Agent
     {
         if ($agent->status !== AgentStatus::ACTIVE->value) {
-            throw new Exception("Agent {$agent->agent_code} must be ACTIVE to be restricted.");
+            throw new Exception(
+                "Agent {$agent->agent_code} must be ACTIVE to be restricted."
+            );
         }
 
         $agent->update([
@@ -57,8 +110,17 @@ class AgentActivationService
      */
     public function suspend(Agent $agent, string $reason): Agent
     {
-        if (! in_array($agent->status, [AgentStatus::ACTIVE->value, AgentStatus::RESTRICTED->value], true)) {
-            throw new Exception("Agent {$agent->agent_code} must be ACTIVE or RESTRICTED to be suspended.");
+        if (! in_array(
+            $agent->status,
+            [
+                AgentStatus::ACTIVE->value,
+                AgentStatus::RESTRICTED->value,
+            ],
+            true
+        )) {
+            throw new Exception(
+                "Agent {$agent->agent_code} must be ACTIVE or RESTRICTED to be suspended."
+            );
         }
 
         $agent->update([
@@ -75,8 +137,17 @@ class AgentActivationService
      */
     public function reactivate(Agent $agent): Agent
     {
-        if (! in_array($agent->status, [AgentStatus::SUSPENDED->value, AgentStatus::RESTRICTED->value], true)) {
-            throw new Exception("Agent {$agent->agent_code} must be SUSPENDED or RESTRICTED to be reactivated.");
+        if (! in_array(
+            $agent->status,
+            [
+                AgentStatus::SUSPENDED->value,
+                AgentStatus::RESTRICTED->value,
+            ],
+            true
+        )) {
+            throw new Exception(
+                "Agent {$agent->agent_code} must be SUSPENDED or RESTRICTED to be reactivated."
+            );
         }
 
         $agent->update([
@@ -93,8 +164,17 @@ class AgentActivationService
      */
     public function terminate(Agent $agent, string $reason): Agent
     {
-        if (in_array($agent->status, [AgentStatus::TERMINATED->value, AgentStatus::REJECTED->value], true)) {
-            throw new Exception("Agent {$agent->agent_code} is already {$agent->status}.");
+        if (in_array(
+            $agent->status,
+            [
+                AgentStatus::TERMINATED->value,
+                AgentStatus::REJECTED->value,
+            ],
+            true
+        )) {
+            throw new Exception(
+                "Agent {$agent->agent_code} is already {$agent->status}."
+            );
         }
 
         $agent->update([
