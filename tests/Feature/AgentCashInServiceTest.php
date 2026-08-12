@@ -279,6 +279,30 @@ class AgentCashInServiceTest extends TestCase
         $this->assertEquals(150000, (float) $balance->available_float, 'Cash-in debits agent float per Blueprint §13.2, not credits it.');
     }
 
+    public function test_declared_physical_cash_increases_on_cash_in(): void
+    {
+        $context = $this->makeReadyAgentContext(200000);
+        $customerAccount = $this->makeActiveCustomerAccount();
+        $user = User::factory()->create();
+
+        $balanceBefore = AgentBalance::where('agent_id', $context['agent']->id)->first();
+        $this->assertEquals(0, (float) $balanceBefore->declared_physical_cash);
+
+        app(AgentCashInService::class)->cashIn(
+            $context['operator'],
+            $context['terminal'],
+            $customerAccount,
+            50000,
+            (string) Str::uuid(),
+            6.5244000,
+            3.3792000,
+            $user->id
+        );
+
+        $balanceAfter = AgentBalance::where('agent_id', $context['agent']->id)->first();
+        $this->assertEquals(50000, (float) $balanceAfter->declared_physical_cash, 'The agent physically receives cash here, so declared_physical_cash should increase.');
+    }
+
     public function test_gl_posting_balances(): void
     {
         $context = $this->makeReadyAgentContext();
