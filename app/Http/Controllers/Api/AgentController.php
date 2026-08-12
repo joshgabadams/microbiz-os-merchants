@@ -24,10 +24,14 @@ use App\Models\AgentAgreement;
 use App\Models\AgentLocation;
 use App\Models\AgentOperator;
 use App\Models\AgentTerminal;
+use App\Models\AgentTrainingRecord;
+use App\Models\TrainingDocument;
 use App\Services\Payments\AgentAgreementService;
 use App\Services\Payments\AgentLocationService;
 use App\Services\Payments\AgentOperatorService;
 use App\Services\Payments\AgentTerminalService;
+use App\Services\Payments\AgentTrainingService;
+use App\Http\Requests\Agent\RecordTrainingDownloadRequest;
 use Exception;
 use Illuminate\Http\Request;
 
@@ -43,7 +47,8 @@ class AgentController extends Controller
         protected AgentLocationService $locationService,
         protected AgentAgreementService $agreementService,
         protected AgentOperatorService $operatorService,
-        protected AgentTerminalService $terminalService
+        protected AgentTerminalService $terminalService,
+        protected AgentTrainingService $trainingService
 
     ) {
     }
@@ -317,6 +322,7 @@ public function listAgreements(Agent $agent)
 {
     return $this->success(
         $agent->agreements()
+            ->with(['approvals', 'signatories', 'template'])
             ->orderByDesc('version')
             ->get(),
         'Agent agreements retrieved successfully.'
@@ -328,17 +334,102 @@ public function createAgreement(
     CreateAgentAgreementRequest $request
 ) {
     try {
+        $template = \App\Models\AgentAgreementTemplate::findOrFail($request->agreement_template_id);
+
         $agreement = $this->agreementService->createAgreement(
             $agent,
+            $template,
             $request->validated(),
             $request->user()->id
         );
 
         return $this->success(
             $agreement,
-            'Agent agreement created successfully.',
+            'Agent agreement drafted successfully.',
             201
         );
+    } catch (Exception $e) {
+        return $this->error($e->getMessage());
+    }
+}
+
+public function submitAgreementForReview(Agent $agent, AgentAgreement $agreement, Request $request)
+{
+    try {
+        $result = $this->agreementService->submitForReview($agreement, $request->user()->id);
+
+        return $this->success($result, 'Agent agreement submitted for internal review.');
+    } catch (Exception $e) {
+        return $this->error($e->getMessage());
+    }
+}
+
+private function recordApprovalDecision(
+    Agent $agent,
+    AgentAgreement $agreement,
+    string $approvalType,
+    \App\Http\Requests\Agent\RecordAgreementApprovalRequest $request
+) {
+    try {
+        $result = $this->agreementService->recordApproval(
+            $agreement,
+            $approvalType,
+            $request->user()->id,
+            $request->decision,
+            $request->notes
+        );
+
+        return $this->success($result, "{$approvalType} decision recorded.");
+    } catch (Exception $e) {
+        return $this->error($e->getMessage());
+    }
+}
+
+public function approveAgreementRisk(Agent $agent, AgentAgreement $agreement, \App\Http\Requests\Agent\RecordAgreementApprovalRequest $request)
+{
+    return $this->recordApprovalDecision($agent, $agreement, 'RISK', $request);
+}
+
+public function approveAgreementCompliance(Agent $agent, AgentAgreement $agreement, \App\Http\Requests\Agent\RecordAgreementApprovalRequest $request)
+{
+    return $this->recordApprovalDecision($agent, $agreement, 'COMPLIANCE', $request);
+}
+
+public function approveAgreementLegal(Agent $agent, AgentAgreement $agreement, \App\Http\Requests\Agent\RecordAgreementApprovalRequest $request)
+{
+    return $this->recordApprovalDecision($agent, $agreement, 'LEGAL', $request);
+}
+
+public function approveAgreementBusinessOwner(Agent $agent, AgentAgreement $agreement, \App\Http\Requests\Agent\RecordAgreementApprovalRequest $request)
+{
+    return $this->recordApprovalDecision($agent, $agreement, 'BUSINESS_OWNER', $request);
+}
+
+public function sendAgreementForSignature(Agent $agent, AgentAgreement $agreement)
+{
+    try {
+        $result = $this->agreementService->sendForSignature($agreement);
+
+        return $this->success($result, 'Agent agreement sent for signature.');
+    } catch (Exception $e) {
+        return $this->error($e->getMessage());
+    }
+}
+
+public function recordAgreementSignature(
+    Agent $agent,
+    AgentAgreement $agreement,
+    \App\Http\Requests\Agent\RecordAgreementSignatureRequest $request
+) {
+    try {
+        $result = $this->agreementService->recordSignature(
+            $agreement,
+            $request->validated(),
+            $request->user()->id,
+            $request->ip()
+        );
+
+        return $this->success($result, 'Signature recorded.', 201);
     } catch (Exception $e) {
         return $this->error($e->getMessage());
     }
@@ -485,5 +576,37 @@ public function createAgreement(
         );
 
         return $this->success($result, 'Location check completed.');
+    }
+
+    // ---------- Training ----------
+
+    public function recordTrainingDownload(Agent $agent, RecordTrainingDownloadRequest $request)
+    {
+        try {
+            $document = TrainingDocument::findOrFail($request->training_document_id);
+
+            $record = $this->trainingService->recordDownload(
+                $agent,
+                $document,
+                $request->operator_id,
+                $request->user()->id,
+                $request->ip()
+            );
+
+            return $this->success($record, 'Training guide download recorded.', 201);
+        } catch (Exception $e) {
+            return $this->error($e->getMessage());
+        }
+    }
+
+    public function acknowledgeTraining(Agent $agent, AgentTrainingRecord $trainingRecord, Request $request)
+    {
+        try {
+            $result = $this->trainingService->acknowledgeTrainingGuide($trainingRecord, $request->user()->id);
+
+            return $this->success($result, 'Training guide acknowledged.');
+        } catch (Exception $e) {
+            return $this->error($e->getMessage());
+        }
     }
 }

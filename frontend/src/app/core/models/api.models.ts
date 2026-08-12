@@ -189,23 +189,125 @@ export interface AgentLocation {
 
 export type AgentAgreementStatus =
   | 'DRAFT'
-  | 'ACTIVE'
+  | 'PENDING_INTERNAL_REVIEW'
+  | 'APPROVED_FOR_EXECUTION'
+  | 'AWAITING_SIGNATURES'
+  | 'EXECUTED'
+  | 'REJECTED'
   | 'EXPIRED'
+  | 'TERMINATED'
   | 'SUPERSEDED';
+
+export interface AgentAgreementPermittedService {
+  service: string;
+  enabled: boolean;
+  limit?: number | null;
+  notes?: string | null;
+}
+
+export interface AgentAgreementCommercialTerm {
+  service: string;
+  customer_fee?: string | null;
+  agent_commission?: string | null;
+  settlement_timing?: string | null;
+}
 
 export interface AgentAgreement {
   id: number;
   agent_id: number;
+  agreement_template_id?: number | null;
   version: number;
   status: AgentAgreementStatus;
+  effective_date?: string | null;
   expiry_date?: string | null;
   renewal_due_date?: string | null;
-  permitted_services?: string[];
-  commercial_terms?: Record<string, unknown>;
+  initial_term_months?: number | null;
+  agent_termination_notice_days?: number | null;
+  microbiz_termination_notice_days?: number | null;
+  dispute_resolution_method?: string | null;
+  arbitration_seat?: string | null;
+  governing_law?: string | null;
+  relationship_manager_id?: number | null;
+  special_conditions?: string | null;
+  permitted_services?: AgentAgreementPermittedService[];
+  commercial_terms?: AgentAgreementCommercialTerm[];
   document_path?: string | null;
   created_by: number;
   executed_by?: number | null;
   executed_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  approvals?: AgentAgreementApproval[];
+  signatories?: AgentAgreementSignatory[];
+  template?: AgentAgreementTemplate | null;
+}
+
+export type AgentAgreementApprovalType =
+  | 'RISK'
+  | 'COMPLIANCE'
+  | 'LEGAL'
+  | 'BUSINESS_OWNER';
+
+export interface AgentAgreementApproval {
+  id: number;
+  agent_agreement_id: number;
+  approval_type: AgentAgreementApprovalType;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  approved_by?: number | null;
+  approved_at?: string | null;
+  notes?: string | null;
+}
+
+export type AgentAgreementSignatoryParty = 'MICROBIZ' | 'AGENT';
+
+export interface AgentAgreementSignatory {
+  id: number;
+  agent_agreement_id: number;
+  party: AgentAgreementSignatoryParty;
+  signatory_name: string;
+  signatory_title?: string | null;
+  signature_method: 'WET_SIGNATURE_UPLOAD' | 'E_SIGNATURE';
+  signature_evidence_path?: string | null;
+  provider_reference_id?: string | null;
+  signed_at?: string | null;
+}
+
+export interface AgentAgreementTemplate {
+  id: number;
+  name: string;
+  version: string;
+  status: string;
+  governing_law?: string | null;
+}
+
+export interface AgentBeneficialOwner {
+  id: number;
+  agent_id: number;
+  full_name: string;
+  date_of_birth?: string | null;
+  nationality?: string | null;
+  identification_type?: string | null;
+  identification_number?: string | null;
+  ownership_percentage?: number | string | null;
+  is_director?: boolean;
+  is_pep?: boolean;
+  sanctions_match?: boolean;
+  screening_status?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface AgentDocument {
+  id: number;
+  agent_id: number;
+  document_type: string;
+  document_number?: string | null;
+  storage_path?: string | null;
+  issued_at?: string | null;
+  expires_at?: string | null;
+  verification_status?: string | null;
+  verified_by?: number | null;
+  verified_at?: string | null;
   created_at?: string;
   updated_at?: string;
 }

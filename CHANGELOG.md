@@ -4,6 +4,14 @@ Original 10 issues found while testing the API in Postman on 2026-07-13. On 2026
 
 Every issue below has the same root shape: at some point a database table was changed (columns added, or a table left half-built), but the code that reads/writes to it — the model, or the checks on incoming data — was never updated to match. Laravel doesn't always error loudly when this happens; sometimes it just quietly throws away data instead of saving it, which is why these went unnoticed until now.
 
+## High — AgentActivationService::activate() is stale dead code now that agreement execution actually works (found 2026-08-11)
+
+**In plain terms:** Once an agent's agreement is executed, their status correctly moves forward through the real lifecycle (`AGREEMENT_PENDING` → `TRAINING_PENDING`, per the rebuilt Agreement workflow). But `activate()` — the function that's supposed to make an agent fully live — still only accepts an agent whose status is exactly `APPROVED`. Since execution moves the agent's status *past* `APPROVED`, there's no path left for `activate()` to ever succeed for an agent who has actually gone through a real agreement. It was only reachable before because Agreement/Training/Terminal genuinely didn't exist yet and nothing advanced status past `APPROVED` — that condition is no longer true.
+
+**Where:** `app/Services/Payments/AgentActivationService.php` — the class's own doc comment already flags this: *"activate() is a staging-only simplification... must not reach production before AG-03/AG-04 land and AgentOperationGuard (§10) is built."* AG-03, AG-04, and AgentOperationGuard have all since landed; this method was never updated to match.
+
+**Fix:** Change the precondition from `status === APPROVED` to `status === TERMINAL_PENDING` (the correct final gate per Blueprint §6 — agreement executed, training completed, and at least one terminal assigned, in that order). Blocked on Training actually existing first (see next section) — currently nothing moves an agent out of `TRAINING_PENDING` at all, so this fix can't be meaningfully tested until that's built.
+
 ## Fixed and confirmed locally (2026-07-14)
 
 These were fixed directly in the local environment (not committed/pushed) and verified working end-to-end:

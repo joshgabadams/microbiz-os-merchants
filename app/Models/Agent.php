@@ -110,5 +110,10 @@ public function terminals()
     return $this->hasMany(AgentTerminal::class);
 }
 
+public function trainingRecords()
+{
+    return $this->hasMany(AgentTrainingRecord::class);
+}
+
 
 }

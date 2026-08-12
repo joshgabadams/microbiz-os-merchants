@@ -11,6 +11,8 @@ use App\Http\Controllers\Api\BalancingController;
 use App\Http\Controllers\Api\BranchEodController;
 use App\Http\Controllers\Api\MerchantController;
 use App\Http\Controllers\Api\AgentController;
+use App\Http\Controllers\Api\AgentAgreementTemplateController;
+use App\Http\Controllers\Api\TrainingDocumentController;
 use App\Http\Controllers\Api\WalletController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\MfaController;
@@ -56,6 +58,11 @@ Route::middleware('auth:sanctum')->group(function () {
             ->middleware('permission:approvals.create');
         Route::post('/float/return/request', [ApprovalController::class, 'requestReturnFloat'])
             ->middleware('permission:approvals.create');
+
+        Route::post('/float/agent/allocate/request', [ApprovalController::class, 'requestAgentAllocateFloat'])
+            ->middleware('permission:approvals.create');
+        Route::post('/float/agent/return/request', [ApprovalController::class, 'requestAgentReturnFloat'])
+            ->middleware('permission:approvals.create');     
 
         Route::get('/approvals/pending', [ApprovalController::class, 'pending']);
         Route::post('/approvals/{id}/approve', [ApprovalController::class, 'approve'])
@@ -229,6 +236,75 @@ Route::post(
     '/agents/{agent}/agreements/{agreement}/execute',
     [AgentController::class, 'executeAgreement']
 )->middleware('permission:agents.agreements.execute');
+
+Route::post(
+    '/agents/{agent}/agreements/{agreement}/submit-review',
+    [AgentController::class, 'submitAgreementForReview']
+)->middleware('permission:agents.agreements.submit-review');
+
+Route::post(
+    '/agents/{agent}/agreements/{agreement}/approve/risk',
+    [AgentController::class, 'approveAgreementRisk']
+)->middleware('permission:agents.agreements.approve-risk');
+
+Route::post(
+    '/agents/{agent}/agreements/{agreement}/approve/compliance',
+    [AgentController::class, 'approveAgreementCompliance']
+)->middleware('permission:agents.agreements.approve-compliance');
+
+Route::post(
+    '/agents/{agent}/agreements/{agreement}/approve/legal',
+    [AgentController::class, 'approveAgreementLegal']
+)->middleware('permission:agents.agreements.approve-legal');
+
+Route::post(
+    '/agents/{agent}/agreements/{agreement}/approve/business-owner',
+    [AgentController::class, 'approveAgreementBusinessOwner']
+)->middleware('permission:agents.agreements.approve-business-owner');
+
+Route::post(
+    '/agents/{agent}/agreements/{agreement}/send-for-signature',
+    [AgentController::class, 'sendAgreementForSignature']
+)->middleware('permission:agents.agreements.send-for-signature');
+
+Route::post(
+    '/agents/{agent}/agreements/{agreement}/signatures',
+    [AgentController::class, 'recordAgreementSignature']
+)->middleware('permission:agents.agreements.sign');
+
+// ---------- Agent Agreement Templates ----------
+
+Route::get(
+    '/agent-agreement-templates',
+    [AgentAgreementTemplateController::class, 'index']
+);
+
+Route::post(
+    '/agent-agreement-templates',
+    [AgentAgreementTemplateController::class, 'store']
+)->middleware('permission:agents.agreements.templates.manage');
+
+// ---------- Training ----------
+
+Route::get(
+    '/training-documents',
+    [TrainingDocumentController::class, 'index']
+);
+
+Route::post(
+    '/training-documents',
+    [TrainingDocumentController::class, 'store']
+)->middleware('permission:agents.training.documents.manage');
+
+Route::post(
+    '/agents/{agent}/training/download',
+    [AgentController::class, 'recordTrainingDownload']
+)->middleware('permission:agents.training.record');
+
+Route::post(
+    '/agents/{agent}/training/{trainingRecord}/acknowledge',
+    [AgentController::class, 'acknowledgeTraining']
+)->middleware('permission:agents.training.record');
 
 // ---------- AG-04: Operators ----------
 

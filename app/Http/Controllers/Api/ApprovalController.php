@@ -17,9 +17,6 @@ class ApprovalController extends Controller
     ) {
     }
 
-    /**
-     * Create a maker-checker request for vault-to-teller float allocation.
-     */
     public function requestAllocateFloat(Request $request)
     {
         $validated = $request->validate([
@@ -39,11 +36,7 @@ class ApprovalController extends Controller
                 'vault_id' => $validated['vault_id'],
                 'teller_id' => $validated['teller_id'],
                 'amount' => $validated['amount'],
-
-                // The authenticated maker will perform the transaction
-                // after the request is approved.
                 'performed_by' => $authenticatedUserId,
-
                 'reference' => $validated['reference'] ?? null,
                 'narration' => $validated['narration'] ?? null,
             ],
@@ -60,9 +53,6 @@ class ApprovalController extends Controller
         );
     }
 
-    /**
-     * Create a maker-checker request for teller-to-vault float return.
-     */
     public function requestReturnFloat(Request $request)
     {
         $validated = $request->validate([
@@ -82,10 +72,7 @@ class ApprovalController extends Controller
                 'vault_id' => $validated['vault_id'],
                 'teller_id' => $validated['teller_id'],
                 'amount' => $validated['amount'],
-
-                // Derived from the authenticated maker.
                 'performed_by' => $authenticatedUserId,
-
                 'reference' => $validated['reference'] ?? null,
                 'narration' => $validated['narration'] ?? null,
             ],
@@ -102,9 +89,78 @@ class ApprovalController extends Controller
         );
     }
 
-    /**
-     * Retrieve all pending approval requests.
-     */
+    public function requestAgentAllocateFloat(Request $request)
+    {
+        $validated = $request->validate([
+            'vault_id' => ['required', 'integer', 'exists:vaults,id'],
+            'agent_id' => ['required', 'integer', 'exists:agents,id'],
+            'amount' => ['required', 'numeric', 'min:1'],
+            'reference' => ['nullable', 'string', 'max:255'],
+            'narration' => ['nullable', 'string'],
+            'maker_note' => ['nullable', 'string'],
+        ]);
+
+        $authenticatedUserId = $request->user()->id;
+
+        $approval = $this->approvalRequestService->createRequest(
+            'AGENT_ALLOCATE_FLOAT',
+            [
+                'vault_id' => $validated['vault_id'],
+                'agent_id' => $validated['agent_id'],
+                'amount' => $validated['amount'],
+                'performed_by' => $authenticatedUserId,
+                'reference' => $validated['reference'] ?? null,
+                'narration' => $validated['narration'] ?? null,
+            ],
+            $authenticatedUserId,
+            $validated['amount'],
+            'NGN',
+            $validated['maker_note'] ?? null
+        );
+
+        return $this->success(
+            $approval,
+            'Agent float allocation request created successfully.',
+            201
+        );
+    }
+
+    public function requestAgentReturnFloat(Request $request)
+    {
+        $validated = $request->validate([
+            'vault_id' => ['required', 'integer', 'exists:vaults,id'],
+            'agent_id' => ['required', 'integer', 'exists:agents,id'],
+            'amount' => ['required', 'numeric', 'min:1'],
+            'reference' => ['nullable', 'string', 'max:255'],
+            'narration' => ['nullable', 'string'],
+            'maker_note' => ['nullable', 'string'],
+        ]);
+
+        $authenticatedUserId = $request->user()->id;
+
+        $approval = $this->approvalRequestService->createRequest(
+            'AGENT_RETURN_FLOAT',
+            [
+                'vault_id' => $validated['vault_id'],
+                'agent_id' => $validated['agent_id'],
+                'amount' => $validated['amount'],
+                'performed_by' => $authenticatedUserId,
+                'reference' => $validated['reference'] ?? null,
+                'narration' => $validated['narration'] ?? null,
+            ],
+            $authenticatedUserId,
+            $validated['amount'],
+            'NGN',
+            $validated['maker_note'] ?? null
+        );
+
+        return $this->success(
+            $approval,
+            'Agent float return request created successfully.',
+            201
+        );
+    }
+
     public function pending()
     {
         $requests = ApprovalRequest::query()
@@ -118,9 +174,6 @@ class ApprovalController extends Controller
         );
     }
 
-    /**
-     * Approve a pending maker-checker request.
-     */
     public function approve(Request $request, int $id)
     {
         $validated = $request->validate([
@@ -143,9 +196,6 @@ class ApprovalController extends Controller
         );
     }
 
-    /**
-     * Reject a pending maker-checker request.
-     */
     public function reject(Request $request, int $id)
     {
         $validated = $request->validate([
