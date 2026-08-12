@@ -99,6 +99,11 @@ class AgentInterbankTransferServiceTest extends TestCase
             'activated_at' => now(),
         ]);
 
+        $serviceEnabler = User::factory()->create();
+        app(\App\Services\Payments\AgentServiceConfigurationService::class)->enableService(
+            $agent, 'EXTERNAL_TRANSFER', $serviceEnabler->id
+        );
+
         return [
             'agent' => $agent,
             'location' => $location,

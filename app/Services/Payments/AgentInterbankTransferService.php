@@ -99,7 +99,7 @@ class AgentInterbankTransferService
             throw new Exception("This terminal is not assigned to the operator's location.");
         }
 
-        $this->guard->guardTransferOperation($agent, $location, $operator, $terminal, $amount);
+        $this->guard->guardTransferOperation($agent, $location, $operator, $terminal, $amount, 'EXTERNAL_TRANSFER');
 
         $geoFencePassed = $this->isWithinGeoFence(
             $latitude,

@@ -23,6 +23,15 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
+/**
+ * Covers AG-07 (Cash-In) against Blueprint §20's exact automated-test
+ * list for this module: valid cash-in succeeds, inactive agent
+ * rejected, insufficient float rejected, duplicate idempotency request
+ * returns original response, customer account credited correctly,
+ * agent float updated correctly, GL posting balances -- plus geo-fence
+ * enforcement, which the Blueprint's Module 9 controls list requires
+ * but §20 doesn't separately enumerate.
+ */
 class AgentCashInServiceTest extends TestCase
 {
     use RefreshDatabase;
@@ -33,6 +42,12 @@ class AgentCashInServiceTest extends TestCase
         $this->seed(GlAccountSeeder::class);
     }
 
+    /**
+     * Builds a fully real, fully active agent + location + operator +
+     * terminal + funded float, all at the exact coordinates the tests
+     * transact against -- the whole real chain a cash-in genuinely
+     * needs, not a shortcut.
+     */
     protected function makeReadyAgentContext(float $floatAmount = 200000, array $agentOverrides = []): array
     {
         $branch = Branch::create(['name' => 'Test Branch', 'code' => 'TB-'.uniqid(), 'office_id' => 1]);
@@ -106,6 +121,11 @@ class AgentCashInServiceTest extends TestCase
         $vaultFunder = User::factory()->create();
         app(VaultTransactionService::class)->deposit($vault, $floatAmount + 100000, $vaultFunder->id);
         app(AgentFloatService::class)->allocateFloat($vault, $agent, $floatAmount, $vaultFunder->id);
+
+        $serviceEnabler = User::factory()->create();
+        app(\App\Services\Payments\AgentServiceConfigurationService::class)->enableService(
+            $agent, 'CASH_IN', $serviceEnabler->id
+        );
 
         return [
             'agent' => $agent,
@@ -333,6 +353,7 @@ class AgentCashInServiceTest extends TestCase
         $this->expectException(\Exception::class);
         $this->expectExceptionMessage('geo-fence');
 
+        // Roughly 100km away from the terminal's registered coordinates.
         app(AgentCashInService::class)->cashIn(
             $context['operator'],
             $context['terminal'],
