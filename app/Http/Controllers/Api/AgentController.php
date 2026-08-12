@@ -322,6 +322,7 @@ public function listAgreements(Agent $agent)
 {
     return $this->success(
         $agent->agreements()
+            ->with(['approvals', 'signatories', 'template'])
             ->orderByDesc('version')
             ->get(),
         'Agent agreements retrieved successfully.'

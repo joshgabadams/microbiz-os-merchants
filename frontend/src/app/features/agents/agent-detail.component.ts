@@ -8,6 +8,10 @@ import { AgentApiService } from '../../core/agent-api.service';
 import {
   Agent,
   AgentAgreement,
+  AgentAgreementApprovalType,
+  AgentAgreementSignatory,
+  AgentAgreementSignatoryParty,
+  AgentAgreementTemplate,
   AgentBeneficialOwner,
   AgentDocument,
   AgentLocation,
@@ -1031,6 +1035,23 @@ import {
 
           @if (showAgreementForm()) {
             <div class="form-grid">
+              <label class="full-width">
+                Agreement Template
+                <select [(ngModel)]="agreementTemplateId">
+                  <option [ngValue]="null">— select a template —</option>
+                  @for (tpl of templates(); track tpl.id) {
+                    <option [ngValue]="tpl.id">
+                      {{ tpl.name }} (v{{ tpl.version }})
+                    </option>
+                  }
+                </select>
+              </label>
+
+              <label>
+                Effective Date
+                <input type="date" [(ngModel)]="agreementEffectiveDate" />
+              </label>
+
               <label>
                 Expiry Date
                 <input
@@ -1051,6 +1072,38 @@ import {
                 />
               </label>
 
+              <label>
+                Initial Term (months)
+                <input type="number" [(ngModel)]="agreementInitialTermMonths" />
+              </label>
+
+              <label>
+                Agent Termination Notice (days)
+                <input type="number" [(ngModel)]="agreementAgentNoticeDays" />
+              </label>
+
+              <label>
+                MicroBiz Termination Notice (days)
+                <input type="number" [(ngModel)]="agreementMicrobizNoticeDays" />
+              </label>
+
+              <label>
+                Dispute Resolution
+                <select [(ngModel)]="agreementDisputeMethod">
+                  <option value="MEDIATION">Mediation</option>
+                  <option value="ARBITRATION">Arbitration</option>
+                  <option value="COURTS">Courts</option>
+                </select>
+              </label>
+
+              <label class="full-width">
+                Special Conditions
+                <textarea
+                  rows="2"
+                  [(ngModel)]="agreementSpecialConditions"
+                ></textarea>
+              </label>
+
               <label class="full-width">
                 Document Path
                 <input
@@ -1060,6 +1113,56 @@ import {
                   "
                 />
               </label>
+
+              <div class="full-width schedule-block">
+                <h4>Schedule 2 &amp; 3 — Authorised Services, Limits, Fees</h4>
+
+                <div class="service-row">
+                  <label class="checkbox-label">
+                    <input type="checkbox" [(ngModel)]="agreementCashInEnabled" />
+                    Cash-in
+                  </label>
+                  <label>
+                    Limit
+                    <input type="number" [(ngModel)]="agreementCashInLimit" />
+                  </label>
+                  <label>
+                    Customer Fee
+                    <input [(ngModel)]="agreementCashInFee" />
+                  </label>
+                  <label>
+                    Agent Commission
+                    <input [(ngModel)]="agreementCashInCommission" />
+                  </label>
+                  <label>
+                    Settlement
+                    <input [(ngModel)]="agreementCashInSettlement" />
+                  </label>
+                </div>
+
+                <div class="service-row">
+                  <label class="checkbox-label">
+                    <input type="checkbox" [(ngModel)]="agreementCashOutEnabled" />
+                    Cash-out
+                  </label>
+                  <label>
+                    Limit
+                    <input type="number" [(ngModel)]="agreementCashOutLimit" />
+                  </label>
+                  <label>
+                    Customer Fee
+                    <input [(ngModel)]="agreementCashOutFee" />
+                  </label>
+                  <label>
+                    Agent Commission
+                    <input [(ngModel)]="agreementCashOutCommission" />
+                  </label>
+                  <label>
+                    Settlement
+                    <input [(ngModel)]="agreementCashOutSettlement" />
+                  </label>
+                </div>
+              </div>
 
               <div class="form-actions">
                 <button
@@ -1110,11 +1213,13 @@ import {
                         <span
                           class="status-badge"
                           [class]="
-                            agreement.status === 'ACTIVE'
+                            agreement.status === 'EXECUTED'
                               ? 'status-active'
-                              : agreement.status === 'DRAFT'
-                                ? 'status-pending'
-                                : 'status-neutral'
+                              : agreement.status === 'REJECTED'
+                                ? 'status-danger'
+                                : agreement.status === 'DRAFT'
+                                  ? 'status-pending'
+                                  : 'status-neutral'
                           "
                         >
                           {{ agreement.status }}
@@ -1143,25 +1248,171 @@ import {
                       </td>
 
                       <td>
-                        @if (
-                          agreement.status ===
-                            'DRAFT' &&
-                          agent()!.status ===
-                            'AGREEMENT_PENDING'
-                        ) {
-                          <button
-                            (click)="
-                              executeAgreement(
-                                agreement
-                              )
-                            "
-                            [disabled]="working()"
-                          >
-                            Execute
-                          </button>
-                        }
+                        <button
+                          (click)="toggleAgreementExpanded(agreement.id)"
+                        >
+                          {{
+                            expandedAgreementId() === agreement.id
+                              ? 'Hide'
+                              : 'Manage'
+                          }}
+                        </button>
                       </td>
                     </tr>
+
+                    @if (expandedAgreementId() === agreement.id) {
+                      <tr class="expanded-row">
+                        <td colspan="6">
+                          <div class="agreement-detail">
+                            @if (agreement.status === 'DRAFT') {
+                              <button
+                                (click)="submitAgreementForReview(agreement)"
+                                [disabled]="working()"
+                              >
+                                Submit for Internal Review
+                              </button>
+                            }
+
+                            @if (agreement.status === 'PENDING_INTERNAL_REVIEW') {
+                              <h4>Internal Approvals</h4>
+
+                              <div class="approval-grid">
+                                @for (
+                                  type of approvalTypes;
+                                  track type
+                                ) {
+                                  <div class="approval-row">
+                                    <span
+                                      class="status-badge"
+                                      [class]="
+                                        approvalStatus(agreement, type) === 'APPROVED'
+                                          ? 'status-active'
+                                          : approvalStatus(agreement, type) === 'REJECTED'
+                                            ? 'status-danger'
+                                            : 'status-pending'
+                                      "
+                                    >
+                                      {{ type }}: {{ approvalStatus(agreement, type) }}
+                                    </span>
+
+                                    @if (approvalStatus(agreement, type) === 'PENDING') {
+                                      <input
+                                        class="notes-input"
+                                        placeholder="Notes (optional)"
+                                        [(ngModel)]="approvalNotes[type]"
+                                      />
+                                      <button
+                                        (click)="recordApproval(agreement, type, 'APPROVED')"
+                                        [disabled]="working()"
+                                      >
+                                        Approve
+                                      </button>
+                                      <button
+                                        (click)="recordApproval(agreement, type, 'REJECTED')"
+                                        [disabled]="working()"
+                                      >
+                                        Reject
+                                      </button>
+                                    }
+                                  </div>
+                                }
+                              </div>
+                            }
+
+                            @if (agreement.status === 'APPROVED_FOR_EXECUTION') {
+                              <button
+                                (click)="sendAgreementForSignature(agreement)"
+                                [disabled]="working()"
+                              >
+                                Send for Signature
+                              </button>
+                            }
+
+                            @if (agreement.status === 'AWAITING_SIGNATURES') {
+                              <h4>Signatures</h4>
+
+                              <div class="approval-grid">
+                                @for (party of signatoryParties; track party) {
+                                  <div class="approval-row">
+                                    @if (signatoryFor(agreement, party); as sig) {
+                                      <span class="status-badge status-active">
+                                        {{ party }} signed by {{ sig.signatory_name }}
+                                      </span>
+                                    } @else {
+                                      <span class="status-badge status-pending">
+                                        {{ party }}: not yet signed
+                                      </span>
+                                    }
+                                  </div>
+                                }
+                              </div>
+
+                              <div class="form-grid">
+                                <label>
+                                  Party
+                                  <select [(ngModel)]="signatureParty">
+                                    <option value="MICROBIZ">MicroBiz</option>
+                                    <option value="AGENT">Agent</option>
+                                  </select>
+                                </label>
+                                <label>
+                                  Signatory Name
+                                  <input [(ngModel)]="signatoryName" />
+                                </label>
+                                <label>
+                                  Title / Capacity
+                                  <input [(ngModel)]="signatoryTitle" />
+                                </label>
+                                <label>
+                                  Method
+                                  <select [(ngModel)]="signatureMethod">
+                                    <option value="WET_SIGNATURE_UPLOAD">
+                                      Wet Signature (Upload)
+                                    </option>
+                                    <option value="E_SIGNATURE">E-Signature</option>
+                                  </select>
+                                </label>
+                                <label class="full-width">
+                                  Signature Evidence Path
+                                  <input
+                                    placeholder="/storage/agreements/..."
+                                    [(ngModel)]="signatureEvidencePath"
+                                  />
+                                </label>
+                                <div class="form-actions">
+                                  <button
+                                    (click)="recordAgreementSignature(agreement)"
+                                    [disabled]="working()"
+                                  >
+                                    Record Signature
+                                  </button>
+                                  <button
+                                    (click)="executeAgreement(agreement)"
+                                    [disabled]="working()"
+                                  >
+                                    Execute
+                                  </button>
+                                </div>
+                              </div>
+                            }
+
+                            @if (agreement.status === 'EXECUTED') {
+                              <div class="empty-state">
+                                Executed {{ agreement.executed_at }}. This
+                                agreement is now frozen.
+                              </div>
+                            }
+
+                            @if (agreement.status === 'REJECTED') {
+                              <div class="empty-state">
+                                This agreement draft was rejected during
+                                internal review.
+                              </div>
+                            }
+                          </div>
+                        </td>
+                      </tr>
+                    }
                   }
                 </tbody>
               </table>
@@ -1705,6 +1956,82 @@ import {
       background: #fafbfe;
     }
 
+    /* ---------- Agreement workflow ---------- */
+
+    .schedule-block {
+      border: 1px solid #e3e7f1;
+      border-radius: 8px;
+      padding: 12px;
+      margin-top: 6px;
+    }
+
+    .schedule-block h4 {
+      margin: 0 0 10px;
+      font-size: 0.85rem;
+      color: #4d5875;
+    }
+
+    .service-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: flex-end;
+      padding: 8px 0;
+      border-top: 1px solid #f0f2f8;
+    }
+
+    .service-row:first-of-type {
+      border-top: none;
+    }
+
+    .service-row label {
+      font-size: 0.78rem;
+      color: #555;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .service-row input {
+      width: 100px;
+    }
+
+    .checkbox-label {
+      flex-direction: row !important;
+      align-items: center;
+      gap: 6px !important;
+    }
+
+    .expanded-row td {
+      background: #fafbfe;
+      padding: 14px;
+    }
+
+    .agreement-detail h4 {
+      margin: 10px 0 8px;
+      font-size: 0.85rem;
+      color: #4d5875;
+    }
+
+    .approval-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .approval-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .notes-input {
+      flex: 1;
+      min-width: 160px;
+    }
+
     /* ---------- General ---------- */
 
     .error-box {
@@ -1823,9 +2150,57 @@ export class AgentDetailComponent implements OnInit {
 
   // ---------- Agreement Form ----------
 
+  templates = signal<AgentAgreementTemplate[]>([]);
+  expandedAgreementId = signal<number | null>(null);
+
+  readonly approvalTypes: AgentAgreementApprovalType[] = [
+    'RISK',
+    'COMPLIANCE',
+    'LEGAL',
+    'BUSINESS_OWNER',
+  ];
+
+  readonly signatoryParties: AgentAgreementSignatoryParty[] = [
+    'MICROBIZ',
+    'AGENT',
+  ];
+
+  agreementTemplateId: number | null = null;
+  agreementEffectiveDate = '';
   agreementExpiryDate = '';
   agreementRenewalDate = '';
+  agreementInitialTermMonths: number | null = 12;
+  agreementAgentNoticeDays: number | null = 30;
+  agreementMicrobizNoticeDays: number | null = 60;
+  agreementDisputeMethod = 'ARBITRATION';
+  agreementSpecialConditions = '';
   agreementDocumentPath = '';
+
+  agreementCashInEnabled = true;
+  agreementCashInLimit: number | null = 100000;
+  agreementCashInFee = '0';
+  agreementCashInCommission = '1%';
+  agreementCashInSettlement = 'T+1';
+
+  agreementCashOutEnabled = true;
+  agreementCashOutLimit: number | null = 100000;
+  agreementCashOutFee = '0';
+  agreementCashOutCommission = '1%';
+  agreementCashOutSettlement = 'T+1';
+
+  approvalNotes: Record<string, string> = {
+    RISK: '',
+    COMPLIANCE: '',
+    LEGAL: '',
+    BUSINESS_OWNER: '',
+  };
+
+  signatureParty: AgentAgreementSignatoryParty = 'MICROBIZ';
+  signatoryName = '';
+  signatoryTitle = '';
+  signatureMethod: 'WET_SIGNATURE_UPLOAD' | 'E_SIGNATURE' =
+    'WET_SIGNATURE_UPLOAD';
+  signatureEvidencePath = '';
 
   // ---------- Lifecycle ----------
 
@@ -1927,6 +2302,9 @@ export class AgentDetailComponent implements OnInit {
 
       agreements:
         this.api.listAgreements(this.agentId),
+
+      templates:
+        this.api.listAgreementTemplates(),
     }).subscribe({
       next: (result) => {
         this.agent.set(
@@ -1947,6 +2325,10 @@ export class AgentDetailComponent implements OnInit {
 
         this.agreements.set(
           result.agreements.data
+        );
+
+        this.templates.set(
+          result.templates.data
         );
 
         this.loading.set(false);
@@ -2602,7 +2984,21 @@ export class AgentDetailComponent implements OnInit {
     );
   }
 
+  toggleAgreementExpanded(agreementId: number): void {
+    this.expandedAgreementId.update((current) =>
+      current === agreementId ? null : agreementId
+    );
+  }
+
   createAgreement(): void {
+    if (!this.agreementTemplateId) {
+      this.error.set(
+        'An agreement template must be selected.'
+      );
+
+      return;
+    }
+
     if (
       !this.agreementExpiryDate
     ) {
@@ -2628,10 +3024,43 @@ export class AgentDetailComponent implements OnInit {
     this.working.set(true);
     this.error.set(null);
 
+    const permittedServices = [
+      {
+        service: 'cash-in',
+        enabled: this.agreementCashInEnabled,
+        limit: this.agreementCashInLimit ?? undefined,
+      },
+      {
+        service: 'cash-out',
+        enabled: this.agreementCashOutEnabled,
+        limit: this.agreementCashOutLimit ?? undefined,
+      },
+    ];
+
+    const commercialTerms = [
+      {
+        service: 'cash-in',
+        customer_fee: this.agreementCashInFee || undefined,
+        agent_commission: this.agreementCashInCommission || undefined,
+        settlement_timing: this.agreementCashInSettlement || undefined,
+      },
+      {
+        service: 'cash-out',
+        customer_fee: this.agreementCashOutFee || undefined,
+        agent_commission: this.agreementCashOutCommission || undefined,
+        settlement_timing: this.agreementCashOutSettlement || undefined,
+      },
+    ];
+
     this.api
       .createAgreement(
         this.agentId,
         {
+          agreement_template_id: this.agreementTemplateId,
+
+          effective_date:
+            this.agreementEffectiveDate || undefined,
+
           expiry_date:
             this.agreementExpiryDate,
 
@@ -2639,15 +3068,23 @@ export class AgentDetailComponent implements OnInit {
             this.agreementRenewalDate ||
             undefined,
 
-          permitted_services: [
-            'CASH_IN',
-            'CASH_OUT',
-          ],
+          initial_term_months:
+            this.agreementInitialTermMonths ?? undefined,
 
-          commercial_terms: {
-            commission_model:
-              'STANDARD',
-          },
+          agent_termination_notice_days:
+            this.agreementAgentNoticeDays ?? undefined,
+
+          microbiz_termination_notice_days:
+            this.agreementMicrobizNoticeDays ?? undefined,
+
+          dispute_resolution_method:
+            this.agreementDisputeMethod || undefined,
+
+          special_conditions:
+            this.agreementSpecialConditions.trim() || undefined,
+
+          permitted_services: permittedServices,
+          commercial_terms: commercialTerms,
 
           document_path:
             this.agreementDocumentPath
@@ -2669,6 +3106,113 @@ export class AgentDetailComponent implements OnInit {
               'Failed to create agreement.'
           );
 
+          this.working.set(false);
+        },
+      });
+  }
+
+  submitAgreementForReview(agreement: AgentAgreement): void {
+    this.working.set(true);
+    this.error.set(null);
+
+    this.api
+      .submitAgreementForReview(this.agentId, agreement.id)
+      .subscribe({
+        next: () => {
+          this.working.set(false);
+          this.reload();
+        },
+        error: (err) => {
+          this.error.set(
+            err?.error?.message ?? 'Failed to submit agreement for review.'
+          );
+          this.working.set(false);
+        },
+      });
+  }
+
+  recordApproval(
+    agreement: AgentAgreement,
+    approvalType: AgentAgreementApprovalType,
+    decision: 'APPROVED' | 'REJECTED'
+  ): void {
+    this.working.set(true);
+    this.error.set(null);
+
+    this.api
+      .recordAgreementApproval(
+        this.agentId,
+        agreement.id,
+        approvalType,
+        decision,
+        this.approvalNotes[approvalType] || undefined
+      )
+      .subscribe({
+        next: () => {
+          this.working.set(false);
+          this.reload();
+        },
+        error: (err) => {
+          this.error.set(
+            err?.error?.message ?? 'Failed to record approval decision.'
+          );
+          this.working.set(false);
+        },
+      });
+  }
+
+  sendAgreementForSignature(agreement: AgentAgreement): void {
+    this.working.set(true);
+    this.error.set(null);
+
+    this.api
+      .sendAgreementForSignature(this.agentId, agreement.id)
+      .subscribe({
+        next: () => {
+          this.working.set(false);
+          this.reload();
+        },
+        error: (err) => {
+          this.error.set(
+            err?.error?.message ?? 'Failed to send agreement for signature.'
+          );
+          this.working.set(false);
+        },
+      });
+  }
+
+  recordAgreementSignature(agreement: AgentAgreement): void {
+    if (!this.signatoryName.trim() || !this.signatureEvidencePath.trim()) {
+      this.error.set(
+        'Signatory name and signature evidence are required.'
+      );
+
+      return;
+    }
+
+    this.working.set(true);
+    this.error.set(null);
+
+    this.api
+      .recordAgreementSignature(this.agentId, agreement.id, {
+        party: this.signatureParty,
+        signatory_name: this.signatoryName.trim(),
+        signatory_title: this.signatoryTitle.trim() || undefined,
+        signature_method: this.signatureMethod,
+        signature_evidence_path: this.signatureEvidencePath.trim(),
+      })
+      .subscribe({
+        next: () => {
+          this.signatoryName = '';
+          this.signatoryTitle = '';
+          this.signatureEvidencePath = '';
+          this.working.set(false);
+          this.reload();
+        },
+        error: (err) => {
+          this.error.set(
+            err?.error?.message ?? 'Failed to record signature.'
+          );
           this.working.set(false);
         },
       });
@@ -2700,6 +3244,23 @@ export class AgentDetailComponent implements OnInit {
           this.working.set(false);
         },
       });
+  }
+
+  approvalStatus(
+    agreement: AgentAgreement,
+    type: AgentAgreementApprovalType
+  ): 'PENDING' | 'APPROVED' | 'REJECTED' {
+    return (
+      agreement.approvals?.find((a) => a.approval_type === type)?.status ??
+      'PENDING'
+    );
+  }
+
+  signatoryFor(
+    agreement: AgentAgreement,
+    party: AgentAgreementSignatoryParty
+  ): AgentAgreementSignatory | null {
+    return agreement.signatories?.find((s) => s.party === party) ?? null;
   }
 
   // ============================================================
@@ -2743,8 +3304,15 @@ export class AgentDetailComponent implements OnInit {
   }
 
   private resetAgreementForm(): void {
+    this.agreementTemplateId = null;
+    this.agreementEffectiveDate = '';
     this.agreementExpiryDate = '';
     this.agreementRenewalDate = '';
+    this.agreementInitialTermMonths = 12;
+    this.agreementAgentNoticeDays = 30;
+    this.agreementMicrobizNoticeDays = 60;
+    this.agreementDisputeMethod = 'ARBITRATION';
+    this.agreementSpecialConditions = '';
     this.agreementDocumentPath = '';
   }
 }
