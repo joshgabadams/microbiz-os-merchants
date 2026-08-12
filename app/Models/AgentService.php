@@ -12,6 +12,7 @@ class AgentService extends Model
         'status',
         'limit_override',
         'fee_amount',
+        'commission_amount',
         'authentication_required',
         'effective_date',
         'expiry_date',
@@ -22,6 +23,7 @@ class AgentService extends Model
     protected $casts = [
         'limit_override' => 'decimal:2',
         'fee_amount' => 'decimal:2',
+        'commission_amount' => 'decimal:2',
         'authentication_required' => 'boolean',
         'effective_date' => 'date',
         'expiry_date' => 'date',

@@ -22,7 +22,8 @@ class AgentServiceConfigurationService
         ?float $feeAmount = null,
         bool $authenticationRequired = true,
         ?string $effectiveDate = null,
-        ?string $expiryDate = null
+        ?string $expiryDate = null,
+        ?float $commissionAmount = null
     ): AgentService {
         return AgentService::updateOrCreate(
             ['agent_id' => $agent->id, 'service_type' => $serviceType],
@@ -30,6 +31,7 @@ class AgentServiceConfigurationService
                 'status' => 'ENABLED',
                 'limit_override' => $limitOverride,
                 'fee_amount' => $feeAmount,
+                'commission_amount' => $commissionAmount,
                 'authentication_required' => $authenticationRequired,
                 'effective_date' => $effectiveDate,
                 'expiry_date' => $expiryDate,

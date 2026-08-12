@@ -35,7 +35,8 @@ class AgentTransferService
     public function __construct(
         protected AgentOperationGuard $guard,
         protected CustomerAccountService $customerAccountService,
-        protected TransactionNumberService $transactionNumberService
+        protected TransactionNumberService $transactionNumberService,
+        protected AgentFeeCalculationService $feeCalculationService
     ) {
     }
 
@@ -131,6 +132,9 @@ class AgentTransferService
             $transactionDate = now();
             $transactionNo = $this->transactionNumberService->generate('AGT');
 
+            $feeAmount = $this->feeCalculationService->calculateFee($agent, 'TRANSFER');
+            $commissionAmount = $this->feeCalculationService->calculateCommission($agent, 'TRANSFER');
+
             $agentTransaction = AgentTransaction::create([
                 'transaction_no' => $transactionNo,
                 'idempotency_key' => $idempotencyKey,
@@ -141,6 +145,8 @@ class AgentTransferService
                 'transaction_type' => 'TRANSFER',
                 'status' => 'INITIATED',
                 'amount' => $amount,
+                'fee_amount' => $feeAmount,
+                'commission_amount' => $commissionAmount,
                 'currency' => 'NGN',
                 'customer_account_id' => $fromAccount->id,
                 'latitude' => $latitude,
@@ -174,6 +180,20 @@ class AgentTransferService
                 'status' => 'COMPLETED',
                 'posted_at' => now(),
             ]);
+
+            if ($commissionAmount > 0) {
+                $balance = \App\Models\AgentBalance::firstOrCreate(
+                    ['agent_id' => $agent->id],
+                    ['currency' => 'NGN']
+                );
+
+                $balance = \App\Models\AgentBalance::where('agent_id', $agent->id)
+                    ->lockForUpdate()
+                    ->first();
+
+                $balance->pending_commission += $commissionAmount;
+                $balance->save();
+            }
 
             $terminal->update([
                 'last_transaction_at' => now(),

@@ -14,13 +14,36 @@ use App\Services\Customer\CustomerAccountService;
 use Exception;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * AG-08: Cash-Out. Follows Module 10's exact workflow and Blueprint
+ * §13.3's exact accounting model -- the reverse of AG-07's cash-in:
+ *
+ *   Debit: Customer deposit liability
+ *   Credit: Agent electronic-float liability
+ *
+ * The agent pays physical cash to the customer, so
+ * declared_physical_cash decreases here -- the same automatic
+ * derivation AG-07 uses on the cash-in side, not a separate manual
+ * declaration step.
+ *
+ * Physical liquidity is a real, load-bearing guard check here (unlike
+ * cash-in, where it isn't relevant) -- an agent with sufficient
+ * electronic float but no real cash on hand must not be able to hand
+ * out cash that doesn't exist.
+ *
+ * No real customer-authentication subsystem exists yet in this
+ * codebase, so this service requires explicit proof of authentication
+ * as an input rather than inventing one -- the caller must have
+ * already verified the customer before calling this.
+ */
 class AgentCashOutService
 {
     public function __construct(
         protected AgentOperationGuard $guard,
         protected CustomerAccountService $customerAccountService,
         protected TransactionNumberService $transactionNumberService,
-        protected GlPostingService $glPostingService
+        protected GlPostingService $glPostingService,
+        protected AgentFeeCalculationService $feeCalculationService
     ) {
     }
 
@@ -48,6 +71,8 @@ class AgentCashOutService
             throw new Exception('Customer authentication is required before cash-out can proceed.');
         }
 
+        // Idempotency: return the original transaction rather than
+        // erroring or re-processing, same as AG-07.
         $existing = AgentTransaction::where('idempotency_key', $idempotencyKey)->first();
 
         if ($existing) {
@@ -109,6 +134,9 @@ class AgentCashOutService
             $transactionDate = now();
             $transactionNo = $this->transactionNumberService->generate('AGT');
 
+            $feeAmount = $this->feeCalculationService->calculateFee($agent, 'CASH_OUT');
+            $commissionAmount = $this->feeCalculationService->calculateCommission($agent, 'CASH_OUT');
+
             $agentTransaction = AgentTransaction::create([
                 'transaction_no' => $transactionNo,
                 'idempotency_key' => $idempotencyKey,
@@ -119,6 +147,8 @@ class AgentCashOutService
                 'transaction_type' => 'CASH_OUT',
                 'status' => 'INITIATED',
                 'amount' => $amount,
+                'fee_amount' => $feeAmount,
+                'commission_amount' => $commissionAmount,
                 'currency' => $balance->currency,
                 'customer_account_id' => $customerAccount->id,
                 'customer_reference' => $customerReference,
@@ -129,6 +159,10 @@ class AgentCashOutService
                 'performed_by' => $performedBy,
             ]);
 
+            // This is called BEFORE crediting the agent's float, so it
+            // performs its own real, tested customer-balance-sufficiency
+            // check (Customer balance checked, per Module 10) without
+            // duplicating that logic here.
             $this->customerAccountService->withdraw(
                 $customerAccount,
                 $amount,
@@ -137,9 +171,15 @@ class AgentCashOutService
                 $narration ?? 'Agent cash-out'
             );
 
+            // Blueprint §13.3 exact direction -- the reverse of AG-07.
             $balance->ledger_float += $amount;
             $balance->available_float += $amount;
             $balance->declared_physical_cash -= $amount;
+
+            if ($commissionAmount > 0) {
+                $balance->pending_commission += $commissionAmount;
+            }
+
             $balance->save();
 
             $cashLedger = CashLedger::create([
@@ -189,6 +229,9 @@ class AgentCashOutService
         });
     }
 
+    /**
+     * Same haversine-distance geo-fence check as AgentCashInService.
+     */
     protected function isWithinGeoFence(
         float $lat1,
         float $lon1,
