@@ -50,6 +50,14 @@ class PaymentsRbacSeeder extends Seeder
             'agents.compliance.review' => 'payments',
             'agents.agreements.create' => 'payments',
             'agents.agreements.execute' => 'payments',
+            'agents.agreements.submit-review' => 'payments',
+            'agents.agreements.approve-risk' => 'payments',
+            'agents.agreements.approve-compliance' => 'payments',
+            'agents.agreements.approve-legal' => 'payments',
+            'agents.agreements.approve-business-owner' => 'payments',
+            'agents.agreements.send-for-signature' => 'payments',
+            'agents.agreements.sign' => 'payments',
+            'agents.agreements.templates.manage' => 'payments',
             'agents.operators.view' => 'payments',
             'agents.operators.manage' => 'payments',
             'agents.terminals.view' => 'payments',
@@ -145,6 +153,41 @@ class PaymentsRbacSeeder extends Seeder
     'permissions' => [
         'agents.view',
         'agents.agreements.execute',
+        'agents.agreements.submit-review',
+        'agents.agreements.send-for-signature',
+        'agents.agreements.sign',
+    ],
+],
+
+'agent-agreement-risk-approver' => [
+    'label' => 'Agent Agreement Risk Approver',
+    'permissions' => [
+        'agents.view',
+        'agents.agreements.approve-risk',
+    ],
+],
+
+'agent-agreement-compliance-approver' => [
+    'label' => 'Agent Agreement Compliance Approver',
+    'permissions' => [
+        'agents.view',
+        'agents.agreements.approve-compliance',
+    ],
+],
+
+'agent-agreement-legal-approver' => [
+    'label' => 'Agent Agreement Legal Approver',
+    'permissions' => [
+        'agents.view',
+        'agents.agreements.approve-legal',
+    ],
+],
+
+'agent-agreement-business-owner-approver' => [
+    'label' => 'Agent Agreement Business Owner Approver',
+    'permissions' => [
+        'agents.view',
+        'agents.agreements.approve-business-owner',
     ],
 ],
 

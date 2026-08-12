@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\BalancingController;
 use App\Http\Controllers\Api\BranchEodController;
 use App\Http\Controllers\Api\MerchantController;
 use App\Http\Controllers\Api\AgentController;
+use App\Http\Controllers\Api\AgentAgreementTemplateController;
 use App\Http\Controllers\Api\WalletController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\MfaController;
@@ -234,6 +235,53 @@ Route::post(
     '/agents/{agent}/agreements/{agreement}/execute',
     [AgentController::class, 'executeAgreement']
 )->middleware('permission:agents.agreements.execute');
+
+Route::post(
+    '/agents/{agent}/agreements/{agreement}/submit-review',
+    [AgentController::class, 'submitAgreementForReview']
+)->middleware('permission:agents.agreements.submit-review');
+
+Route::post(
+    '/agents/{agent}/agreements/{agreement}/approve/risk',
+    [AgentController::class, 'approveAgreementRisk']
+)->middleware('permission:agents.agreements.approve-risk');
+
+Route::post(
+    '/agents/{agent}/agreements/{agreement}/approve/compliance',
+    [AgentController::class, 'approveAgreementCompliance']
+)->middleware('permission:agents.agreements.approve-compliance');
+
+Route::post(
+    '/agents/{agent}/agreements/{agreement}/approve/legal',
+    [AgentController::class, 'approveAgreementLegal']
+)->middleware('permission:agents.agreements.approve-legal');
+
+Route::post(
+    '/agents/{agent}/agreements/{agreement}/approve/business-owner',
+    [AgentController::class, 'approveAgreementBusinessOwner']
+)->middleware('permission:agents.agreements.approve-business-owner');
+
+Route::post(
+    '/agents/{agent}/agreements/{agreement}/send-for-signature',
+    [AgentController::class, 'sendAgreementForSignature']
+)->middleware('permission:agents.agreements.send-for-signature');
+
+Route::post(
+    '/agents/{agent}/agreements/{agreement}/signatures',
+    [AgentController::class, 'recordAgreementSignature']
+)->middleware('permission:agents.agreements.sign');
+
+// ---------- Agent Agreement Templates ----------
+
+Route::get(
+    '/agent-agreement-templates',
+    [AgentAgreementTemplateController::class, 'index']
+);
+
+Route::post(
+    '/agent-agreement-templates',
+    [AgentAgreementTemplateController::class, 'store']
+)->middleware('permission:agents.agreements.templates.manage');
 
 // ---------- AG-04: Operators ----------
 
