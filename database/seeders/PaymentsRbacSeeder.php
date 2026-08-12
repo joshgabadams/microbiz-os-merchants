@@ -58,6 +58,8 @@ class PaymentsRbacSeeder extends Seeder
             'agents.agreements.send-for-signature' => 'payments',
             'agents.agreements.sign' => 'payments',
             'agents.agreements.templates.manage' => 'payments',
+            'agents.training.documents.manage' => 'payments',
+            'agents.training.record' => 'payments',
             'agents.operators.view' => 'payments',
             'agents.operators.manage' => 'payments',
             'agents.terminals.view' => 'payments',
@@ -188,6 +190,15 @@ class PaymentsRbacSeeder extends Seeder
     'permissions' => [
         'agents.view',
         'agents.agreements.approve-business-owner',
+    ],
+],
+
+'agent-training-officer' => [
+    'label' => 'Agent Training Officer',
+    'permissions' => [
+        'agents.view',
+        'agents.training.documents.manage',
+        'agents.training.record',
     ],
 ],
 

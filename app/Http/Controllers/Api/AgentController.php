@@ -24,10 +24,14 @@ use App\Models\AgentAgreement;
 use App\Models\AgentLocation;
 use App\Models\AgentOperator;
 use App\Models\AgentTerminal;
+use App\Models\AgentTrainingRecord;
+use App\Models\TrainingDocument;
 use App\Services\Payments\AgentAgreementService;
 use App\Services\Payments\AgentLocationService;
 use App\Services\Payments\AgentOperatorService;
 use App\Services\Payments\AgentTerminalService;
+use App\Services\Payments\AgentTrainingService;
+use App\Http\Requests\Agent\RecordTrainingDownloadRequest;
 use Exception;
 use Illuminate\Http\Request;
 
@@ -43,7 +47,8 @@ class AgentController extends Controller
         protected AgentLocationService $locationService,
         protected AgentAgreementService $agreementService,
         protected AgentOperatorService $operatorService,
-        protected AgentTerminalService $terminalService
+        protected AgentTerminalService $terminalService,
+        protected AgentTrainingService $trainingService
 
     ) {
     }
@@ -570,5 +575,37 @@ public function recordAgreementSignature(
         );
 
         return $this->success($result, 'Location check completed.');
+    }
+
+    // ---------- Training ----------
+
+    public function recordTrainingDownload(Agent $agent, RecordTrainingDownloadRequest $request)
+    {
+        try {
+            $document = TrainingDocument::findOrFail($request->training_document_id);
+
+            $record = $this->trainingService->recordDownload(
+                $agent,
+                $document,
+                $request->operator_id,
+                $request->user()->id,
+                $request->ip()
+            );
+
+            return $this->success($record, 'Training guide download recorded.', 201);
+        } catch (Exception $e) {
+            return $this->error($e->getMessage());
+        }
+    }
+
+    public function acknowledgeTraining(Agent $agent, AgentTrainingRecord $trainingRecord, Request $request)
+    {
+        try {
+            $result = $this->trainingService->acknowledgeTrainingGuide($trainingRecord, $request->user()->id);
+
+            return $this->success($result, 'Training guide acknowledged.');
+        } catch (Exception $e) {
+            return $this->error($e->getMessage());
+        }
     }
 }

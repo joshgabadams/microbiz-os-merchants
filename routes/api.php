@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\BranchEodController;
 use App\Http\Controllers\Api\MerchantController;
 use App\Http\Controllers\Api\AgentController;
 use App\Http\Controllers\Api\AgentAgreementTemplateController;
+use App\Http\Controllers\Api\TrainingDocumentController;
 use App\Http\Controllers\Api\WalletController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\MfaController;
@@ -282,6 +283,28 @@ Route::post(
     '/agent-agreement-templates',
     [AgentAgreementTemplateController::class, 'store']
 )->middleware('permission:agents.agreements.templates.manage');
+
+// ---------- Training ----------
+
+Route::get(
+    '/training-documents',
+    [TrainingDocumentController::class, 'index']
+);
+
+Route::post(
+    '/training-documents',
+    [TrainingDocumentController::class, 'store']
+)->middleware('permission:agents.training.documents.manage');
+
+Route::post(
+    '/agents/{agent}/training/download',
+    [AgentController::class, 'recordTrainingDownload']
+)->middleware('permission:agents.training.record');
+
+Route::post(
+    '/agents/{agent}/training/{trainingRecord}/acknowledge',
+    [AgentController::class, 'acknowledgeTraining']
+)->middleware('permission:agents.training.record');
 
 // ---------- AG-04: Operators ----------
 
