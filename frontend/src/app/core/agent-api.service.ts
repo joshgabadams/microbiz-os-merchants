@@ -5,6 +5,11 @@ import { environment } from '../../environments/environment';
 import {
   Agent,
   AgentAgreement,
+  AgentAgreementApprovalType,
+  AgentAgreementCommercialTerm,
+  AgentAgreementPermittedService,
+  AgentAgreementSignatoryParty,
+  AgentAgreementTemplate,
   AgentBeneficialOwner,
   AgentDocument,
   AgentLocation,
@@ -169,16 +174,83 @@ export class AgentApiService {
   createAgreement(
     agentId: number,
     payload: {
+      agreement_template_id: number;
       effective_date?: string;
       expiry_date?: string;
       renewal_due_date?: string;
-      permitted_services?: string[];
-      commercial_terms?: Record<string, unknown>;
+      initial_term_months?: number;
+      agent_termination_notice_days?: number;
+      microbiz_termination_notice_days?: number;
+      dispute_resolution_method?: string;
+      arbitration_seat?: string;
+      special_conditions?: string;
+      permitted_services?: AgentAgreementPermittedService[];
+      commercial_terms?: AgentAgreementCommercialTerm[];
       document_path?: string;
     }
   ): Observable<ApiResponse<AgentAgreement>> {
     return this.http.post<ApiResponse<AgentAgreement>>(
       `${this.base}/${agentId}/agreements`,
+      payload
+    );
+  }
+
+  submitAgreementForReview(
+    agentId: number,
+    agreementId: number
+  ): Observable<ApiResponse<AgentAgreement>> {
+    return this.http.post<ApiResponse<AgentAgreement>>(
+      `${this.base}/${agentId}/agreements/${agreementId}/submit-review`,
+      {}
+    );
+  }
+
+  private readonly approvalRoutes: Record<AgentAgreementApprovalType, string> = {
+    RISK: 'risk',
+    COMPLIANCE: 'compliance',
+    LEGAL: 'legal',
+    BUSINESS_OWNER: 'business-owner',
+  };
+
+  recordAgreementApproval(
+    agentId: number,
+    agreementId: number,
+    approvalType: AgentAgreementApprovalType,
+    decision: 'APPROVED' | 'REJECTED',
+    notes?: string
+  ): Observable<ApiResponse<AgentAgreement>> {
+    const segment = this.approvalRoutes[approvalType];
+
+    return this.http.post<ApiResponse<AgentAgreement>>(
+      `${this.base}/${agentId}/agreements/${agreementId}/approve/${segment}`,
+      { decision, notes }
+    );
+  }
+
+  sendAgreementForSignature(
+    agentId: number,
+    agreementId: number
+  ): Observable<ApiResponse<AgentAgreement>> {
+    return this.http.post<ApiResponse<AgentAgreement>>(
+      `${this.base}/${agentId}/agreements/${agreementId}/send-for-signature`,
+      {}
+    );
+  }
+
+  recordAgreementSignature(
+    agentId: number,
+    agreementId: number,
+    payload: {
+      party: AgentAgreementSignatoryParty;
+      signatory_name: string;
+      signatory_title?: string;
+      signature_method: 'WET_SIGNATURE_UPLOAD' | 'E_SIGNATURE';
+      signature_evidence_path: string;
+      provider_reference_id?: string;
+    }
+  ): Observable<ApiResponse<unknown>> {
+    return this.http.post<ApiResponse<unknown>>(
+      `${this.base}/${agentId}/agreements/${agreementId}/signatures`,
       payload
     );
   }
@@ -190,6 +262,14 @@ export class AgentApiService {
     return this.http.post<ApiResponse<Agent>>(
       `${this.base}/${agentId}/agreements/${agreementId}/execute`,
       {}
+    );
+  }
+
+  // ---------- Agreement Templates ----------
+
+  listAgreementTemplates(): Observable<ApiResponse<AgentAgreementTemplate[]>> {
+    return this.http.get<ApiResponse<AgentAgreementTemplate[]>>(
+      `${environment.apiUrl}/v1/agent-agreement-templates`
     );
   }
 // ---------- AG-02: KYC ----------
