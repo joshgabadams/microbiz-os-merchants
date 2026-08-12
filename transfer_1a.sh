@@ -1,3 +1,8 @@
+#!/bin/sh
+set -e
+cd /Users/user/microbiz/microbiz-os
+
+cat > app/Services/Payments/AgentOperationGuard.php << 'MBOS_EOF'
 <?php
 
 namespace App\Services\Payments;
@@ -274,3 +279,6 @@ class AgentOperationGuard
         $this->checkTerminalActive($terminal);
     }
 }
+MBOS_EOF
+
+echo "AG-09 Part 1a of 3 applied (guard extension)."
