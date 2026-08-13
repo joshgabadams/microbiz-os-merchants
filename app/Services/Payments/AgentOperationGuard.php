@@ -218,23 +218,51 @@ class AgentOperationGuard
      *
      * @throws Exception
      */
-    public function checkDailyCumulativeLimit(Agent $agent, float $amount, ?float $limitOverride = null): void
-    {
-        $limit = $limitOverride ?? ($agent->daily_transaction_limit !== null ? (float) $agent->daily_transaction_limit : null);
+    public function checkDailyCumulativeLimit(
+    Agent $agent,
+    float $amount,
+    ?float $limitOverride = null,
+    ?string $transactionType = null
+): void {
+    $limit = $limitOverride
+        ?? (
+            $agent->daily_transaction_limit !== null
+                ? (float) $agent->daily_transaction_limit
+                : null
+        );
 
-        if ($limit === null) {
-            return;
-        }
-
-        $todayTotal = (float) AgentTransaction::where('agent_id', $agent->id)
-            ->where('status', 'COMPLETED')
-            ->whereDate('transaction_date', now()->toDateString())
-            ->sum('amount');
-
-        if (($todayTotal + $amount) > $limit) {
-            throw new Exception("This would exceed agent {$agent->agent_code}'s daily cumulative limit.");
-        }
+    if ($limit === null) {
+        return;
     }
+
+    $query = AgentTransaction::where(
+        'agent_id',
+        $agent->id
+    )
+        ->where(
+            'status',
+            'COMPLETED'
+        )
+        ->whereDate(
+            'transaction_date',
+            now()->toDateString()
+        );
+
+    if ($transactionType !== null) {
+        $query->where(
+            'transaction_type',
+            $transactionType
+        );
+    }
+
+    $todayTotal = (float) $query->sum('amount');
+
+    if (($todayTotal + $amount) > $limit) {
+        throw new Exception(
+            "This would exceed agent {$agent->agent_code}'s daily cumulative limit."
+        );
+    }
+}
 
     /**
      * Composite guard for float allocation/return.
@@ -307,13 +335,28 @@ class AgentOperationGuard
         $this->checkTerminalActive($terminal);
         $this->checkAgentPhysicalLiquiditySufficient($agent, $amount);
         $this->checkServiceEnabled($agent, 'CASH_OUT');
-        $this->checkDailyCumulativeLimit(
-            $agent,
-            $amount,
-            $agent->daily_cash_out_limit === null ? null : (float) $agent->daily_cash_out_limit
-        );
-    }
+    /*
+ * General daily transaction limit:
+ * all COMPLETED transaction types count.
+ */
+$this->checkDailyCumulativeLimit(
+    $agent,
+    $amount
+);
 
+/*
+ * Cash-out-specific daily limit:
+ * only COMPLETED CASH_OUT transactions count.
+ */
+if ($agent->daily_cash_out_limit !== null) {
+    $this->checkDailyCumulativeLimit(
+        $agent,
+        $amount,
+        (float) $agent->daily_cash_out_limit,
+        'CASH_OUT'
+    );
+}
+    }
     /**
      * Composite guard for transfers (both internal customer-to-customer
      * and interbank) -- same agent/location/operator/terminal checks as

@@ -7,6 +7,7 @@ use App\Models\Agent;
 use App\Models\AgentLocation;
 use App\Models\AgentOperator;
 use App\Models\AgentTerminal;
+use App\Models\AgentTransaction;
 use App\Models\Branch;
 use App\Models\Customer;
 use App\Models\CustomerAccount;
@@ -265,6 +266,30 @@ class AgentTransactionApiTest extends TestCase
             3.3792000,
             User::factory()->create()->id
         );
+    }
+
+    protected function createCompletedAgentTransaction(
+        array $context,
+        float $amount,
+        string $transactionType = 'CASH_IN'
+    ): AgentTransaction {
+        return AgentTransaction::create([
+            'transaction_no' => 'AGT-'.uniqid(),
+            'idempotency_key' => (string) Str::uuid(),
+            'agent_id' => $context['agent']->id,
+            'agent_location_id' => $context['location']->id,
+            'agent_terminal_id' => $context['terminal']->id,
+            'agent_operator_id' => $context['operator']->id,
+            'transaction_type' => $transactionType,
+            'status' => 'COMPLETED',
+            'amount' => $amount,
+            'currency' => 'NGN',
+            'latitude' => 6.5244000,
+            'longitude' => 3.3792000,
+            'geo_fence_passed' => true,
+            'transaction_date' => now(),
+            'performed_by' => User::factory()->create()->id,
+        ]);
     }
 
     public function test_unauthenticated_user_cannot_cash_in(): void
@@ -1067,6 +1092,254 @@ class AgentTransactionApiTest extends TestCase
             0
         );
     }
+    public function test_cash_in_rejects_when_daily_cumulative_limit_would_be_exceeded(): void
+    {
+    $user = User::factory()->create();
+
+    $this->attachRole(
+        $user,
+        'agent-transaction-operator'
+    );
+
+    Sanctum::actingAs($user);
+
+    $context = $this->makeReadyAgentContext(
+        ['CASH_IN'],
+        200000
+    );
+
+    $context['agent']->update([
+        'daily_transaction_limit' => 100000,
+    ]);
+
+    $this->createCompletedAgentTransaction(
+        $context,
+        80000
+    );
+
+    $account = $this->makeCustomerAccount();
+
+    $response = $this->postJson(
+        "/api/v1/agents/{$context['agent']->id}/transactions/cash-in",
+        $this->cashInPayload(
+            $context,
+            $account,
+            ['amount' => 30000]
+        )
+    );
+
+    $response->assertUnprocessable();
+
+    $this->assertStringContainsString(
+        'daily cumulative limit',
+        $response->getContent()
+    );
+
+    $this->assertDatabaseMissing('agent_transactions', [
+        'agent_id' => $context['agent']->id,
+        'amount' => 30000,
+        'status' => 'COMPLETED',
+    ]);
+}
+
+    public function test_cash_in_allows_transaction_at_exact_daily_cumulative_limit(): void
+    {
+    $user = User::factory()->create();
+
+    $this->attachRole(
+        $user,
+        'agent-transaction-operator'
+    );
+
+    Sanctum::actingAs($user);
+
+    $context = $this->makeReadyAgentContext(
+        ['CASH_IN'],
+        200000
+    );
+
+    $context['agent']->update([
+        'daily_transaction_limit' => 100000,
+    ]);
+
+    $this->createCompletedAgentTransaction(
+        $context,
+        80000
+    );
+
+    $account = $this->makeCustomerAccount();
+
+    $response = $this->postJson(
+        "/api/v1/agents/{$context['agent']->id}/transactions/cash-in",
+        $this->cashInPayload(
+            $context,
+            $account,
+            ['amount' => 20000]
+        )
+    );
+
+    $response->assertCreated();
+
+    $this->assertDatabaseHas('agent_transactions', [
+        'agent_id' => $context['agent']->id,
+        'transaction_type' => 'CASH_IN',
+        'status' => 'COMPLETED',
+        'amount' => 20000,
+    ]);
+}
+
+    public function test_transfer_rejects_when_daily_cumulative_limit_would_be_exceeded(): void
+    {
+    $user = User::factory()->create();
+
+    $this->attachRole(
+        $user,
+        'agent-transaction-operator'
+    );
+
+    Sanctum::actingAs($user);
+
+    $context = $this->makeReadyAgentContext(
+        ['TRANSFER']
+    );
+
+    $context['agent']->update([
+        'daily_transaction_limit' => 100000,
+    ]);
+
+    $this->createCompletedAgentTransaction(
+        $context,
+        80000
+    );
+
+    $fromAccount = $this->makeCustomerAccount(100000);
+    $toAccount = $this->makeCustomerAccount();
+
+    $response = $this->postJson(
+        "/api/v1/agents/{$context['agent']->id}/transactions/transfer",
+        $this->transferPayload(
+            $context,
+            $fromAccount,
+            $toAccount,
+            ['amount' => 30000]
+        )
+    );
+
+    $response->assertUnprocessable();
+
+    $this->assertStringContainsString(
+        'daily cumulative limit',
+        $response->getContent()
+    );
+}
+
+    public function test_prior_cash_in_does_not_consume_daily_cash_out_limit(): void
+    {
+        $user = User::factory()->create();
+
+        $this->attachRole(
+            $user,
+            'agent-transaction-operator'
+        );
+
+        Sanctum::actingAs($user);
+
+        $context = $this->makeReadyAgentContext(
+            ['CASH_IN', 'CASH_OUT'],
+            200000
+        );
+
+        $context['agent']->update([
+            'daily_transaction_limit' => 500000,
+            'daily_cash_out_limit' => 50000,
+        ]);
+
+        /*
+         * This cash-in creates genuine physical liquidity and contributes
+         * to the general daily transaction total, but it must not consume
+         * the cash-out-specific daily limit.
+         */
+        $this->fundPhysicalCash(
+            $context,
+            40000
+        );
+
+        $account = $this->makeCustomerAccount(100000);
+
+        $response = $this->postJson(
+            "/api/v1/agents/{$context['agent']->id}/transactions/cash-out",
+            $this->cashOutPayload(
+                $context,
+                $account,
+                ['amount' => 20000]
+            )
+        );
+
+        $response->assertCreated();
+
+        $this->assertDatabaseHas('agent_transactions', [
+            'agent_id' => $context['agent']->id,
+            'transaction_type' => 'CASH_OUT',
+            'status' => 'COMPLETED',
+            'amount' => 20000,
+        ]);
+    }
+
+    public function test_cash_out_rejects_when_daily_cash_out_limit_would_be_exceeded(): void
+    {
+        $user = User::factory()->create();
+
+        $this->attachRole(
+            $user,
+            'agent-transaction-operator'
+        );
+
+        Sanctum::actingAs($user);
+
+        $context = $this->makeReadyAgentContext(
+            ['CASH_IN', 'CASH_OUT'],
+            200000
+        );
+
+        $context['agent']->update([
+            'daily_transaction_limit' => 500000,
+            'daily_cash_out_limit' => 50000,
+        ]);
+
+        /*
+         * Build enough real physical liquidity to ensure the rejection
+         * comes from the cash-out daily limit rather than liquidity.
+         */
+        $this->fundPhysicalCash(
+            $context,
+            100000
+        );
+
+        $this->createCompletedAgentTransaction(
+            $context,
+            40000,
+            'CASH_OUT'
+        );
+
+        $account = $this->makeCustomerAccount(100000);
+
+        $response = $this->postJson(
+            "/api/v1/agents/{$context['agent']->id}/transactions/cash-out",
+            $this->cashOutPayload(
+                $context,
+                $account,
+                ['amount' => 20000]
+            )
+        );
+
+        $response->assertUnprocessable();
+
+        $this->assertStringContainsString(
+            'daily cumulative limit',
+            $response->getContent()
+        );
+    }
+
 
 
 }
