@@ -3,6 +3,7 @@
 namespace App\Services\Payments;
 
 use App\Domain\MPay\Enums\AgentStatus;
+use App\Services\Branch\BranchBusinessDayService;
 use App\Models\Agent;
 use App\Models\AgentBalance;
 use App\Models\AgentLocation;
@@ -55,6 +56,11 @@ use Exception;
  */
 class AgentOperationGuard
 {
+    public function __construct(
+        protected BranchBusinessDayService $branchBusinessDayService
+    ) {
+    }
+
     /**
      * @throws Exception
      */
@@ -210,6 +216,24 @@ class AgentOperationGuard
     }
 
     /**
+     * Ensure the agent's branch currently has an open business day.
+     *
+     * @throws Exception
+     */
+    public function checkBusinessDayOpen(Agent $agent): void
+    {
+        if ($agent->branch_id === null) {
+            throw new Exception(
+                "Agent {$agent->agent_code} is not assigned to a branch."
+            );
+        }
+
+        $this->branchBusinessDayService->requireOpenDay(
+            $agent->branch_id
+        );
+    }
+
+    /**
      * Real, load-bearing check -- now genuinely buildable since
      * agent_transactions has real volume from AG-07/08/09. $limitOverride
      * lets callers pass a type-specific limit (e.g. Agent's own
@@ -219,50 +243,50 @@ class AgentOperationGuard
      * @throws Exception
      */
     public function checkDailyCumulativeLimit(
-    Agent $agent,
-    float $amount,
-    ?float $limitOverride = null,
-    ?string $transactionType = null
-): void {
-    $limit = $limitOverride
-        ?? (
-            $agent->daily_transaction_limit !== null
-                ? (float) $agent->daily_transaction_limit
-                : null
-        );
+        Agent $agent,
+        float $amount,
+        ?float $limitOverride = null,
+        ?string $transactionType = null
+    ): void {
+        $limit = $limitOverride
+            ?? (
+                $agent->daily_transaction_limit !== null
+                    ? (float) $agent->daily_transaction_limit
+                    : null
+            );
 
-    if ($limit === null) {
-        return;
-    }
+        if ($limit === null) {
+            return;
+        }
 
-    $query = AgentTransaction::where(
-        'agent_id',
-        $agent->id
-    )
-        ->where(
-            'status',
-            'COMPLETED'
+        $query = AgentTransaction::where(
+            'agent_id',
+            $agent->id
         )
-        ->whereDate(
-            'transaction_date',
-            now()->toDateString()
-        );
+            ->where(
+                'status',
+                'COMPLETED'
+            )
+            ->whereDate(
+                'transaction_date',
+                now()->toDateString()
+            );
 
-    if ($transactionType !== null) {
-        $query->where(
-            'transaction_type',
-            $transactionType
-        );
+        if ($transactionType !== null) {
+            $query->where(
+                'transaction_type',
+                $transactionType
+            );
+        }
+
+        $todayTotal = (float) $query->sum('amount');
+
+        if (($todayTotal + $amount) > $limit) {
+            throw new Exception(
+                "This would exceed agent {$agent->agent_code}'s daily cumulative limit."
+            );
+        }
     }
-
-    $todayTotal = (float) $query->sum('amount');
-
-    if (($todayTotal + $amount) > $limit) {
-        throw new Exception(
-            "This would exceed agent {$agent->agent_code}'s daily cumulative limit."
-        );
-    }
-}
 
     /**
      * Composite guard for float allocation/return.
@@ -299,6 +323,7 @@ class AgentOperationGuard
         $this->checkAgreementActive($agent);
         $this->checkKycValid($agent);
         $this->checkNotSuspendedOrRestricted($agent);
+        $this->checkBusinessDayOpen($agent);
         $this->checkTransactionLimit($agent, $amount);
         $this->checkLocationActive($location);
         $this->checkOperatorActive($operator);
@@ -329,34 +354,37 @@ class AgentOperationGuard
         $this->checkAgreementActive($agent);
         $this->checkKycValid($agent);
         $this->checkNotSuspendedOrRestricted($agent);
+        $this->checkBusinessDayOpen($agent);
         $this->checkTransactionLimit($agent, $amount);
         $this->checkLocationActive($location);
         $this->checkOperatorActive($operator);
         $this->checkTerminalActive($terminal);
         $this->checkAgentPhysicalLiquiditySufficient($agent, $amount);
         $this->checkServiceEnabled($agent, 'CASH_OUT');
-    /*
- * General daily transaction limit:
- * all COMPLETED transaction types count.
- */
-$this->checkDailyCumulativeLimit(
-    $agent,
-    $amount
-);
 
-/*
- * Cash-out-specific daily limit:
- * only COMPLETED CASH_OUT transactions count.
- */
-if ($agent->daily_cash_out_limit !== null) {
-    $this->checkDailyCumulativeLimit(
-        $agent,
-        $amount,
-        (float) $agent->daily_cash_out_limit,
-        'CASH_OUT'
-    );
-}
+        /*
+         * General daily transaction limit:
+         * all COMPLETED transaction types count.
+         */
+        $this->checkDailyCumulativeLimit(
+            $agent,
+            $amount
+        );
+
+        /*
+         * Cash-out-specific daily limit:
+         * only COMPLETED CASH_OUT transactions count.
+         */
+        if ($agent->daily_cash_out_limit !== null) {
+            $this->checkDailyCumulativeLimit(
+                $agent,
+                $amount,
+                (float) $agent->daily_cash_out_limit,
+                'CASH_OUT'
+            );
+        }
     }
+
     /**
      * Composite guard for transfers (both internal customer-to-customer
      * and interbank) -- same agent/location/operator/terminal checks as
@@ -378,6 +406,7 @@ if ($agent->daily_cash_out_limit !== null) {
         $this->checkAgreementActive($agent);
         $this->checkKycValid($agent);
         $this->checkNotSuspendedOrRestricted($agent);
+        $this->checkBusinessDayOpen($agent);
         $this->checkTransactionLimit($agent, $amount);
         $this->checkLocationActive($location);
         $this->checkOperatorActive($operator);

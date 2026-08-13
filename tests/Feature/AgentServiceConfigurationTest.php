@@ -14,6 +14,7 @@ use App\Models\Customer;
 use App\Models\CustomerAccount;
 use App\Models\CustomerAccountBalance;
 use App\Models\User;
+use App\Services\Branch\BranchBusinessDayService;
 use App\Services\CashManagement\AgentFloatService;
 use App\Services\Payments\AgentCashInService;
 use App\Services\Payments\AgentOperationGuard;
@@ -275,23 +276,35 @@ class AgentServiceConfigurationTest extends TestCase
      * from cash-in until CASH_IN is explicitly enabled. Before today,
      * this agent would have been able to transact freely.
      */
-    public function test_cash_in_is_blocked_end_to_end_without_service_enabled(): void
-    {
-        $branch = Branch::create(['name' => 'Test Branch', 'code' => 'TB-'.uniqid(), 'office_id' => 1]);
-        $registrant = User::factory()->create();
 
-        $agent = Agent::create([
-            'agent_code' => 'AGT-'.uniqid(),
-            'agent_type' => 'INDIVIDUAL',
-            'legal_name' => 'Test Agent',
-            'phone' => '08000000000',
-            'branch_id' => $branch->id,
-            'status' => AgentStatus::ACTIVE->value,
-            'kyc_status' => 'COMPLETED',
-            'created_by' => $registrant->id,
-            'single_transaction_limit' => 1000000,
-        ]);
+public function test_cash_in_is_blocked_end_to_end_without_service_enabled(): void
+{
+    $branch = Branch::create([
+        'name' => 'Test Branch',
+        'code' => 'TB-'.uniqid(),
+        'office_id' => 1,
+    ]);
 
+    $registrant = User::factory()->create();
+
+    app(BranchBusinessDayService::class)->open(
+        $branch->id,
+        now()->toDateString(),
+        $registrant->id,
+        'Opened for agent service configuration test.'
+    );
+
+    $agent = Agent::create([
+        'agent_code' => 'AGT-'.uniqid(),
+        'agent_type' => 'INDIVIDUAL',
+        'legal_name' => 'Test Agent',
+        'phone' => '08000000000',
+        'branch_id' => $branch->id,
+        'status' => AgentStatus::ACTIVE->value,
+        'kyc_status' => 'COMPLETED',
+        'created_by' => $registrant->id,
+        'single_transaction_limit' => 1000000,
+    ]);
         $agreementCreator = User::factory()->create();
         $agent->agreements()->create([
             'agreement_number' => 'AGR-'.uniqid(),

@@ -15,6 +15,7 @@ use App\Models\CustomerAccountBalance;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\Vault;
+use App\Services\Branch\BranchBusinessDayService;
 use App\Services\CashManagement\AgentFloatService;
 use App\Services\Payments\AgentCashInService;
 use App\Services\Payments\AgentServiceConfigurationService;
@@ -53,28 +54,35 @@ class AgentTransactionApiTest extends TestCase
     }
 
     protected function makeReadyAgentContext(
-        array $services = ['CASH_IN', 'CASH_OUT', 'TRANSFER'],
-        float $floatAmount = 200000
-    ): array {
-        $branch = Branch::create([
-            'name' => 'Agent Transaction API Branch',
-            'code' => 'ATAB-'.uniqid(),
-            'office_id' => 1,
-        ]);
+    array $services = ['CASH_IN', 'CASH_OUT', 'TRANSFER'],
+    float $floatAmount = 200000
+): array {
+    $branch = Branch::create([
+        'name' => 'Agent Transaction API Branch',
+        'code' => 'ATAB-'.uniqid(),
+        'office_id' => 1,
+    ]);
 
-        $registrant = User::factory()->create();
+    $registrant = User::factory()->create();
 
-        $agent = Agent::create([
-            'agent_code' => 'AGT-'.uniqid(),
-            'agent_type' => 'INDIVIDUAL',
-            'legal_name' => 'Agent Transaction API Test Agent',
-            'phone' => '08000000000',
-            'branch_id' => $branch->id,
-            'status' => AgentStatus::ACTIVE->value,
-            'kyc_status' => 'COMPLETED',
-            'created_by' => $registrant->id,
-            'single_transaction_limit' => 1000000,
-        ]);
+    app(BranchBusinessDayService::class)->open(
+        $branch->id,
+        now()->toDateString(),
+        $registrant->id,
+        'Opened for agent transaction API test.'
+    );
+
+    $agent = Agent::create([
+        'agent_code' => 'AGT-'.uniqid(),
+        'agent_type' => 'INDIVIDUAL',
+        'legal_name' => 'Agent Transaction API Test Agent',
+        'phone' => '08000000000',
+        'branch_id' => $branch->id,
+        'status' => AgentStatus::ACTIVE->value,
+        'kyc_status' => 'COMPLETED',
+        'created_by' => $registrant->id,
+        'single_transaction_limit' => 1000000,
+    ]);
 
         $agent->agreements()->create([
             'agreement_number' => 'AGR-'.uniqid(),
