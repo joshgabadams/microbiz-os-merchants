@@ -51,7 +51,8 @@ class AgentInterbankTransferService
 {
     public function __construct(
         protected AgentOperationGuard $guard,
-        protected TransactionNumberService $transactionNumberService
+        protected TransactionNumberService $transactionNumberService,
+        protected AgentTransactionIdempotencyService $idempotencyService
     ) {
     }
 
@@ -82,14 +83,29 @@ class AgentInterbankTransferService
             throw new Exception('Card PIN verification is required before an interbank transfer can proceed.');
         }
 
-        $existing = AgentTransaction::where('idempotency_key', $idempotencyKey)->first();
+        $agent = $operator->agent;
+        $location = $operator->location;
+
+        $existing = $this->idempotencyService->findExisting(
+            $idempotencyKey,
+            'INTERBANK_TRANSFER',
+            $agent->id,
+            $location->id,
+            $terminal->id,
+            $operator->id,
+            $sourceAccount->id,
+            $amount,
+            [
+                'card_reference' => $cardReference,
+                'destination_bank_code' => $destinationBankCode,
+                'destination_account_number' => $destinationAccountNumber,
+                'destination_account_name' => $destinationAccountName,
+            ]
+        );
 
         if ($existing) {
             return $existing;
         }
-
-        $agent = $operator->agent;
-        $location = $operator->location;
 
         if ($terminal->agent_id !== $agent->id) {
             throw new Exception('This terminal does not belong to the specified agent.');

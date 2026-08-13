@@ -43,7 +43,8 @@ class AgentCashOutService
         protected CustomerAccountService $customerAccountService,
         protected TransactionNumberService $transactionNumberService,
         protected GlPostingService $glPostingService,
-        protected AgentFeeCalculationService $feeCalculationService
+        protected AgentFeeCalculationService $feeCalculationService,
+        protected AgentTransactionIdempotencyService $idempotencyService
     ) {
     }
 
@@ -71,16 +72,23 @@ class AgentCashOutService
             throw new Exception('Customer authentication is required before cash-out can proceed.');
         }
 
-        // Idempotency: return the original transaction rather than
-        // erroring or re-processing, same as AG-07.
-        $existing = AgentTransaction::where('idempotency_key', $idempotencyKey)->first();
+        $agent = $operator->agent;
+        $location = $operator->location;
+
+        $existing = $this->idempotencyService->findExisting(
+            $idempotencyKey,
+            'CASH_OUT',
+            $agent->id,
+            $location->id,
+            $terminal->id,
+            $operator->id,
+            $customerAccount->id,
+            $amount
+        );
 
         if ($existing) {
             return $existing;
         }
-
-        $agent = $operator->agent;
-        $location = $operator->location;
 
         if ($terminal->agent_id !== $agent->id) {
             throw new Exception('This terminal does not belong to the specified agent.');

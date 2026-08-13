@@ -337,4 +337,41 @@ class AgentTransferServiceTest extends TestCase
             $user->id
         );
     }
+
+    public function test_reused_idempotency_key_with_different_destination_is_rejected(): void
+    {
+        $context = $this->makeReadyAgentContext();
+        $from = $this->makeCustomerAccount(100000);
+        $firstDestination = $this->makeCustomerAccount(0);
+        $secondDestination = $this->makeCustomerAccount(0);
+        $user = User::factory()->create();
+        $idempotencyKey = (string) Str::uuid();
+
+        app(AgentTransferService::class)->transfer(
+            $context['operator'],
+            $context['terminal'],
+            $from,
+            $firstDestination,
+            30000,
+            $idempotencyKey,
+            6.5244000,
+            3.3792000,
+            $user->id
+        );
+
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('Idempotency key');
+
+        app(AgentTransferService::class)->transfer(
+            $context['operator'],
+            $context['terminal'],
+            $from,
+            $secondDestination,
+            30000,
+            $idempotencyKey,
+            6.5244000,
+            3.3792000,
+            $user->id
+        );
+    }
 }

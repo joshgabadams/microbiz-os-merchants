@@ -39,7 +39,8 @@ class AgentCashInService
         protected CustomerAccountService $customerAccountService,
         protected TransactionNumberService $transactionNumberService,
         protected GlPostingService $glPostingService,
-        protected AgentFeeCalculationService $feeCalculationService
+        protected AgentFeeCalculationService $feeCalculationService,
+        protected AgentTransactionIdempotencyService $idempotencyService
     ) {
     }
 
@@ -62,17 +63,23 @@ class AgentCashInService
             throw new Exception('Cash-in amount must be greater than zero.');
         }
 
-        // Idempotency: return the original transaction rather than
-        // erroring or re-processing, per Blueprint §20's exact test --
-        // "Duplicate idempotency request returns original response."
-        $existing = AgentTransaction::where('idempotency_key', $idempotencyKey)->first();
+        $agent = $operator->agent;
+        $location = $operator->location;
+
+        $existing = $this->idempotencyService->findExisting(
+            $idempotencyKey,
+            'CASH_IN',
+            $agent->id,
+            $location->id,
+            $terminal->id,
+            $operator->id,
+            $customerAccount->id,
+            $amount
+        );
 
         if ($existing) {
             return $existing;
         }
-
-        $agent = $operator->agent;
-        $location = $operator->location;
 
         if ($terminal->agent_id !== $agent->id) {
             throw new Exception('This terminal does not belong to the specified agent.');

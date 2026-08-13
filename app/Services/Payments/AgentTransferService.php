@@ -36,7 +36,8 @@ class AgentTransferService
         protected AgentOperationGuard $guard,
         protected CustomerAccountService $customerAccountService,
         protected TransactionNumberService $transactionNumberService,
-        protected AgentFeeCalculationService $feeCalculationService
+        protected AgentFeeCalculationService $feeCalculationService,
+        protected AgentTransactionIdempotencyService $idempotencyService
     ) {
     }
 
@@ -63,14 +64,27 @@ class AgentTransferService
             throw new Exception('Cannot transfer an account to itself.');
         }
 
-        $existing = AgentTransaction::where('idempotency_key', $idempotencyKey)->first();
+        $agent = $operator->agent;
+        $location = $operator->location;
+
+        $existing = $this->idempotencyService->findExisting(
+            $idempotencyKey,
+            'TRANSFER',
+            $agent->id,
+            $location->id,
+            $terminal->id,
+            $operator->id,
+            $fromAccount->id,
+            $amount,
+            [
+                'to_customer_account_id' => $toAccount->id,
+                'to_account_no' => $toAccount->account_no,
+            ]
+        );
 
         if ($existing) {
             return $existing;
         }
-
-        $agent = $operator->agent;
-        $location = $operator->location;
 
         if ($terminal->agent_id !== $agent->id) {
             throw new Exception('This terminal does not belong to the specified agent.');

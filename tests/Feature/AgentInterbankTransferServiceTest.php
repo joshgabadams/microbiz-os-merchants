@@ -284,4 +284,51 @@ class AgentInterbankTransferServiceTest extends TestCase
         $this->assertEquals('MASKED-1234', $transaction->channel_metadata['card_reference']);
         $this->assertEquals('0123456789', $transaction->channel_metadata['destination_account_number']);
     }
+
+    public function test_reused_idempotency_key_with_different_destination_is_rejected(): void
+    {
+        $context = $this->makeReadyAgentContext();
+        $account = $this->makeCustomerAccount();
+        $user = User::factory()->create();
+        $idempotencyKey = (string) Str::uuid();
+
+        try {
+            app(AgentInterbankTransferService::class)->transfer(
+                $context['operator'],
+                $context['terminal'],
+                $account,
+                'CARD-REF-1234',
+                true,
+                '058',
+                '0123456789',
+                'John Smith',
+                50000,
+                $idempotencyKey,
+                6.5244000,
+                3.3792000,
+                $user->id
+            );
+        } catch (\Exception $e) {
+            $this->assertStringContainsString('PTSP/NIBSS', $e->getMessage());
+        }
+
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('Idempotency key');
+
+        app(AgentInterbankTransferService::class)->transfer(
+            $context['operator'],
+            $context['terminal'],
+            $account,
+            'CARD-REF-1234',
+            true,
+            '058',
+            '9999999999',
+            'Jane Smith',
+            50000,
+            $idempotencyKey,
+            6.5244000,
+            3.3792000,
+            $user->id
+        );
+    }
 }

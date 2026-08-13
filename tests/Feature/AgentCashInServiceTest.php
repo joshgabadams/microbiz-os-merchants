@@ -365,4 +365,37 @@ class AgentCashInServiceTest extends TestCase
             $user->id
         );
     }
+
+    public function test_reused_idempotency_key_with_different_amount_is_rejected(): void
+    {
+        $context = $this->makeReadyAgentContext();
+        $customerAccount = $this->makeActiveCustomerAccount();
+        $user = User::factory()->create();
+        $idempotencyKey = (string) Str::uuid();
+
+        app(AgentCashInService::class)->cashIn(
+            $context['operator'],
+            $context['terminal'],
+            $customerAccount,
+            50000,
+            $idempotencyKey,
+            6.5244000,
+            3.3792000,
+            $user->id
+        );
+
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('Idempotency key');
+
+        app(AgentCashInService::class)->cashIn(
+            $context['operator'],
+            $context['terminal'],
+            $customerAccount,
+            40000,
+            $idempotencyKey,
+            6.5244000,
+            3.3792000,
+            $user->id
+        );
+    }
 }

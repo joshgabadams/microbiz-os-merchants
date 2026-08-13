@@ -400,4 +400,40 @@ class AgentCashOutServiceTest extends TestCase
         $this->assertEquals($first->id, $second->id);
         $this->assertEquals(1, AgentTransaction::where('idempotency_key', $idempotencyKey)->count());
     }
+
+    public function test_reused_idempotency_key_with_different_customer_account_is_rejected(): void
+    {
+        $context = $this->makeReadyAgentContext(100000);
+        $firstAccount = $this->makeActiveCustomerAccount(80000);
+        $secondAccount = $this->makeActiveCustomerAccount(80000);
+        $user = User::factory()->create();
+        $idempotencyKey = (string) Str::uuid();
+
+        app(AgentCashOutService::class)->cashOut(
+            $context['operator'],
+            $context['terminal'],
+            $firstAccount,
+            30000,
+            $idempotencyKey,
+            6.5244000,
+            3.3792000,
+            $user->id,
+            true
+        );
+
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('Idempotency key');
+
+        app(AgentCashOutService::class)->cashOut(
+            $context['operator'],
+            $context['terminal'],
+            $secondAccount,
+            30000,
+            $idempotencyKey,
+            6.5244000,
+            3.3792000,
+            $user->id,
+            true
+        );
+    }
 }
