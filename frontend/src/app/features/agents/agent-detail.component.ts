@@ -15,6 +15,12 @@ import {
   AgentBeneficialOwner,
   AgentDocument,
   AgentLocation,
+  AgentOperator,
+  AgentTerminal,
+  AgentTransaction,
+  AgentTransactionType,
+  AgentTrainingRecord,
+  TrainingDocument,
 } from '../../core/models/api.models';
 
 @Component({
@@ -1400,17 +1406,31 @@ import {
                                   </select>
                                 </label>
                                 <label class="full-width">
-                                  Signature Evidence Path
+                                  Signature Evidence
                                   <input
-                                    placeholder="/storage/agreements/..."
-                                    [(ngModel)]="signatureEvidencePath"
+                                    type="file"
+                                    accept=".pdf,.jpg,.jpeg,.png"
+                                    [disabled]="uploadingEvidence()"
+                                    (change)="onSignatureEvidenceSelected($event, agreement)"
                                   />
+                                  @if (uploadingEvidence()) {
+                                    <span class="muted">Uploading...</span>
+                                  } @else if (signatureEvidenceFileName()) {
+                                    <span class="muted">
+                                      ✓ Uploaded: {{ signatureEvidenceFileName() }}
+                                    </span>
+                                  } @else {
+                                    <span class="muted">
+                                      Upload a scanned wet signature or an
+                                      already e-signed document (PDF/JPG/PNG, max 10MB).
+                                    </span>
+                                  }
                                 </label>
                                 <div class="form-actions">
                                   <button
                                     class="btn-outline"
                                     (click)="recordAgreementSignature(agreement)"
-                                    [disabled]="working()"
+                                    [disabled]="working() || !signatureEvidencePath"
                                   >
                                     Record Signature
                                   </button>
@@ -1458,6 +1478,689 @@ import {
         </section>
 
         <!-- ===================================================== -->
+        <!-- AG-04: TRAINING -->
+        <!-- ===================================================== -->
+
+        <section class="card">
+          <div class="section-header">
+            <div>
+              <h2>Training</h2>
+
+              <p>
+                Agency banking training guide delivery and
+                acknowledgement.
+              </p>
+            </div>
+
+            <button
+              class="btn-outline"
+              (click)="toggleTrainingDocumentForm()"
+              [disabled]="uploadingTrainingDocument()"
+            >
+              {{
+                showTrainingDocumentForm()
+                  ? 'Cancel'
+                  : '+ Upload Training Guide'
+              }}
+            </button>
+          </div>
+
+          @if (showTrainingDocumentForm()) {
+            <div class="form-grid">
+              <label>
+                Guide Name
+                <input [(ngModel)]="trainingDocumentName" />
+              </label>
+
+              <label>
+                Version
+                <input
+                  [(ngModel)]="trainingDocumentVersion"
+                  placeholder="v1"
+                />
+              </label>
+
+              <label class="full-width">
+                Guide File
+                <input
+                  type="file"
+                  accept=".pdf,.doc,.docx"
+                  [disabled]="uploadingTrainingDocument()"
+                  (change)="onTrainingDocumentFileSelected($event)"
+                />
+                <span class="muted">
+                  PDF/DOC/DOCX, max 10MB.
+                </span>
+              </label>
+
+              <div class="form-actions">
+                <button
+                  (click)="uploadTrainingDocument()"
+                  [disabled]="uploadingTrainingDocument()"
+                >
+                  {{
+                    uploadingTrainingDocument()
+                      ? 'Uploading...'
+                      : 'Add Training Guide'
+                  }}
+                </button>
+              </div>
+            </div>
+          }
+
+          @if ((agent()!.training_records ?? []).length === 0) {
+            <div class="empty-state">
+              No training activity recorded.
+            </div>
+          } @else {
+            <div class="checklist">
+              @for (
+                record of agent()!.training_records!;
+                track record.id
+              ) {
+                <div
+                  class="checklist-item"
+                  [class.done]="record.acknowledged_at"
+                >
+                  <span class="checklist-icon">
+                    {{ record.acknowledged_at ? '✓' : '•' }}
+                  </span>
+
+                  <span class="checklist-label">
+                    {{ record.training_document?.name }}
+                    (v{{ record.training_document_version }})
+                  </span>
+
+                  <span
+                    class="status-badge"
+                    [class]="
+                      record.acknowledged_at
+                        ? 'status-active'
+                        : 'status-pending'
+                    "
+                  >
+                    {{
+                      record.acknowledged_at
+                        ? 'Acknowledged ' + record.acknowledged_at
+                        : 'Downloaded, awaiting acknowledgement'
+                    }}
+                  </span>
+
+                  @if (
+                    !record.acknowledged_at &&
+                    agent()!.status === 'TRAINING_PENDING'
+                  ) {
+                    <button
+                      class="btn-success"
+                      (click)="acknowledgeTraining(record)"
+                      [disabled]="working()"
+                    >
+                      Acknowledge
+                    </button>
+                  }
+                </div>
+              }
+            </div>
+          }
+
+          @if (
+            agent()!.status === 'TRAINING_PENDING' &&
+            !hasPendingTrainingRecord()
+          ) {
+            <div class="form-grid">
+              <label class="full-width">
+                Issue Training Guide
+                <select [(ngModel)]="selectedTrainingDocumentId">
+                  <option [ngValue]="null">
+                    — select a guide —
+                  </option>
+                  @for (
+                    doc of trainingDocuments();
+                    track doc.id
+                  ) {
+                    <option [ngValue]="doc.id">
+                      {{ doc.name }} (v{{ doc.version }})
+                    </option>
+                  }
+                </select>
+              </label>
+
+              <div class="form-actions">
+                <button
+                  (click)="recordTrainingDownload()"
+                  [disabled]="working()"
+                >
+                  Record Download
+                </button>
+              </div>
+            </div>
+          }
+        </section>
+
+        <!-- ===================================================== -->
+        <!-- AG-04: OPERATORS -->
+        <!-- ===================================================== -->
+
+        <section class="card">
+          <div class="section-header">
+            <div>
+              <h2>Operators</h2>
+
+              <p>
+                Platform users authorised to operate this agent's
+                locations.
+              </p>
+            </div>
+
+            <button
+              class="btn-outline"
+              (click)="toggleOperatorForm()"
+              [disabled]="working()"
+            >
+              {{
+                showOperatorForm()
+                  ? 'Cancel'
+                  : '+ Assign Operator'
+              }}
+            </button>
+          </div>
+
+          @if (showOperatorForm()) {
+            <div class="form-grid">
+              <label>
+                Location
+                <select [(ngModel)]="operatorLocationId">
+                  <option [ngValue]="null">
+                    — select a location —
+                  </option>
+                  @for (loc of locations(); track loc.id) {
+                    <option [ngValue]="loc.id">
+                      {{ loc.address_line_1 }}, {{ loc.city }}
+                    </option>
+                  }
+                </select>
+              </label>
+
+              <label>
+                User ID
+                <input
+                  type="number"
+                  [(ngModel)]="operatorUserId"
+                  placeholder="platform user ID"
+                />
+                <span class="muted">
+                  The numeric ID of an existing platform login
+                  account -- confirm it with the user directly,
+                  there's no user directory here.
+                </span>
+              </label>
+
+              <label>
+                Role
+                <input
+                  [(ngModel)]="operatorRole"
+                  placeholder="e.g. Cashier, Manager"
+                />
+              </label>
+
+              <div class="form-actions">
+                <button
+                  (click)="createOperator()"
+                  [disabled]="working()"
+                >
+                  Assign Operator
+                </button>
+              </div>
+            </div>
+          }
+
+          @if (operators().length === 0) {
+            <div class="empty-state">
+              No operators assigned.
+            </div>
+          } @else {
+            <div class="checklist">
+              @for (operator of operators(); track operator.id) {
+                <div
+                  class="checklist-item"
+                  [class.done]="operator.status === 'ACTIVE'"
+                  [class.rejected]="operator.status === 'SUSPENDED'"
+                >
+                  <span class="checklist-icon">
+                    {{
+                      operator.status === 'ACTIVE'
+                        ? '✓'
+                        : operator.status === 'SUSPENDED'
+                          ? '✕'
+                          : '•'
+                    }}
+                  </span>
+
+                  <span class="checklist-label">
+                    {{ operator.role }} (user #{{ operator.user_id }})
+                  </span>
+
+                  <span
+                    class="status-badge"
+                    [class]="
+                      operator.status === 'ACTIVE'
+                        ? 'status-active'
+                        : operator.status === 'SUSPENDED'
+                          ? 'status-danger'
+                          : 'status-pending'
+                    "
+                  >
+                    {{ displayStatus(operator.status) }}
+                  </span>
+
+                  <div class="checklist-actions">
+                    @if (operator.status !== 'ACTIVE') {
+                      <button
+                        class="btn-success"
+                        (click)="activateOperator(operator)"
+                        [disabled]="working()"
+                      >
+                        Activate
+                      </button>
+                    }
+
+                    @if (operator.status === 'ACTIVE') {
+                      <button
+                        class="btn-danger-outline"
+                        (click)="suspendOperator(operator)"
+                        [disabled]="working()"
+                      >
+                        Suspend
+                      </button>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          }
+        </section>
+
+        <!-- ===================================================== -->
+        <!-- AG-04/05: TERMINALS -->
+        <!-- ===================================================== -->
+
+        <section class="card">
+          <div class="section-header">
+            <div>
+              <h2>Terminals</h2>
+
+              <p>
+                POS/device registry and geo-fence status per
+                location.
+              </p>
+            </div>
+
+            <button
+              class="btn-outline"
+              (click)="toggleTerminalForm()"
+              [disabled]="working()"
+            >
+              {{
+                showTerminalForm()
+                  ? 'Cancel'
+                  : '+ Register Terminal'
+              }}
+            </button>
+          </div>
+
+          @if (showTerminalForm()) {
+            <div class="form-grid">
+              <label>
+                Location
+                <select [(ngModel)]="terminalLocationId">
+                  <option [ngValue]="null">
+                    — select a location —
+                  </option>
+                  @for (loc of locations(); track loc.id) {
+                    <option [ngValue]="loc.id">
+                      {{ loc.address_line_1 }}, {{ loc.city }}
+                    </option>
+                  }
+                </select>
+              </label>
+
+              <label>
+                Terminal ID
+                <input [(ngModel)]="terminalIdValue" />
+              </label>
+
+              <label>
+                Serial Number
+                <input [(ngModel)]="terminalSerialNumber" />
+              </label>
+
+              <label>
+                Device Model
+                <input [(ngModel)]="terminalDeviceModel" />
+              </label>
+
+              <label>
+                Provider
+                <input [(ngModel)]="terminalProvider" />
+              </label>
+
+              <label>
+                Registered Latitude
+                <input
+                  type="number"
+                  [(ngModel)]="terminalLatitude"
+                />
+              </label>
+
+              <label>
+                Registered Longitude
+                <input
+                  type="number"
+                  [(ngModel)]="terminalLongitude"
+                />
+              </label>
+
+              <div class="form-actions">
+                <button
+                  (click)="createTerminal()"
+                  [disabled]="working()"
+                >
+                  Register Terminal
+                </button>
+              </div>
+            </div>
+          }
+
+          @if (terminals().length === 0) {
+            <div class="empty-state">
+              No terminals registered.
+            </div>
+          } @else {
+            <div class="record-list">
+              @for (terminal of terminals(); track terminal.id) {
+                <div class="record-card">
+                  <div>
+                    <strong>{{ terminal.terminal_id }}</strong>
+
+                    <div class="muted">
+                      Serial: {{ terminal.serial_number }}
+                      @if (terminal.device_model) {
+                        · {{ terminal.device_model }}
+                      }
+                    </div>
+
+                    <div class="muted">
+                      Geo-fence radius:
+                      {{ terminal.geo_fence_radius_metres }}m
+                    </div>
+
+                    @if (terminal.last_ip_address) {
+                      <div class="muted">
+                        Last seen from IP
+                        {{ terminal.last_ip_address }}
+                        @if (terminal.ip_city) {
+                          ({{ terminal.ip_city }},
+                          {{ terminal.ip_state }},
+                          {{ terminal.ip_country }})
+                        }
+                        @if (terminal.ip_location_mismatch) {
+                          <span class="status-badge status-danger">
+                            IP location mismatch
+                          </span>
+                        }
+                      </div>
+                    } @else {
+                      <div class="muted">
+                        No IP location signal yet -- recorded on
+                        the terminal's next heartbeat.
+                      </div>
+                    }
+                  </div>
+
+                  <div class="record-meta">
+                    <span
+                      class="status-badge"
+                      [class]="
+                        terminal.status === 'ACTIVE'
+                          ? 'status-active'
+                          : terminal.status === 'SUSPENDED'
+                            ? 'status-danger'
+                            : 'status-pending'
+                      "
+                    >
+                      {{ displayStatus(terminal.status) }}
+                    </span>
+
+                    @if (terminal.status !== 'ACTIVE') {
+                      <button
+                        class="btn-success"
+                        (click)="activateTerminal(terminal)"
+                        [disabled]="working()"
+                      >
+                        Activate
+                      </button>
+                    }
+
+                    @if (terminal.status === 'ACTIVE') {
+                      <button
+                        class="btn-danger-outline"
+                        (click)="suspendTerminal(terminal)"
+                        [disabled]="working()"
+                      >
+                        Suspend
+                      </button>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          }
+        </section>
+
+        <!-- ===================================================== -->
+        <!-- AG-07/08/09: TRANSACTIONS -->
+        <!-- ===================================================== -->
+
+        <section class="card">
+          <div class="section-header">
+            <div>
+              <h2>Transactions</h2>
+
+              <p>
+                Cash-in, cash-out and transfer, routed through the
+                agent operation guard.
+              </p>
+            </div>
+
+            <button
+              class="btn-outline"
+              (click)="toggleTransactionForm()"
+              [disabled]="working()"
+            >
+              {{
+                showTransactionForm()
+                  ? 'Cancel'
+                  : '+ New Transaction'
+              }}
+            </button>
+          </div>
+
+          @if (showTransactionForm()) {
+            <div class="form-grid">
+              <label>
+                Type
+                <select [(ngModel)]="transactionType">
+                  <option value="CASH_IN">Cash-In</option>
+                  <option value="CASH_OUT">Cash-Out</option>
+                  <option value="TRANSFER">Transfer</option>
+                </select>
+              </label>
+
+              <label>
+                Operator
+                <select [(ngModel)]="txOperatorId">
+                  <option [ngValue]="null">
+                    — select an operator —
+                  </option>
+                  @for (op of operators(); track op.id) {
+                    <option [ngValue]="op.id">
+                      {{ op.role }} (user #{{ op.user_id }}) --
+                      {{ displayStatus(op.status) }}
+                    </option>
+                  }
+                </select>
+              </label>
+
+              <label>
+                Terminal
+                <select
+                  [(ngModel)]="txTerminalId"
+                  (ngModelChange)="onTransactionTerminalChange()"
+                >
+                  <option [ngValue]="null">
+                    — select a terminal —
+                  </option>
+                  @for (t of terminals(); track t.id) {
+                    <option [ngValue]="t.id">
+                      {{ t.terminal_id }} -- {{ displayStatus(t.status) }}
+                    </option>
+                  }
+                </select>
+              </label>
+
+              @if (transactionType === 'CASH_IN' || transactionType === 'CASH_OUT') {
+                <label>
+                  Customer Account ID
+                  <input
+                    type="number"
+                    [(ngModel)]="txCustomerAccountId"
+                  />
+                  <span class="muted">
+                    Numeric customer account ID from FINCORE360 --
+                    no lookup here yet.
+                  </span>
+                </label>
+              }
+
+              @if (transactionType === 'CASH_OUT') {
+                <label class="checkbox-field">
+                  <input
+                    type="checkbox"
+                    [(ngModel)]="txCustomerAuthenticated"
+                  />
+                  Customer authenticated
+                </label>
+              }
+
+              @if (transactionType === 'TRANSFER') {
+                <label>
+                  From Account ID
+                  <input
+                    type="number"
+                    [(ngModel)]="txFromAccountId"
+                  />
+                </label>
+
+                <label>
+                  To Account ID
+                  <input
+                    type="number"
+                    [(ngModel)]="txToAccountId"
+                  />
+                </label>
+              }
+
+              <label>
+                Amount
+                <input
+                  type="number"
+                  [(ngModel)]="txAmount"
+                />
+              </label>
+
+              <label>
+                Latitude
+                <input
+                  type="number"
+                  [(ngModel)]="txLatitude"
+                />
+                <span class="muted">
+                  Auto-filled from the selected terminal's
+                  registered position.
+                </span>
+              </label>
+
+              <label>
+                Longitude
+                <input
+                  type="number"
+                  [(ngModel)]="txLongitude"
+                />
+              </label>
+
+              <label>
+                Customer Reference
+                <input [(ngModel)]="txCustomerReference" />
+              </label>
+
+              <label class="full-width">
+                Narration
+                <input [(ngModel)]="txNarration" />
+              </label>
+
+              <div class="form-actions">
+                <button
+                  (click)="submitTransaction()"
+                  [disabled]="working()"
+                >
+                  {{
+                    working() ? 'Processing...' : 'Submit Transaction'
+                  }}
+                </button>
+              </div>
+            </div>
+          }
+
+          @if (transactions().length === 0) {
+            <div class="empty-state">
+              No transactions recorded.
+            </div>
+          } @else {
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Transaction No</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Amount</th>
+                    <th>Terminal</th>
+                    <th>Date</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  @for (tx of transactions(); track tx.id) {
+                    <tr>
+                      <td>{{ tx.transaction_no }}</td>
+                      <td>{{ displayStatus(tx.transaction_type) }}</td>
+                      <td>
+                        <span class="status-badge status-neutral">
+                          {{ displayStatus(tx.status) }}
+                        </span>
+                      </td>
+                      <td>{{ tx.amount }}</td>
+                      <td>{{ tx.terminal?.terminal_id ?? '—' }}</td>
+                      <td>{{ tx.transaction_date ?? tx.created_at ?? '—' }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </section>
+
+        <!-- ===================================================== -->
         <!-- AG-03 EXIT / AG-04 ENTRY -->
         <!-- ===================================================== -->
 
@@ -1496,9 +2199,19 @@ import {
               </h2>
 
               <p>
-                Training has been completed. Terminal controls
-                belong to the AG-04 workflow.
+                Training has been completed. Assign an active
+                operator and an active terminal above, then
+                activate the agent -- the server re-checks all of
+                agreement, training, location, operator and
+                terminal before allowing it.
               </p>
+
+              <button
+                (click)="activateAgent()"
+                [disabled]="working()"
+              >
+                Activate Agent
+              </button>
             </div>
           </section>
         }
@@ -2384,6 +3097,60 @@ export class AgentDetailComponent implements OnInit {
   signatureMethod: 'WET_SIGNATURE_UPLOAD' | 'E_SIGNATURE' =
     'WET_SIGNATURE_UPLOAD';
   signatureEvidencePath = '';
+  signatureEvidenceFileName = signal<string | null>(null);
+  uploadingEvidence = signal(false);
+
+  // ---------- Training (AG-04) ----------
+
+  trainingDocuments = signal<TrainingDocument[]>([]);
+  showTrainingDocumentForm = signal(false);
+  uploadingTrainingDocument = signal(false);
+
+  trainingDocumentName = '';
+  trainingDocumentVersion = '';
+  trainingDocumentFile: File | null = null;
+
+  selectedTrainingDocumentId: number | null = null;
+
+  // ---------- Operators (AG-04) ----------
+
+  operators = signal<AgentOperator[]>([]);
+  showOperatorForm = signal(false);
+
+  operatorLocationId: number | null = null;
+  operatorUserId: number | null = null;
+  operatorRole = '';
+
+  // ---------- Terminals (AG-04/05) ----------
+
+  terminals = signal<AgentTerminal[]>([]);
+  showTerminalForm = signal(false);
+
+  terminalLocationId: number | null = null;
+  terminalIdValue = '';
+  terminalSerialNumber = '';
+  terminalDeviceModel = '';
+  terminalProvider = '';
+  terminalLatitude: number | null = null;
+  terminalLongitude: number | null = null;
+
+  // ---------- Transactions (AG-07/08/09) ----------
+
+  transactions = signal<AgentTransaction[]>([]);
+  showTransactionForm = signal(false);
+  transactionType: AgentTransactionType = 'CASH_IN';
+
+  txOperatorId: number | null = null;
+  txTerminalId: number | null = null;
+  txCustomerAccountId: number | null = null;
+  txFromAccountId: number | null = null;
+  txToAccountId: number | null = null;
+  txAmount: number | null = null;
+  txCustomerAuthenticated = false;
+  txCustomerReference = '';
+  txNarration = '';
+  txLatitude: number | null = null;
+  txLongitude: number | null = null;
 
   // ---------- Lifecycle ----------
 
@@ -2488,6 +3255,18 @@ export class AgentDetailComponent implements OnInit {
 
       templates:
         this.api.listAgreementTemplates(),
+
+      trainingDocuments:
+        this.api.listTrainingDocuments(),
+
+      operators:
+        this.api.listOperators(this.agentId),
+
+      terminals:
+        this.api.listTerminals(this.agentId),
+
+      transactions:
+        this.api.listTransactions(this.agentId),
     }).subscribe({
       next: (result) => {
         this.agent.set(
@@ -2512,6 +3291,22 @@ export class AgentDetailComponent implements OnInit {
 
         this.templates.set(
           result.templates.data
+        );
+
+        this.trainingDocuments.set(
+          result.trainingDocuments.data
+        );
+
+        this.operators.set(
+          result.operators.data
+        );
+
+        this.terminals.set(
+          result.terminals.data
+        );
+
+        this.transactions.set(
+          result.transactions.data
         );
 
         this.loading.set(false);
@@ -3390,10 +4185,46 @@ export class AgentDetailComponent implements OnInit {
       });
   }
 
+  onSignatureEvidenceSelected(
+    event: Event,
+    agreement: AgentAgreement
+  ): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    this.uploadingEvidence.set(true);
+    this.error.set(null);
+
+    this.api
+      .uploadAgreementSignatureEvidence(
+        this.agentId,
+        agreement.id,
+        file
+      )
+      .subscribe({
+        next: (result) => {
+          this.signatureEvidencePath = result.data.path;
+          this.signatureEvidenceFileName.set(file.name);
+          this.uploadingEvidence.set(false);
+        },
+        error: (err) => {
+          this.error.set(
+            err?.error?.message ?? 'Failed to upload signature evidence.'
+          );
+          this.uploadingEvidence.set(false);
+          input.value = '';
+        },
+      });
+  }
+
   recordAgreementSignature(agreement: AgentAgreement): void {
     if (!this.signatoryName.trim() || !this.signatureEvidencePath.trim()) {
       this.error.set(
-        'Signatory name and signature evidence are required.'
+        'Signatory name and uploaded signature evidence are required.'
       );
 
       return;
@@ -3415,6 +4246,7 @@ export class AgentDetailComponent implements OnInit {
           this.signatoryName = '';
           this.signatoryTitle = '';
           this.signatureEvidencePath = '';
+          this.signatureEvidenceFileName.set(null);
           this.working.set(false);
           this.reload();
         },
@@ -3523,5 +4355,479 @@ export class AgentDetailComponent implements OnInit {
     this.agreementDisputeMethod = 'ARBITRATION';
     this.agreementSpecialConditions = '';
     this.agreementDocumentPath = '';
+  }
+
+  // ---------- AG-04: Training ----------
+
+  toggleTrainingDocumentForm(): void {
+    this.showTrainingDocumentForm.update(
+      (current) => !current
+    );
+  }
+
+  onTrainingDocumentFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.trainingDocumentFile = input.files?.[0] ?? null;
+  }
+
+  uploadTrainingDocument(): void {
+    if (
+      !this.trainingDocumentName.trim() ||
+      !this.trainingDocumentVersion.trim() ||
+      !this.trainingDocumentFile
+    ) {
+      this.error.set(
+        'Guide name, version and file are all required.'
+      );
+
+      return;
+    }
+
+    this.uploadingTrainingDocument.set(true);
+    this.error.set(null);
+
+    this.api
+      .createTrainingDocument(
+        this.trainingDocumentName.trim(),
+        this.trainingDocumentVersion.trim(),
+        this.trainingDocumentFile
+      )
+      .subscribe({
+        next: () => {
+          this.trainingDocumentName = '';
+          this.trainingDocumentVersion = '';
+          this.trainingDocumentFile = null;
+          this.showTrainingDocumentForm.set(false);
+          this.uploadingTrainingDocument.set(false);
+          this.reload();
+        },
+        error: (err) => {
+          this.error.set(
+            err?.error?.message ??
+              'Failed to upload training guide.'
+          );
+          this.uploadingTrainingDocument.set(false);
+        },
+      });
+  }
+
+  hasPendingTrainingRecord(): boolean {
+    return (
+      this.agent()?.training_records?.some(
+        (record) => !record.acknowledged_at
+      ) ?? false
+    );
+  }
+
+  recordTrainingDownload(): void {
+    if (!this.selectedTrainingDocumentId) {
+      this.error.set(
+        'Select a training guide to issue.'
+      );
+
+      return;
+    }
+
+    this.working.set(true);
+    this.error.set(null);
+
+    this.api
+      .recordTrainingDownload(
+        this.agentId,
+        this.selectedTrainingDocumentId
+      )
+      .subscribe({
+        next: () => {
+          this.selectedTrainingDocumentId = null;
+          this.working.set(false);
+          this.reload();
+        },
+        error: (err) => {
+          this.error.set(
+            err?.error?.message ??
+              'Failed to record training download.'
+          );
+          this.working.set(false);
+        },
+      });
+  }
+
+  acknowledgeTraining(record: AgentTrainingRecord): void {
+    this.working.set(true);
+    this.error.set(null);
+
+    this.api
+      .acknowledgeTraining(this.agentId, record.id)
+      .subscribe({
+        next: () => {
+          this.working.set(false);
+          this.reload();
+        },
+        error: (err) => {
+          this.error.set(
+            err?.error?.message ??
+              'Failed to acknowledge training.'
+          );
+          this.working.set(false);
+        },
+      });
+  }
+
+  // ---------- AG-04: Operators ----------
+
+  toggleOperatorForm(): void {
+    this.showOperatorForm.update(
+      (current) => !current
+    );
+  }
+
+  createOperator(): void {
+    if (
+      !this.operatorLocationId ||
+      !this.operatorUserId ||
+      !this.operatorRole.trim()
+    ) {
+      this.error.set(
+        'Location, user ID and role are all required.'
+      );
+
+      return;
+    }
+
+    this.working.set(true);
+    this.error.set(null);
+
+    this.api
+      .createOperator(this.agentId, {
+        agent_location_id: this.operatorLocationId,
+        user_id: this.operatorUserId,
+        role: this.operatorRole.trim(),
+      })
+      .subscribe({
+        next: () => {
+          this.operatorLocationId = null;
+          this.operatorUserId = null;
+          this.operatorRole = '';
+          this.showOperatorForm.set(false);
+          this.working.set(false);
+          this.reload();
+        },
+        error: (err) => {
+          this.error.set(
+            err?.error?.message ??
+              'Failed to assign operator.'
+          );
+          this.working.set(false);
+        },
+      });
+  }
+
+  activateOperator(operator: AgentOperator): void {
+    this.working.set(true);
+    this.error.set(null);
+
+    this.api
+      .activateOperator(operator.id)
+      .subscribe({
+        next: () => {
+          this.working.set(false);
+          this.reload();
+        },
+        error: (err) => {
+          this.error.set(
+            err?.error?.message ??
+              'Failed to activate operator.'
+          );
+          this.working.set(false);
+        },
+      });
+  }
+
+  suspendOperator(operator: AgentOperator): void {
+    this.working.set(true);
+    this.error.set(null);
+
+    this.api
+      .suspendOperator(operator.id)
+      .subscribe({
+        next: () => {
+          this.working.set(false);
+          this.reload();
+        },
+        error: (err) => {
+          this.error.set(
+            err?.error?.message ??
+              'Failed to suspend operator.'
+          );
+          this.working.set(false);
+        },
+      });
+  }
+
+  // ---------- AG-04/05: Terminals ----------
+
+  toggleTerminalForm(): void {
+    this.showTerminalForm.update(
+      (current) => !current
+    );
+  }
+
+  createTerminal(): void {
+    if (
+      !this.terminalLocationId ||
+      !this.terminalIdValue.trim() ||
+      !this.terminalSerialNumber.trim() ||
+      this.terminalLatitude === null ||
+      this.terminalLongitude === null
+    ) {
+      this.error.set(
+        'Location, terminal ID, serial number and GPS coordinates are all required.'
+      );
+
+      return;
+    }
+
+    this.working.set(true);
+    this.error.set(null);
+
+    this.api
+      .createTerminal({
+        agent_id: this.agentId,
+        agent_location_id: this.terminalLocationId,
+        terminal_id: this.terminalIdValue.trim(),
+        serial_number: this.terminalSerialNumber.trim(),
+        device_model: this.terminalDeviceModel.trim() || undefined,
+        provider: this.terminalProvider.trim() || undefined,
+        registered_latitude: this.terminalLatitude,
+        registered_longitude: this.terminalLongitude,
+      })
+      .subscribe({
+        next: () => {
+          this.terminalLocationId = null;
+          this.terminalIdValue = '';
+          this.terminalSerialNumber = '';
+          this.terminalDeviceModel = '';
+          this.terminalProvider = '';
+          this.terminalLatitude = null;
+          this.terminalLongitude = null;
+          this.showTerminalForm.set(false);
+          this.working.set(false);
+          this.reload();
+        },
+        error: (err) => {
+          this.error.set(
+            err?.error?.message ??
+              'Failed to register terminal.'
+          );
+          this.working.set(false);
+        },
+      });
+  }
+
+  activateTerminal(terminal: AgentTerminal): void {
+    this.working.set(true);
+    this.error.set(null);
+
+    this.api
+      .activateTerminal(terminal.id)
+      .subscribe({
+        next: () => {
+          this.working.set(false);
+          this.reload();
+        },
+        error: (err) => {
+          this.error.set(
+            err?.error?.message ??
+              'Failed to activate terminal.'
+          );
+          this.working.set(false);
+        },
+      });
+  }
+
+  suspendTerminal(terminal: AgentTerminal): void {
+    this.working.set(true);
+    this.error.set(null);
+
+    this.api
+      .suspendTerminal(terminal.id)
+      .subscribe({
+        next: () => {
+          this.working.set(false);
+          this.reload();
+        },
+        error: (err) => {
+          this.error.set(
+            err?.error?.message ??
+              'Failed to suspend terminal.'
+          );
+          this.working.set(false);
+        },
+      });
+  }
+
+  // ---------- AG-07/08/09: Transactions ----------
+
+  toggleTransactionForm(): void {
+    this.showTransactionForm.update(
+      (current) => !current
+    );
+  }
+
+  onTransactionTerminalChange(): void {
+    const terminal = this.terminals().find(
+      (t) => t.id === this.txTerminalId
+    );
+
+    if (terminal) {
+      this.txLatitude = Number(terminal.registered_latitude);
+      this.txLongitude = Number(terminal.registered_longitude);
+    }
+  }
+
+  submitTransaction(): void {
+    if (
+      !this.txOperatorId ||
+      !this.txTerminalId ||
+      !this.txAmount ||
+      this.txLatitude === null ||
+      this.txLongitude === null
+    ) {
+      this.error.set(
+        'Operator, terminal, amount and GPS coordinates are all required.'
+      );
+
+      return;
+    }
+
+    const idempotencyKey = crypto.randomUUID();
+
+    this.working.set(true);
+    this.error.set(null);
+
+    if (this.transactionType === 'CASH_IN') {
+      if (!this.txCustomerAccountId) {
+        this.error.set('Customer account is required.');
+        this.working.set(false);
+
+        return;
+      }
+
+      this.api
+        .cashIn(this.agentId, {
+          operator_id: this.txOperatorId,
+          terminal_id: this.txTerminalId,
+          customer_account_id: this.txCustomerAccountId,
+          amount: this.txAmount,
+          idempotency_key: idempotencyKey,
+          latitude: this.txLatitude,
+          longitude: this.txLongitude,
+          customer_reference: this.txCustomerReference.trim() || undefined,
+          narration: this.txNarration.trim() || undefined,
+        })
+        .subscribe(this.transactionObserver());
+
+      return;
+    }
+
+    if (this.transactionType === 'CASH_OUT') {
+      if (!this.txCustomerAccountId) {
+        this.error.set('Customer account is required.');
+        this.working.set(false);
+
+        return;
+      }
+
+      this.api
+        .cashOut(this.agentId, {
+          operator_id: this.txOperatorId,
+          terminal_id: this.txTerminalId,
+          customer_account_id: this.txCustomerAccountId,
+          amount: this.txAmount,
+          idempotency_key: idempotencyKey,
+          latitude: this.txLatitude,
+          longitude: this.txLongitude,
+          customer_authenticated: this.txCustomerAuthenticated,
+          customer_reference: this.txCustomerReference.trim() || undefined,
+          narration: this.txNarration.trim() || undefined,
+        })
+        .subscribe(this.transactionObserver());
+
+      return;
+    }
+
+    if (!this.txFromAccountId || !this.txToAccountId) {
+      this.error.set(
+        'Both the source and destination customer accounts are required.'
+      );
+      this.working.set(false);
+
+      return;
+    }
+
+    this.api
+      .transfer(this.agentId, {
+        operator_id: this.txOperatorId,
+        terminal_id: this.txTerminalId,
+        from_account_id: this.txFromAccountId,
+        to_account_id: this.txToAccountId,
+        amount: this.txAmount,
+        idempotency_key: idempotencyKey,
+        latitude: this.txLatitude,
+        longitude: this.txLongitude,
+        narration: this.txNarration.trim() || undefined,
+      })
+      .subscribe(this.transactionObserver());
+  }
+
+  private transactionObserver() {
+    return {
+      next: () => {
+        this.resetTransactionForm();
+        this.working.set(false);
+        this.reload();
+      },
+      error: (err: any) => {
+        this.error.set(
+          err?.error?.message ?? 'Transaction failed.'
+        );
+        this.working.set(false);
+      },
+    };
+  }
+
+  activateAgent(): void {
+    this.working.set(true);
+    this.error.set(null);
+
+    this.api
+      .activate(this.agentId)
+      .subscribe({
+        next: () => {
+          this.working.set(false);
+          this.reload();
+        },
+        error: (err) => {
+          this.error.set(
+            err?.error?.message ?? 'Failed to activate agent.'
+          );
+          this.working.set(false);
+        },
+      });
+  }
+
+  private resetTransactionForm(): void {
+    this.txOperatorId = null;
+    this.txTerminalId = null;
+    this.txCustomerAccountId = null;
+    this.txFromAccountId = null;
+    this.txToAccountId = null;
+    this.txAmount = null;
+    this.txCustomerAuthenticated = false;
+    this.txCustomerReference = '';
+    this.txNarration = '';
+    this.txLatitude = null;
+    this.txLongitude = null;
+    this.showTransactionForm.set(false);
   }
 }
