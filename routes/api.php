@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\BalancingController;
 use App\Http\Controllers\Api\BranchEodController;
 use App\Http\Controllers\Api\MerchantController;
 use App\Http\Controllers\Api\AgentController;
+use App\Http\Controllers\Api\AgentTransactionController;
 use App\Http\Controllers\Api\AgentAgreementTemplateController;
 use App\Http\Controllers\Api\TrainingDocumentController;
 use App\Http\Controllers\Api\WalletController;
@@ -363,7 +364,27 @@ Route::post(
 Route::post(
     '/agent-terminals/{terminal}/location-check',
     [AgentController::class, 'terminalLocationCheck']
+
 );
+
+// ---------- Agent operational transactions ----------
+
+Route::post(
+    '/agents/{agent}/transactions/cash-in',
+    [AgentTransactionController::class, 'cashIn']
+)->middleware('permission:agents.transactions.cash-in');
+
+Route::post(
+    '/agents/{agent}/transactions/cash-out',
+    [AgentTransactionController::class, 'cashOut']
+)->middleware('permission:agents.transactions.cash-out');
+
+Route::post(
+    '/agents/{agent}/transactions/transfer',
+    [AgentTransactionController::class, 'transfer']
+)->middleware('permission:agents.transactions.transfer');
+
+
 
         Route::get('/wallets', [WalletController::class, 'index']);
         Route::get('/wallets/{wallet}', [WalletController::class, 'show']);
