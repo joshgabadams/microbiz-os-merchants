@@ -90,7 +90,7 @@ public function agreements()
 public function activeAgreement()
 {
     return $this->hasOne(AgentAgreement::class)
-        ->where('status', 'ACTIVE')
+        ->where('status', 'EXECUTED')
         ->latestOfMany();
 }
 
