@@ -159,6 +159,7 @@ export interface Agent {
   activated_at: string | null;
   suspended_at: string | null;
   suspension_reason: string | null;
+  training_records?: AgentTrainingRecord[];
 }
 export type AgentLocationVerificationStatus =
   | 'PENDING'
@@ -311,6 +312,99 @@ export interface AgentDocument {
   created_at?: string;
   updated_at?: string;
 }
+export interface TrainingDocument {
+  id: number;
+  name: string;
+  version: string;
+  status: string;
+  file_path: string;
+  created_by: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface AgentTrainingRecord {
+  id: number;
+  agent_id: number;
+  operator_id?: number | null;
+  training_document_id: number;
+  training_document_version: string;
+  downloaded_at: string | null;
+  acknowledged_at: string | null;
+  acknowledged_by?: number | null;
+  recorded_by: number;
+  completion_method?: string | null;
+  training_document?: TrainingDocument;
+}
+
+export interface AgentOperator {
+  id: number;
+  agent_id: number;
+  agent_location_id: number;
+  user_id: number;
+  role: string;
+  status: 'PENDING' | 'ACTIVE' | 'SUSPENDED';
+  training_completed_at?: string | null;
+  activated_at?: string | null;
+  suspended_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface AgentTerminal {
+  id: number;
+  agent_id: number;
+  agent_location_id: number;
+  terminal_id: string;
+  serial_number: string;
+  device_model?: string | null;
+  provider?: string | null;
+  application_version?: string | null;
+  status: 'PENDING_ACTIVATION' | 'ACTIVE' | 'SUSPENDED';
+  registered_latitude: string | number;
+  registered_longitude: string | number;
+  geo_fence_radius_metres: number;
+  activated_at?: string | null;
+  last_heartbeat_at?: string | null;
+  last_transaction_at?: string | null;
+  geo_fence_compliant?: boolean | null;
+  last_ip_address?: string | null;
+  ip_city?: string | null;
+  ip_state?: string | null;
+  ip_country?: string | null;
+  ip_location_mismatch?: boolean | null;
+  ip_checked_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export type AgentTransactionType = 'CASH_IN' | 'CASH_OUT' | 'TRANSFER';
+
+export interface AgentTransaction {
+  id: number;
+  transaction_no: string;
+  idempotency_key: string;
+  agent_id: number;
+  agent_location_id?: number | null;
+  agent_terminal_id: number;
+  agent_operator_id: number;
+  transaction_type: AgentTransactionType;
+  status: string;
+  amount: string | number;
+  fee_amount?: string | number | null;
+  commission_amount?: string | number | null;
+  currency?: string;
+  customer_account_id: number;
+  customer_reference?: string | null;
+  latitude?: string | number | null;
+  longitude?: string | number | null;
+  geo_fence_passed?: boolean | null;
+  transaction_date?: string | null;
+  created_at?: string;
+  terminal?: AgentTerminal;
+  operator?: AgentOperator;
+}
+
 export interface Wallet {
   id: number;
   wallet_no: string;

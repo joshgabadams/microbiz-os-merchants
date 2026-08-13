@@ -13,13 +13,21 @@ import {
   AgentBeneficialOwner,
   AgentDocument,
   AgentLocation,
+  AgentOperator,
+  AgentTerminal,
+  AgentTransaction,
+  AgentTrainingRecord,
   AgentType,
   ApiResponse,
+  TrainingDocument,
 } from './models/api.models';
 
 @Injectable({ providedIn: 'root' })
 export class AgentApiService {
   private readonly base = `${environment.apiUrl}/v1/agents`;
+  private readonly trainingDocumentsBase = `${environment.apiUrl}/v1/training-documents`;
+  private readonly agentOperatorsBase = `${environment.apiUrl}/v1/agent-operators`;
+  private readonly agentTerminalsBase = `${environment.apiUrl}/v1/agent-terminals`;
 
   constructor(private http: HttpClient) {}
 
@@ -255,6 +263,62 @@ export class AgentApiService {
     );
   }
 
+  uploadAgreementSignatureEvidence(
+    agentId: number,
+    agreementId: number,
+    file: File
+  ): Observable<ApiResponse<{ path: string }>> {
+    const formData = new FormData();
+    formData.append('evidence', file);
+
+    return this.http.post<ApiResponse<{ path: string }>>(
+      `${this.base}/${agentId}/agreements/${agreementId}/signature-evidence`,
+      formData
+    );
+  }
+
+  listTrainingDocuments(): Observable<ApiResponse<TrainingDocument[]>> {
+    return this.http.get<ApiResponse<TrainingDocument[]>>(
+      this.trainingDocumentsBase
+    );
+  }
+
+  createTrainingDocument(
+    name: string,
+    version: string,
+    file: File
+  ): Observable<ApiResponse<TrainingDocument>> {
+    const formData = new FormData();
+    formData.append('name', name);
+    formData.append('version', version);
+    formData.append('file', file);
+
+    return this.http.post<ApiResponse<TrainingDocument>>(
+      this.trainingDocumentsBase,
+      formData
+    );
+  }
+
+  recordTrainingDownload(
+    agentId: number,
+    trainingDocumentId: number
+  ): Observable<ApiResponse<AgentTrainingRecord>> {
+    return this.http.post<ApiResponse<AgentTrainingRecord>>(
+      `${this.base}/${agentId}/training/download`,
+      { training_document_id: trainingDocumentId }
+    );
+  }
+
+  acknowledgeTraining(
+    agentId: number,
+    trainingRecordId: number
+  ): Observable<ApiResponse<AgentTrainingRecord>> {
+    return this.http.post<ApiResponse<AgentTrainingRecord>>(
+      `${this.base}/${agentId}/training/${trainingRecordId}/acknowledge`,
+      {}
+    );
+  }
+
   executeAgreement(
     agentId: number,
     agreementId: number
@@ -335,6 +399,164 @@ completeKyc(
   );
 }
 
+// ---------- AG-04: Operators ----------
+
+listOperators(
+  agentId: number
+): Observable<ApiResponse<AgentOperator[]>> {
+  return this.http.get<ApiResponse<AgentOperator[]>>(
+    `${this.base}/${agentId}/operators`
+  );
+}
+
+createOperator(
+  agentId: number,
+  payload: {
+    agent_location_id: number;
+    user_id: number;
+    role: string;
+  }
+): Observable<ApiResponse<AgentOperator>> {
+  return this.http.post<ApiResponse<AgentOperator>>(
+    `${this.base}/${agentId}/operators`,
+    payload
+  );
+}
+
+activateOperator(
+  operatorId: number
+): Observable<ApiResponse<AgentOperator>> {
+  return this.http.post<ApiResponse<AgentOperator>>(
+    `${this.agentOperatorsBase}/${operatorId}/activate`,
+    {}
+  );
+}
+
+suspendOperator(
+  operatorId: number
+): Observable<ApiResponse<AgentOperator>> {
+  return this.http.post<ApiResponse<AgentOperator>>(
+    `${this.agentOperatorsBase}/${operatorId}/suspend`,
+    {}
+  );
+}
+
+// ---------- AG-04/05: Terminals & Geo-Fence ----------
+
+listTerminals(
+  agentId: number
+): Observable<ApiResponse<AgentTerminal[]>> {
+  return this.http.get<ApiResponse<AgentTerminal[]>>(
+    `${this.base}/${agentId}/terminals`
+  );
+}
+
+createTerminal(payload: {
+  agent_id: number;
+  agent_location_id: number;
+  terminal_id: string;
+  serial_number: string;
+  device_model?: string;
+  provider?: string;
+  application_version?: string;
+  registered_latitude: number;
+  registered_longitude: number;
+  geo_fence_radius_metres?: number;
+}): Observable<ApiResponse<AgentTerminal>> {
+  return this.http.post<ApiResponse<AgentTerminal>>(
+    this.agentTerminalsBase,
+    payload
+  );
+}
+
+activateTerminal(
+  terminalId: number
+): Observable<ApiResponse<AgentTerminal>> {
+  return this.http.post<ApiResponse<AgentTerminal>>(
+    `${this.agentTerminalsBase}/${terminalId}/activate`,
+    {}
+  );
+}
+
+suspendTerminal(
+  terminalId: number
+): Observable<ApiResponse<AgentTerminal>> {
+  return this.http.post<ApiResponse<AgentTerminal>>(
+    `${this.agentTerminalsBase}/${terminalId}/suspend`,
+    {}
+  );
+}
+
+// ---------- AG-07/08/09: Operational Transactions ----------
+
+listTransactions(
+  agentId: number
+): Observable<ApiResponse<AgentTransaction[]>> {
+  return this.http.get<ApiResponse<AgentTransaction[]>>(
+    `${this.base}/${agentId}/transactions`
+  );
+}
+
+cashIn(
+  agentId: number,
+  payload: {
+    operator_id: number;
+    terminal_id: number;
+    customer_account_id: number;
+    amount: number;
+    idempotency_key: string;
+    latitude: number;
+    longitude: number;
+    customer_reference?: string;
+    narration?: string;
+  }
+): Observable<ApiResponse<AgentTransaction>> {
+  return this.http.post<ApiResponse<AgentTransaction>>(
+    `${this.base}/${agentId}/transactions/cash-in`,
+    payload
+  );
+}
+
+cashOut(
+  agentId: number,
+  payload: {
+    operator_id: number;
+    terminal_id: number;
+    customer_account_id: number;
+    amount: number;
+    idempotency_key: string;
+    latitude: number;
+    longitude: number;
+    customer_authenticated: boolean;
+    customer_reference?: string;
+    narration?: string;
+  }
+): Observable<ApiResponse<AgentTransaction>> {
+  return this.http.post<ApiResponse<AgentTransaction>>(
+    `${this.base}/${agentId}/transactions/cash-out`,
+    payload
+  );
+}
+
+transfer(
+  agentId: number,
+  payload: {
+    operator_id: number;
+    terminal_id: number;
+    from_account_id: number;
+    to_account_id: number;
+    amount: number;
+    idempotency_key: string;
+    latitude: number;
+    longitude: number;
+    narration?: string;
+  }
+): Observable<ApiResponse<AgentTransaction>> {
+  return this.http.post<ApiResponse<AgentTransaction>>(
+    `${this.base}/${agentId}/transactions/transfer`,
+    payload
+  );
+}
 
 
 }
