@@ -1021,6 +1021,7 @@ import {
               'AGREEMENT_PENDING'
             ) {
               <button
+                [class.btn-outline]="showAgreementForm()"
                 (click)="toggleAgreementForm()"
                 [disabled]="working()"
               >
@@ -1212,17 +1213,9 @@ import {
                       <td>
                         <span
                           class="status-badge"
-                          [class]="
-                            agreement.status === 'EXECUTED'
-                              ? 'status-active'
-                              : agreement.status === 'REJECTED'
-                                ? 'status-danger'
-                                : agreement.status === 'DRAFT'
-                                  ? 'status-pending'
-                                  : 'status-neutral'
-                          "
+                          [class]="agreementStatusClass(agreement.status)"
                         >
-                          {{ agreement.status }}
+                          {{ displayStatus(agreement.status) }}
                         </span>
                       </td>
 
@@ -1249,6 +1242,7 @@ import {
 
                       <td>
                         <button
+                          class="btn-outline"
                           (click)="toggleAgreementExpanded(agreement.id)"
                         >
                           {{
@@ -1276,12 +1270,30 @@ import {
                             @if (agreement.status === 'PENDING_INTERNAL_REVIEW') {
                               <h4>Internal Approvals</h4>
 
-                              <div class="approval-grid">
+                              <div class="checklist">
                                 @for (
                                   type of approvalTypes;
                                   track type
                                 ) {
-                                  <div class="approval-row">
+                                  <div
+                                    class="checklist-item"
+                                    [class.done]="approvalStatus(agreement, type) === 'APPROVED'"
+                                    [class.rejected]="approvalStatus(agreement, type) === 'REJECTED'"
+                                  >
+                                    <span class="checklist-icon">
+                                      {{
+                                        approvalStatus(agreement, type) === 'APPROVED'
+                                          ? '✓'
+                                          : approvalStatus(agreement, type) === 'REJECTED'
+                                            ? '✕'
+                                            : '•'
+                                      }}
+                                    </span>
+
+                                    <span class="checklist-label">
+                                      {{ displayStatus(type) }}
+                                    </span>
+
                                     <span
                                       class="status-badge"
                                       [class]="
@@ -1292,27 +1304,31 @@ import {
                                             : 'status-pending'
                                       "
                                     >
-                                      {{ type }}: {{ approvalStatus(agreement, type) }}
+                                      {{ displayStatus(approvalStatus(agreement, type)) }}
                                     </span>
 
                                     @if (approvalStatus(agreement, type) === 'PENDING') {
-                                      <input
-                                        class="notes-input"
-                                        placeholder="Notes (optional)"
-                                        [(ngModel)]="approvalNotes[type]"
-                                      />
-                                      <button
-                                        (click)="recordApproval(agreement, type, 'APPROVED')"
-                                        [disabled]="working()"
-                                      >
-                                        Approve
-                                      </button>
-                                      <button
-                                        (click)="recordApproval(agreement, type, 'REJECTED')"
-                                        [disabled]="working()"
-                                      >
-                                        Reject
-                                      </button>
+                                      <div class="checklist-actions">
+                                        <input
+                                          class="notes-input"
+                                          placeholder="Notes (optional)"
+                                          [(ngModel)]="approvalNotes[type]"
+                                        />
+                                        <button
+                                          class="btn-success"
+                                          (click)="recordApproval(agreement, type, 'APPROVED')"
+                                          [disabled]="working()"
+                                        >
+                                          Approve
+                                        </button>
+                                        <button
+                                          class="btn-danger-outline"
+                                          (click)="recordApproval(agreement, type, 'REJECTED')"
+                                          [disabled]="working()"
+                                        >
+                                          Reject
+                                        </button>
+                                      </div>
                                     }
                                   </div>
                                 }
@@ -1331,16 +1347,27 @@ import {
                             @if (agreement.status === 'AWAITING_SIGNATURES') {
                               <h4>Signatures</h4>
 
-                              <div class="approval-grid">
+                              <div class="checklist">
                                 @for (party of signatoryParties; track party) {
-                                  <div class="approval-row">
+                                  <div
+                                    class="checklist-item"
+                                    [class.done]="signatoryFor(agreement, party)"
+                                  >
+                                    <span class="checklist-icon">
+                                      {{ signatoryFor(agreement, party) ? '✓' : '•' }}
+                                    </span>
+
+                                    <span class="checklist-label">
+                                      {{ displayStatus(party) }}
+                                    </span>
+
                                     @if (signatoryFor(agreement, party); as sig) {
                                       <span class="status-badge status-active">
-                                        {{ party }} signed by {{ sig.signatory_name }}
+                                        Signed by {{ sig.signatory_name }}
                                       </span>
                                     } @else {
                                       <span class="status-badge status-pending">
-                                        {{ party }}: not yet signed
+                                        Not yet signed
                                       </span>
                                     }
                                   </div>
@@ -1381,16 +1408,18 @@ import {
                                 </label>
                                 <div class="form-actions">
                                   <button
+                                    class="btn-outline"
                                     (click)="recordAgreementSignature(agreement)"
                                     [disabled]="working()"
                                   >
                                     Record Signature
                                   </button>
                                   <button
+                                    class="btn-success"
                                     (click)="executeAgreement(agreement)"
                                     [disabled]="working()"
                                   >
-                                    Execute
+                                    Execute Agreement
                                   </button>
                                 </div>
                               </div>
@@ -1407,6 +1436,14 @@ import {
                               <div class="empty-state">
                                 This agreement draft was rejected during
                                 internal review.
+                              </div>
+                            }
+
+                            @if (agreement.status === 'SUPERSEDED') {
+                              <div class="empty-state">
+                                This version was replaced by a later
+                                executed agreement and is kept for record
+                                only.
                               </div>
                             }
                           </div>
@@ -1488,6 +1525,8 @@ import {
   styles: [`
     :host {
       display: block;
+      font-family: var(--font-sans);
+      color: var(--color-foreground);
     }
 
     .page {
@@ -1498,74 +1537,83 @@ import {
     .page-header {
       display: flex;
       justify-content: space-between;
-      gap: 20px;
+      gap: var(--space-5);
       align-items: flex-start;
-      margin-bottom: 22px;
+      margin-bottom: var(--space-5);
     }
 
     h1 {
       margin: 6px 0 4px;
-      font-size: 1.7rem;
-      color: #1e2761;
+      font-size: var(--font-size-2xl);
+      font-weight: 700;
+      color: var(--color-primary);
     }
 
     h2 {
       margin: 0 0 8px;
-      font-size: 1.05rem;
-      color: #1e2761;
+      font-size: var(--font-size-lg);
+      font-weight: 600;
+      color: var(--color-primary);
     }
 
     h3 {
       margin: 0 0 5px;
-      color: #1e2761;
-      font-size: 0.95rem;
+      color: var(--color-primary);
+      font-size: var(--font-size-base);
+      font-weight: 600;
     }
 
     p {
-      line-height: 1.5;
+      line-height: var(--line-height-base);
     }
 
     .back-link {
       text-decoration: none;
-      color: #1e2761;
-      font-size: 0.9rem;
+      color: var(--color-primary);
+      font-size: var(--font-size-sm);
+      font-weight: 500;
+    }
+
+    .back-link:hover {
+      text-decoration: underline;
     }
 
     .agent-meta {
       display: flex;
       flex-wrap: wrap;
-      gap: 8px;
-      color: #666;
-      font-size: 0.88rem;
+      gap: var(--space-2);
+      color: var(--color-muted);
+      font-size: var(--font-size-sm);
     }
 
     .card {
-      background: white;
-      border: 1px solid #e1e5ee;
-      border-radius: 10px;
-      padding: 18px;
-      margin-bottom: 18px;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+      padding: var(--space-5);
+      margin-bottom: var(--space-4);
     }
 
     .section-header {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      gap: 16px;
-      margin-bottom: 14px;
+      gap: var(--space-4);
+      margin-bottom: var(--space-4);
     }
 
     .section-header p {
       margin: 0;
-      color: #666;
-      font-size: 0.87rem;
+      color: var(--color-muted);
+      font-size: var(--font-size-sm);
     }
 
     .details-grid {
       display: grid;
       grid-template-columns:
         repeat(auto-fit, minmax(180px, 1fr));
-      gap: 16px;
+      gap: var(--space-4);
     }
 
     .details-grid > div {
@@ -1575,8 +1623,10 @@ import {
     }
 
     .label {
-      font-size: 0.78rem;
-      color: #777;
+      font-size: var(--font-size-xs);
+      color: var(--color-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
     }
 
     /* ---------- Lifecycle ---------- */
@@ -1585,33 +1635,34 @@ import {
       display: grid;
       grid-template-columns:
         repeat(auto-fit, minmax(190px, 1fr));
-      gap: 12px;
+      gap: var(--space-3);
     }
 
     .lifecycle-step {
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      padding: 12px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: var(--space-3);
       display: flex;
-      gap: 10px;
+      gap: var(--space-2);
       min-width: 0;
-      font-size: 0.78rem;
-      color: #777;
-      background: #fafafa;
+      font-size: var(--font-size-xs);
+      color: var(--color-muted);
+      background: var(--color-background);
+      transition: background var(--transition-fast), border-color var(--transition-fast);
     }
 
     .lifecycle-step.complete {
-      background: #e7f6ec;
-      border-color: #b9dfc7;
-      color: #26623c;
+      background: var(--color-success-bg);
+      border-color: var(--color-success);
+      color: var(--color-success);
     }
 
     .lifecycle-step.current {
-      background: #fff3d5;
-      border-color: #eccb77;
-      color: #795900;
+      background: var(--color-warning-bg);
+      border-color: var(--color-warning);
+      color: var(--color-warning);
       box-shadow:
-        0 0 0 1px rgba(236, 203, 119, 0.2);
+        0 0 0 1px rgba(146, 64, 14, 0.15);
     }
 
     .step-dot {
@@ -1627,6 +1678,7 @@ import {
     .step-content strong {
       display: block;
       margin-bottom: 4px;
+      color: var(--color-foreground);
     }
 
     .step-status {
@@ -1640,61 +1692,79 @@ import {
 
     .status-badge {
       display: inline-block;
-      font-size: 0.76rem;
-      padding: 5px 10px;
-      border-radius: 14px;
+      font-size: var(--font-size-xs);
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 999px;
       white-space: nowrap;
     }
 
     .status-active {
-      background: #d7f0dd;
-      color: #1f6f5c;
+      background: var(--color-success-bg);
+      color: var(--color-success);
     }
 
     .status-pending {
-      background: #fbe9c9;
-      color: #8a5d00;
+      background: var(--color-warning-bg);
+      color: var(--color-warning);
+    }
+
+    .status-info {
+      background: var(--color-info-bg);
+      color: var(--color-info);
     }
 
     .status-danger {
-      background: #f6d9d5;
-      color: #a6432f;
+      background: var(--color-danger-bg);
+      color: var(--color-danger);
     }
 
     .status-neutral {
-      background: #eef1f8;
-      color: #4d5875;
+      background: var(--color-muted-bg);
+      color: var(--color-muted);
     }
 
     /* ---------- Forms ---------- */
 
     .form-grid {
-      margin: 15px 0;
+      margin: var(--space-4) 0;
       display: grid;
       grid-template-columns:
         repeat(auto-fit, minmax(200px, 1fr));
-      gap: 12px;
-      padding: 14px;
-      background: #f8f9fc;
-      border-radius: 8px;
+      gap: var(--space-3);
+      padding: var(--space-4);
+      background: var(--color-background);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
     }
 
     .form-grid label {
       display: flex;
       flex-direction: column;
       gap: 5px;
-      font-size: 0.8rem;
-      color: #555;
+      font-size: var(--font-size-sm);
+      font-weight: 500;
+      color: var(--color-foreground);
     }
 
     .form-grid input,
-    .form-grid select {
+    .form-grid select,
+    .form-grid textarea {
       box-sizing: border-box;
       width: 100%;
       padding: 8px 10px;
-      border: 1px solid #ccc;
-      border-radius: 5px;
-      background: white;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-sm);
+      background: var(--color-surface);
+      font-size: var(--font-size-sm);
+      color: var(--color-foreground);
+      transition: border-color var(--transition-fast);
+    }
+
+    .form-grid input:focus-visible,
+    .form-grid select:focus-visible,
+    .form-grid textarea:focus-visible {
+      border-color: var(--color-primary);
     }
 
     .full-width {
@@ -1703,6 +1773,8 @@ import {
 
     .form-actions {
       grid-column: 1 / -1;
+      display: flex;
+      gap: var(--space-2);
     }
 
     .checkbox-field {
@@ -1716,12 +1788,19 @@ import {
     }
 
     button {
-      padding: 7px 12px;
-      border: 0;
-      border-radius: 5px;
-      background: #1e2761;
-      color: white;
+      padding: 8px 14px;
+      border: 1px solid transparent;
+      border-radius: var(--radius-sm);
+      background: var(--color-primary);
+      color: var(--color-on-primary);
+      font-size: var(--font-size-sm);
+      font-weight: 600;
       cursor: pointer;
+      transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+    }
+
+    button:hover:not(:disabled) {
+      background: var(--color-primary-hover);
     }
 
     button:disabled {
@@ -1730,38 +1809,69 @@ import {
     }
 
     button.danger {
-      background: #a6432f;
+      background: var(--color-danger);
+    }
+
+    button.btn-outline {
+      background: transparent;
+      border-color: var(--color-border);
+      color: var(--color-foreground);
+    }
+
+    button.btn-outline:hover:not(:disabled) {
+      background: var(--color-muted-bg);
+      border-color: var(--color-muted);
+    }
+
+    button.btn-danger-outline {
+      background: transparent;
+      border-color: var(--color-danger-bg);
+      color: var(--color-danger);
+    }
+
+    button.btn-danger-outline:hover:not(:disabled) {
+      background: var(--color-danger-bg);
+      border-color: var(--color-danger);
+    }
+
+    button.btn-success {
+      background: var(--color-success);
+    }
+
+    button.btn-success:hover:not(:disabled) {
+      background: var(--color-success);
+      filter: brightness(0.92);
     }
 
     .actions {
       display: flex;
       flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 12px;
+      gap: var(--space-2);
+      margin-top: var(--space-3);
     }
 
     /* ---------- Workflow ---------- */
 
     .action-card {
-      border-left: 4px solid #1e2761;
+      border-left: 4px solid var(--color-primary);
     }
 
     .pending-card {
-      border-left: 4px solid #d0a22c;
-      background: #fffdf7;
+      border-left: 4px solid var(--color-accent);
+      background: var(--color-warning-bg);
     }
 
     .action-heading {
       display: flex;
-      gap: 12px;
+      gap: var(--space-3);
       align-items: flex-start;
-      margin-bottom: 12px;
+      margin-bottom: var(--space-3);
     }
 
     .action-heading p {
       margin: 0;
-      color: #666;
-      font-size: 0.88rem;
+      color: var(--color-muted);
+      font-size: var(--font-size-sm);
     }
 
     .action-number {
@@ -1769,12 +1879,12 @@ import {
       height: 28px;
       flex: 0 0 28px;
       border-radius: 50%;
-      background: #1e2761;
-      color: white;
+      background: var(--color-primary);
+      color: var(--color-on-primary);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 0.8rem;
+      font-size: var(--font-size-xs);
       font-weight: 600;
     }
 
@@ -1784,50 +1894,50 @@ import {
       display: grid;
       grid-template-columns:
         repeat(auto-fit, minmax(220px, 1fr));
-      gap: 10px;
-      margin: 15px 0 20px;
+      gap: var(--space-2);
+      margin: var(--space-4) 0 var(--space-5);
     }
 
     .readiness-item {
-      border: 1px solid #e1e5ee;
-      border-radius: 8px;
-      padding: 12px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: var(--space-3);
       display: flex;
       flex-direction: column;
       gap: 4px;
-      color: #777;
-      background: white;
+      color: var(--color-muted);
+      background: var(--color-surface);
     }
 
     .readiness-item.ready {
-      background: #e7f6ec;
-      border-color: #b9dfc7;
-      color: #26623c;
+      background: var(--color-success-bg);
+      border-color: var(--color-success);
+      color: var(--color-success);
     }
 
     .readiness-item span {
-      font-size: 0.78rem;
+      font-size: var(--font-size-xs);
     }
 
     .kyc-section {
-      border-top: 1px solid #eee;
-      padding-top: 18px;
-      margin-top: 18px;
+      border-top: 1px solid var(--color-border);
+      padding-top: var(--space-4);
+      margin-top: var(--space-4);
     }
 
     .record-list {
       display: grid;
-      gap: 10px;
+      gap: var(--space-2);
     }
 
     .record-card {
-      border: 1px solid #e1e5ee;
-      border-radius: 8px;
-      padding: 12px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: var(--space-3);
       display: flex;
       justify-content: space-between;
-      gap: 14px;
-      background: white;
+      gap: var(--space-3);
+      background: var(--color-surface);
     }
 
     .record-meta {
@@ -1836,98 +1946,100 @@ import {
       justify-content: flex-end;
       align-items: center;
       gap: 6px;
-      font-size: 0.78rem;
+      font-size: var(--font-size-xs);
     }
 
     .meta-pill,
     .warning-pill,
     .danger-pill {
-      border-radius: 12px;
-      padding: 3px 7px;
-      font-size: 0.72rem;
+      border-radius: 999px;
+      padding: 3px 8px;
+      font-size: var(--font-size-xs);
+      font-weight: 600;
     }
 
     .meta-pill {
-      background: #eef1f8;
-      color: #4d5875;
+      background: var(--color-muted-bg);
+      color: var(--color-muted);
     }
 
     .warning-pill {
-      background: #fff3d5;
-      color: #795900;
+      background: var(--color-warning-bg);
+      color: var(--color-warning);
     }
 
     .danger-pill {
-      background: #f6d9d5;
-      color: #a6432f;
+      background: var(--color-danger-bg);
+      color: var(--color-danger);
     }
 
     .kyc-completion {
-      margin-top: 20px;
-      border-top: 1px solid #eee;
-      padding-top: 18px;
+      margin-top: var(--space-5);
+      border-top: 1px solid var(--color-border);
+      padding-top: var(--space-4);
       display: flex;
       justify-content: space-between;
       align-items: center;
-      gap: 15px;
+      gap: var(--space-4);
     }
 
     .kyc-completion p {
       margin: 4px 0 0;
-      color: #666;
-      font-size: 0.84rem;
+      color: var(--color-muted);
+      font-size: var(--font-size-sm);
     }
 
     /* ---------- Locations ---------- */
 
     .location-list {
       display: grid;
-      gap: 10px;
+      gap: var(--space-2);
     }
 
     .location-card {
-      border: 1px solid #e1e5ee;
-      border-radius: 8px;
-      padding: 13px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: var(--space-3);
     }
 
     .location-top {
       display: flex;
       justify-content: space-between;
-      gap: 15px;
+      gap: var(--space-4);
     }
 
     .location-details {
-      margin-top: 8px;
+      margin-top: var(--space-2);
       display: flex;
       flex-wrap: wrap;
-      gap: 14px;
-      color: #666;
-      font-size: 0.8rem;
+      gap: var(--space-4);
+      color: var(--color-muted);
+      font-size: var(--font-size-sm);
     }
 
     .verification-notes {
-      margin-top: 10px;
+      margin-top: var(--space-2);
       padding: 8px 10px;
-      border-radius: 5px;
-      background: #f8f9fc;
-      color: #555;
-      font-size: 0.8rem;
+      border-radius: var(--radius-sm);
+      background: var(--color-background);
+      color: var(--color-foreground);
+      font-size: var(--font-size-sm);
     }
 
     .muted {
-      color: #777;
-      font-size: 0.82rem;
+      color: var(--color-muted);
+      font-size: var(--font-size-sm);
       margin-top: 2px;
     }
 
     .empty-state {
-      padding: 14px;
-      border: 1px dashed #ccd3e5;
-      border-radius: 7px;
-      color: #777;
-      background: #fafbfe;
-      font-size: 0.85rem;
+      padding: var(--space-4);
+      border: 1px dashed var(--color-border);
+      border-radius: var(--radius-md);
+      color: var(--color-muted);
+      background: var(--color-background);
+      font-size: var(--font-size-sm);
+      text-align: center;
     }
 
     /* ---------- Agreements ---------- */
@@ -1944,40 +2056,46 @@ import {
 
     th,
     td {
-      padding: 9px;
-      border-bottom: 1px solid #eee;
+      padding: var(--space-2) var(--space-2);
+      border-bottom: 1px solid var(--color-border);
       text-align: left;
-      font-size: 0.83rem;
+      font-size: var(--font-size-sm);
       white-space: nowrap;
     }
 
     th {
-      color: #555;
-      background: #fafbfe;
+      color: var(--color-muted);
+      background: var(--color-background);
+      font-size: var(--font-size-xs);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
     }
 
     /* ---------- Agreement workflow ---------- */
 
     .schedule-block {
-      border: 1px solid #e3e7f1;
-      border-radius: 8px;
-      padding: 12px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: var(--space-3);
       margin-top: 6px;
+      background: var(--color-surface);
     }
 
     .schedule-block h4 {
       margin: 0 0 10px;
-      font-size: 0.85rem;
-      color: #4d5875;
+      font-size: var(--font-size-sm);
+      font-weight: 600;
+      color: var(--color-foreground);
     }
 
     .service-row {
       display: flex;
       flex-wrap: wrap;
-      gap: 12px;
+      gap: var(--space-3);
       align-items: flex-end;
-      padding: 8px 0;
-      border-top: 1px solid #f0f2f8;
+      padding: var(--space-2) 0;
+      border-top: 1px solid var(--color-border);
     }
 
     .service-row:first-of-type {
@@ -1985,8 +2103,8 @@ import {
     }
 
     .service-row label {
-      font-size: 0.78rem;
-      color: #555;
+      font-size: var(--font-size-xs);
+      color: var(--color-muted);
       display: flex;
       flex-direction: column;
       gap: 3px;
@@ -2003,58 +2121,118 @@ import {
     }
 
     .expanded-row td {
-      background: #fafbfe;
-      padding: 14px;
+      background: var(--color-background);
+      padding: var(--space-4);
     }
 
     .agreement-detail h4 {
-      margin: 10px 0 8px;
-      font-size: 0.85rem;
-      color: #4d5875;
+      margin: var(--space-2) 0 var(--space-2);
+      font-size: var(--font-size-sm);
+      font-weight: 600;
+      color: var(--color-foreground);
     }
 
-    .approval-grid {
+    .checklist {
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      margin-bottom: 10px;
+      gap: var(--space-2);
+      margin-bottom: var(--space-3);
     }
 
-    .approval-row {
+    .checklist-item {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: var(--space-3);
+      flex-wrap: wrap;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: var(--space-2) var(--space-3);
+      background: var(--color-surface);
+    }
+
+    .checklist-item.done {
+      border-color: var(--color-success);
+      background: var(--color-success-bg);
+    }
+
+    .checklist-item.rejected {
+      border-color: var(--color-danger);
+      background: var(--color-danger-bg);
+    }
+
+    .checklist-icon {
+      width: 22px;
+      height: 22px;
+      flex: 0 0 22px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: var(--font-size-xs);
+      font-weight: 700;
+      background: var(--color-muted-bg);
+      color: var(--color-muted);
+    }
+
+    .checklist-item.done .checklist-icon {
+      background: var(--color-success);
+      color: var(--color-on-primary);
+    }
+
+    .checklist-item.rejected .checklist-icon {
+      background: var(--color-danger);
+      color: var(--color-on-primary);
+    }
+
+    .checklist-label {
+      font-size: var(--font-size-sm);
+      font-weight: 600;
+      color: var(--color-foreground);
+      flex: 1 1 auto;
+      min-width: 140px;
+    }
+
+    .checklist-actions {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
       flex-wrap: wrap;
     }
 
     .notes-input {
       flex: 1;
       min-width: 160px;
+      padding: 6px 10px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-sm);
+      font-size: var(--font-size-sm);
+      background: var(--color-surface);
     }
 
     /* ---------- General ---------- */
 
     .error-box {
-      padding: 12px;
-      background: #f6d9d5;
-      color: #a6432f;
-      border-radius: 7px;
-      margin-bottom: 15px;
+      padding: var(--space-3);
+      background: var(--color-danger-bg);
+      color: var(--color-danger);
+      border-radius: var(--radius-md);
+      margin-bottom: var(--space-4);
+      font-size: var(--font-size-sm);
     }
 
     .next-stage {
-      background: #eef3ff;
-      border-color: #bcccf2;
+      background: var(--color-info-bg);
+      border-color: var(--color-info);
       display: flex;
-      gap: 14px;
+      gap: var(--space-4);
       align-items: flex-start;
     }
 
     .active-card {
-      background: #e7f6ec;
-      border-color: #b9dfc7;
+      background: var(--color-success-bg);
+      border-color: var(--color-success);
       display: flex;
-      gap: 14px;
+      gap: var(--space-4);
       align-items: flex-start;
     }
 
@@ -2063,8 +2241,8 @@ import {
       height: 34px;
       flex: 0 0 34px;
       border-radius: 50%;
-      background: #1f6f5c;
-      color: white;
+      background: var(--color-success);
+      color: var(--color-on-primary);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -2090,6 +2268,11 @@ import {
 
       .lifecycle {
         grid-template-columns: 1fr;
+      }
+
+      .checklist-item {
+        flex-direction: column;
+        align-items: flex-start;
       }
     }
   `],
@@ -2388,6 +2571,32 @@ export class AgentDetailComponent implements OnInit {
       status === 'TERMINAL_PENDING'
     ) {
       return 'status-pending';
+    }
+
+    return 'status-neutral';
+  }
+
+  agreementStatusClass(status: string): string {
+    if (status === 'EXECUTED') {
+      return 'status-active';
+    }
+
+    if (status === 'REJECTED') {
+      return 'status-danger';
+    }
+
+    if (
+      status === 'DRAFT' ||
+      status === 'PENDING_INTERNAL_REVIEW'
+    ) {
+      return 'status-pending';
+    }
+
+    if (
+      status === 'APPROVED_FOR_EXECUTION' ||
+      status === 'AWAITING_SIGNATURES'
+    ) {
+      return 'status-info';
     }
 
     return 'status-neutral';
