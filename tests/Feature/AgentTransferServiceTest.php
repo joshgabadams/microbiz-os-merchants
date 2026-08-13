@@ -14,6 +14,7 @@ use App\Models\CustomerAccount;
 use App\Models\CustomerAccountBalance;
 use App\Models\GlJournal;
 use App\Models\User;
+use App\Services\Branch\BranchBusinessDayService;
 use App\Services\Payments\AgentTransferService;
 use Database\Seeders\GlAccountSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -42,6 +43,12 @@ class AgentTransferServiceTest extends TestCase
     {
         $branch = Branch::create(['name' => 'Test Branch', 'code' => 'TB-'.uniqid(), 'office_id' => 1]);
         $registrant = User::factory()->create();
+
+        app(BranchBusinessDayService::class)->open(
+    $branch->id,
+    now()->toDateString(),
+    $registrant->id
+);
 
         $agent = Agent::create(array_merge([
             'agent_code' => 'AGT-'.uniqid(),

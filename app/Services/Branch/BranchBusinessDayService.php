@@ -4,6 +4,7 @@ namespace App\Services\Branch;
 
 use App\Models\Branch;
 use App\Models\BranchBusinessDay;
+use App\Models\TillSession;
 use Exception;
 use Illuminate\Support\Facades\DB;
 
@@ -13,6 +14,9 @@ class BranchBusinessDayService
      * Open a business day for a branch.
      *
      * A branch may have only one OPEN business day at a time.
+     *
+     * A business date that has already been used by the branch
+     * cannot be opened again.
      *
      * @throws Exception
      */
@@ -28,8 +32,18 @@ class BranchBusinessDayService
             $openedBy,
             $notes
         ) {
+            /*
+             * Ensure the branch exists before attempting to
+             * create a business day for it.
+             */
             Branch::findOrFail($branchId);
 
+            /*
+             * A branch may have only one OPEN business day.
+             *
+             * Lock the existing row, when present, so competing
+             * close/open operations cannot mutate it underneath us.
+             */
             $existingOpenDay = BranchBusinessDay::where(
                 'branch_id',
                 $branchId
@@ -44,6 +58,10 @@ class BranchBusinessDayService
                 );
             }
 
+            /*
+             * A previously used business date must never be reopened,
+             * even if that business day is already CLOSED.
+             */
             $existingDay = BranchBusinessDay::where(
                 'branch_id',
                 $branchId
@@ -77,6 +95,12 @@ class BranchBusinessDayService
     /**
      * Close the currently OPEN business day.
      *
+     * A business day cannot be closed while any till session
+     * belonging to that exact business day remains OPEN.
+     *
+     * Till sessions must therefore complete their reconciliation
+     * and close workflow before branch end-of-day can complete.
+     *
      * @throws Exception
      */
     public function close(
@@ -89,6 +113,10 @@ class BranchBusinessDayService
             $closedBy,
             $notes
         ) {
+            /*
+             * Lock the OPEN business day for the duration of the
+             * close operation.
+             */
             $businessDay = BranchBusinessDay::where(
                 'branch_id',
                 $branchId
@@ -103,6 +131,31 @@ class BranchBusinessDayService
                 );
             }
 
+            /*
+             * A branch business day must not close while a till
+             * session attached to this exact business day remains OPEN.
+             *
+             * Scope this check by branch_business_day_id rather than
+             * branch_id alone. That prevents historical sessions from
+             * other business days from interfering with today's close.
+             */
+            $hasOpenTillSessions = TillSession::where(
+                'branch_business_day_id',
+                $businessDay->id
+            )
+                ->where('status', 'OPEN')
+                ->exists();
+
+            if ($hasOpenTillSessions) {
+                throw new Exception(
+                    "Branch {$branchId} cannot close its business day while till sessions remain open."
+                );
+            }
+
+            /*
+             * All till sessions for this business day are closed,
+             * so the branch business day may now be closed.
+             */
             $businessDay->update([
                 'status' => 'CLOSED',
                 'closed_by' => $closedBy,

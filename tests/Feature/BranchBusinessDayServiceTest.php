@@ -4,8 +4,11 @@ namespace Tests\Feature;
 
 use App\Models\Branch;
 use App\Models\BranchBusinessDay;
+use App\Models\Reconciliation;
+use App\Models\Teller;
 use App\Models\User;
 use App\Services\Branch\BranchBusinessDayService;
+use App\Services\TillSession\TillSessionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -39,6 +42,27 @@ class BranchBusinessDayServiceTest extends TestCase
     {
         return User::factory()->create();
     }
+
+    protected function createTeller(
+    Branch $branch,
+    array $overrides = []
+): Teller {
+    return Teller::create(array_merge([
+        'branch_id' => $branch->id,
+        'vault_id' => null,
+        'gl_account_id' => null,
+        'user_id' => User::factory()->create()->id,
+        'teller_code' => 'TLR-' . uniqid(),
+        'staff_code' => 'STF-' . uniqid(),
+        'display_name' => 'Business Day Close Guard Teller',
+        'daily_limit' => 1000000,
+        'opening_cash_limit' => 500000,
+        'minimum_cash' => 0,
+        'maximum_cash' => 1000000,
+        'active' => true,
+        'status' => 'CLOSED',
+    ], $overrides));
+}
 
     public function test_business_day_can_be_opened(): void
     {
@@ -355,4 +379,149 @@ class BranchBusinessDayServiceTest extends TestCase
             )->count()
         );
     }
+
+    public function test_business_day_cannot_close_while_till_session_is_open(): void
+{
+    $branch = $this->createBranch();
+    $user = $this->createUser();
+    $teller = $this->createTeller($branch);
+
+    $businessDay = $this->service->open(
+        $branch->id,
+        '2026-08-13',
+        $user->id
+    );
+
+    $session = app(TillSessionService::class)->open([
+        'teller_id' => $teller->id,
+        'opened_by' => $user->id,
+        'opening_float' => 10000,
+    ]);
+
+    $this->assertSame(
+        $businessDay->id,
+        $session->branch_business_day_id
+    );
+
+    try {
+        $this->service->close(
+            $branch->id,
+            $user->id
+        );
+
+        $this->fail(
+            'Expected business-day close to be blocked by an open till session.'
+        );
+    } catch (\Exception $exception) {
+        $this->assertSame(
+            "Branch {$branch->id} cannot close its business day while till sessions remain open.",
+            $exception->getMessage()
+        );
+    }
+
+    /*
+     * The failed close must leave both sides of the lifecycle open.
+     */
+    $this->assertSame(
+        'OPEN',
+        $businessDay->fresh()->status
+    );
+
+    $this->assertSame(
+        'OPEN',
+        $session->fresh()->status
+    );
+
+    $this->assertNull(
+        $businessDay->fresh()->closed_at
+    );
+}
+
+    public function test_business_day_can_close_after_till_session_is_closed(): void
+{
+    $branch = $this->createBranch();
+    $user = $this->createUser();
+    $teller = $this->createTeller($branch);
+
+    $businessDay = $this->service->open(
+        $branch->id,
+        '2026-08-13',
+        $user->id
+    );
+
+    $session = app(TillSessionService::class)->open([
+        'teller_id' => $teller->id,
+        'opened_by' => $user->id,
+        'opening_float' => 10000,
+    ]);
+
+    /*
+     * Normal production path:
+     *
+     * OPEN business day
+     * -> OPEN till
+     * -> MATCHED reconciliation
+     * -> CLOSED till
+     * -> CLOSED business day
+     */
+    Reconciliation::create([
+        'till_session_id' => $session->id,
+        'teller_id' => $teller->id,
+        'branch_id' => $branch->id,
+        'system_balance' => 10000,
+        'physical_cash' => 10000,
+        'variance' => 0,
+        'status' => 'MATCHED',
+        'reconciled_by' => $user->id,
+        'approved_by' => null,
+        'notes' => 'Matched before business-day close.',
+        'reconciled_at' => now(),
+    ]);
+
+    $closedSession = app(TillSessionService::class)->close(
+        $session->id,
+        $user->id
+    );
+
+    $this->assertSame(
+        'CLOSED',
+        $closedSession->status
+    );
+
+    $closedBusinessDay = $this->service->close(
+        $branch->id,
+        $user->id,
+        'All till sessions closed.'
+    );
+
+    $this->assertSame(
+        'CLOSED',
+        $closedBusinessDay->status
+    );
+
+    $this->assertSame(
+        $businessDay->id,
+        $closedBusinessDay->id
+    );
+
+    $this->assertSame(
+        $user->id,
+        $closedBusinessDay->closed_by
+    );
+
+    $this->assertNotNull(
+        $closedBusinessDay->closed_at
+    );
+
+    $this->assertSame(
+        'All till sessions closed.',
+        $closedBusinessDay->notes
+    );
+
+    $this->assertNull(
+        $this->service->currentOpenDay(
+            $branch->id
+        )
+    );
+}
 }

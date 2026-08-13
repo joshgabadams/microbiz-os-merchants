@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Domain\MPay\Enums\AgentStatus;
 use App\Models\Agent;
+use App\Services\Branch\BranchBusinessDayService;
 use App\Models\AgentBalance;
 use App\Models\AgentLocation;
 use App\Models\AgentOperator;
@@ -81,6 +82,12 @@ class AgentCashOutServiceTest extends TestCase
     {
         $branch = Branch::create(['name' => 'Test Branch', 'code' => 'TB-'.uniqid(), 'office_id' => 1]);
         $registrant = User::factory()->create();
+
+        app(BranchBusinessDayService::class)->open(
+    $branch->id,
+    now()->toDateString(),
+    $registrant->id
+);
 
         $agent = Agent::create(array_merge([
             'agent_code' => 'AGT-'.uniqid(),
