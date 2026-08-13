@@ -61,17 +61,16 @@ class TillSession extends Model
         return $this->belongsTo(User::class, 'closed_by');
     }
 
-    public function transactions()
+        public function transactions()
     {
         return $this->hasMany(TillTransaction::class);
     }
 
     public function businessDay()
-{
-    return $this->belongsTo(
-        BranchBusinessDay::class,
-        'branch_business_day_id'
-    );
-}
-
+    {
+        return $this->belongsTo(
+            BranchBusinessDay::class,
+            'branch_business_day_id'
+        );
+    }
 }
