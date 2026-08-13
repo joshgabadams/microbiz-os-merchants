@@ -16,7 +16,7 @@ class CreateTrainingDocumentRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'version' => ['required', 'string', 'max:50'],
-            'file_path' => ['required', 'string', 'max:500'],
+            'file' => ['required', 'file', 'mimes:pdf,doc,docx', 'max:10240'],
         ];
     }
 }

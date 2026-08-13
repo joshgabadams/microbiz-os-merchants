@@ -10,6 +10,7 @@ use App\Models\AgentAgreementSignatory;
 use App\Models\AgentAgreementSnapshot;
 use App\Models\AgentAgreementTemplate;
 use Exception;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -473,6 +474,30 @@ public function test_agreement_drafter_cannot_execute_their_own_agreement(): voi
         ]);
 
         return $agreement->fresh();
+    }
+
+    /**
+     * Store the uploaded signature evidence (a scanned wet signature, or
+     * a document already signed via an external e-signature tool) on the
+     * private local disk and return its stored path. The caller then
+     * passes that path as signature_evidence_path to recordSignature().
+     *
+     * @throws Exception
+     */
+    public function uploadSignatureEvidence(
+        AgentAgreement $agreement,
+        UploadedFile $file
+    ): string {
+        if ($agreement->status !== 'AWAITING_SIGNATURES') {
+            throw new Exception(
+                'Agreement is not awaiting signatures.'
+            );
+        }
+
+        return $file->store(
+            "agent-agreements/{$agreement->agent_id}/{$agreement->id}/signatures",
+            'local'
+        );
     }
 
     /**

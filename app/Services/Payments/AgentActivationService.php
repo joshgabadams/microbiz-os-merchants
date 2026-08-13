@@ -37,7 +37,7 @@ class AgentActivationService
         }
 
         if (! $agent->agreements()
-            ->where('status', 'ACTIVE')
+            ->where('status', 'EXECUTED')
             ->exists()) {
             throw new Exception(
                 "Agent {$agent->agent_code} has no active agreement."
