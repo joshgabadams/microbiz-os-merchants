@@ -111,6 +111,7 @@ class AgentCashInServiceTest extends TestCase
             'terminal_id' => 'TERM-'.uniqid(),
             'serial_number' => 'SN-'.uniqid(),
             'status' => 'ACTIVE',
+            'last_heartbeat_at' => now(),
             'registered_latitude' => 6.5244000,
             'registered_longitude' => 3.3792000,
             'geo_fence_radius_metres' => 100,
@@ -372,6 +373,33 @@ class AgentCashInServiceTest extends TestCase
             $user->id
         );
     }
+
+    public function test_cash_in_rejected_when_terminal_heartbeat_is_stale(): void
+{
+    $context = $this->makeReadyAgentContext();
+    $customerAccount = $this->makeActiveCustomerAccount();
+    $user = User::factory()->create();
+
+    $context['terminal']->update([
+        'last_heartbeat_at' => now()->subMinutes(10),
+    ]);
+
+    $this->expectException(\Exception::class);
+    $this->expectExceptionMessage(
+        "Terminal {$context['terminal']->terminal_id} heartbeat is stale."
+    );
+
+    app(AgentCashInService::class)->cashIn(
+        $context['operator'],
+        $context['terminal']->fresh(),
+        $customerAccount,
+        50000,
+        (string) Str::uuid(),
+        6.5244000,
+        3.3792000,
+        $user->id
+    );
+}
 
     public function test_reused_idempotency_key_with_different_amount_is_rejected(): void
     {
