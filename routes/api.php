@@ -22,11 +22,7 @@ use App\Http\Controllers\Api\TessaAlertController;
 use App\Http\Controllers\Api\TransactionReversalController;
 use App\Http\Controllers\Api\AuthController;
 
-Route::prefix('v1')->group(function () {
-    Route::post('/login', [AuthController::class, 'login']);
-});
-
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware('auth.basic.once')->group(function () {
     Route::get('/sync/offices', [OfficeSyncController::class, 'sync'])
         ->middleware('permission:offices.sync');
     Route::get('/sync/glaccounts', [GlAccountSyncController::class, 'sync'])
@@ -43,7 +39,6 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware('permission:tellers.manage');
 
     Route::prefix('v1')->group(function () {
-        Route::post('/logout', [AuthController::class, 'logout']);
         Route::get('/me', [AuthController::class, 'me']);
 
         Route::post('/mfa/setup', [MfaController::class, 'setup']);

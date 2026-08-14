@@ -432,12 +432,3 @@ export interface AuthUser {
   email: string;
 }
 
-export interface LoginResponse {
-  success: boolean;
-  message: string;
-  data: {
-    user: AuthUser;
-    token: string;
-    token_type: string;
-  };
-}
