@@ -384,6 +384,10 @@ Route::post(
     [AgentTransactionController::class, 'transfer']
 )->middleware('permission:agents.transactions.transfer');
 
+Route::post(
+    '/agent-transactions/{transaction}/reversal/request',
+    [AgentTransactionController::class, 'requestReversal']
+)->middleware('permission:agents.transactions.reverse');
 
 
         Route::get('/wallets', [WalletController::class, 'index']);

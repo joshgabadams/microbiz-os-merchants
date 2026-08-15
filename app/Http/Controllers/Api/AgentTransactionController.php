@@ -9,12 +9,15 @@ use App\Http\Requests\Agent\AgentTransferRequest;
 use App\Models\Agent;
 use App\Models\AgentOperator;
 use App\Models\AgentTerminal;
+use App\Models\AgentTransaction;
 use App\Models\CustomerAccount;
+use App\Services\Approval\ApprovalRequestService;
 use App\Services\Payments\AgentCashInService;
 use App\Services\Payments\AgentCashOutService;
 use App\Services\Payments\AgentTransferService;
 use App\Traits\ApiResponse;
 use Exception;
+use Illuminate\Http\Request;
 
 class AgentTransactionController extends Controller
 {
@@ -23,9 +26,9 @@ class AgentTransactionController extends Controller
     public function __construct(
         protected AgentCashInService $cashInService,
         protected AgentCashOutService $cashOutService,
-        protected AgentTransferService $transferService
-    ) {
-    }
+        protected AgentTransferService $transferService,
+        protected ApprovalRequestService $approvalRequestService
+    ) {}
 
     public function cashIn(
         Agent $agent,
@@ -170,6 +173,61 @@ class AgentTransactionController extends Controller
             return $this->success(
                 $transaction,
                 'Agent transfer completed successfully.',
+                201
+            );
+        } catch (Exception $e) {
+            return $this->error(
+                $e->getMessage()
+            );
+        }
+    }
+
+    public function requestReversal(
+        AgentTransaction $transaction,
+        Request $request
+    ) {
+        try {
+            $validated = $request->validate([
+                'narration' => ['nullable', 'string', 'max:1000'],
+                'maker_note' => ['nullable', 'string', 'max:1000'],
+            ]);
+
+            if (
+                $transaction->reversed_at !== null
+                || $transaction->status === 'REVERSED'
+            ) {
+                throw new Exception(
+                    'Agent transaction has already been reversed.'
+                );
+            }
+
+            if ($transaction->status !== 'COMPLETED') {
+                throw new Exception(
+                    'Only completed agent transactions can be submitted for reversal.'
+                );
+            }
+
+            if ($transaction->transaction_type !== 'CASH_IN') {
+                throw new Exception(
+                    'Only CASH_IN agent transactions can currently be submitted for reversal.'
+                );
+            }
+
+            $approval = $this->approvalRequestService->createRequest(
+                'AGENT_TRANSACTION_REVERSAL',
+                [
+                    'agent_transaction_id' => $transaction->id,
+                    'narration' => $validated['narration'] ?? null,
+                ],
+                $request->user()->id,
+                (float) $transaction->amount,
+                $transaction->currency,
+                $validated['maker_note'] ?? null
+            );
+
+            return $this->success(
+                $approval,
+                'Agent transaction reversal request created successfully.',
                 201
             );
         } catch (Exception $e) {
