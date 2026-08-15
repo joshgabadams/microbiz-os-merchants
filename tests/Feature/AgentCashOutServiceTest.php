@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Domain\MPay\Enums\AgentStatus;
 use App\Models\Agent;
-use App\Services\Branch\BranchBusinessDayService;
 use App\Models\AgentBalance;
 use App\Models\AgentLocation;
 use App\Models\AgentOperator;
@@ -16,9 +15,12 @@ use App\Models\CustomerAccount;
 use App\Models\CustomerAccountBalance;
 use App\Models\GlJournal;
 use App\Models\User;
+use App\Models\Vault;
+use App\Services\Branch\BranchBusinessDayService;
 use App\Services\CashManagement\AgentFloatService;
 use App\Services\Payments\AgentCashInService;
 use App\Services\Payments\AgentCashOutService;
+use App\Services\Payments\AgentServiceConfigurationService;
 use App\Services\Vault\VaultTransactionService;
 use Database\Seeders\GlAccountSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -84,10 +86,10 @@ class AgentCashOutServiceTest extends TestCase
         $registrant = User::factory()->create();
 
         app(BranchBusinessDayService::class)->open(
-    $branch->id,
-    now()->toDateString(),
-    $registrant->id
-);
+            $branch->id,
+            now()->toDateString(),
+            $registrant->id
+        );
 
         $agent = Agent::create(array_merge([
             'agent_code' => 'AGT-'.uniqid(),
@@ -148,16 +150,16 @@ class AgentCashOutServiceTest extends TestCase
         ]);
 
         $serviceEnabler = User::factory()->create();
-        app(\App\Services\Payments\AgentServiceConfigurationService::class)->enableService(
+        app(AgentServiceConfigurationService::class)->enableService(
             $agent, 'CASH_IN', $serviceEnabler->id
         );
-        app(\App\Services\Payments\AgentServiceConfigurationService::class)->enableService(
+        app(AgentServiceConfigurationService::class)->enableService(
             $agent, 'CASH_OUT', $serviceEnabler->id
         );
 
         if ($physicalCash > 0) {
             $vaultBranch = Branch::create(['name' => 'Vault Branch', 'code' => 'VB-'.uniqid(), 'office_id' => 1]);
-            $vault = \App\Models\Vault::create([
+            $vault = Vault::create([
                 'branch_id' => $vaultBranch->id,
                 'code' => 'VLT-'.uniqid(),
                 'name' => 'Test Vault',
@@ -262,7 +264,7 @@ class AgentCashOutServiceTest extends TestCase
     {
         $context = $this->makeReadyAgentContext(500000);
         $context['agent']->update(['single_transaction_limit' => 20000]);
-        $freshOperator = \App\Models\AgentOperator::find($context['operator']->id);
+        $freshOperator = AgentOperator::find($context['operator']->id);
         $customerAccount = $this->makeActiveCustomerAccount(200000);
         $user = User::factory()->create();
 
@@ -443,5 +445,31 @@ class AgentCashOutServiceTest extends TestCase
             $user->id,
             true
         );
+    }
+
+    public function test_cash_out_persists_risk_metadata(): void
+    {
+        $context = $this->makeReadyAgentContext(100000);
+        $customerAccount = $this->makeActiveCustomerAccount(80000);
+        $user = User::factory()->create();
+
+        $result = app(AgentCashOutService::class)->cashOut(
+            $context['operator'],
+            $context['terminal'],
+            $customerAccount,
+            50000,
+            (string) Str::uuid(),
+            6.5244000,
+            3.3792000,
+            $user->id,
+            true
+        );
+
+        $result->refresh();
+
+        $this->assertIsArray($result->risk_metadata);
+        $this->assertArrayHasKey('score', $result->risk_metadata);
+        $this->assertArrayHasKey('level', $result->risk_metadata);
+        $this->assertArrayHasKey('rules', $result->risk_metadata);
     }
 }

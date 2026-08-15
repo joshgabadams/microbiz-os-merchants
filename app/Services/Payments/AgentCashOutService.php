@@ -44,9 +44,9 @@ class AgentCashOutService
         protected TransactionNumberService $transactionNumberService,
         protected GlPostingService $glPostingService,
         protected AgentFeeCalculationService $feeCalculationService,
-        protected AgentTransactionIdempotencyService $idempotencyService
-    ) {
-    }
+        protected AgentTransactionIdempotencyService $idempotencyService,
+        protected AgentTransactionRiskService $riskService
+    ) {}
 
     /**
      * @throws Exception
@@ -69,7 +69,9 @@ class AgentCashOutService
         }
 
         if (! $customerAuthenticated) {
-            throw new Exception('Customer authentication is required before cash-out can proceed.');
+            throw new Exception(
+                'Customer authentication is required before cash-out can proceed.'
+            );
         }
 
         $agent = $operator->agent;
@@ -91,14 +93,24 @@ class AgentCashOutService
         }
 
         if ($terminal->agent_id !== $agent->id) {
-            throw new Exception('This terminal does not belong to the specified agent.');
+            throw new Exception(
+                'This terminal does not belong to the specified agent.'
+            );
         }
 
         if ($terminal->agent_location_id !== $location->id) {
-            throw new Exception("This terminal is not assigned to the operator's location.");
+            throw new Exception(
+                "This terminal is not assigned to the operator's location."
+            );
         }
 
-        $this->guard->guardCashOutOperation($agent, $location, $operator, $terminal, $amount);
+        $this->guard->guardCashOutOperation(
+            $agent,
+            $location,
+            $operator,
+            $terminal,
+            $amount
+        );
 
         $geoFencePassed = $this->isWithinGeoFence(
             $latitude,
@@ -109,7 +121,9 @@ class AgentCashOutService
         );
 
         if (! $geoFencePassed) {
-            throw new Exception("Transaction rejected: device is outside the terminal's approved geo-fence.");
+            throw new Exception(
+                "Transaction rejected: device is outside the terminal's approved geo-fence."
+            );
         }
 
         if ($customerAccount->status !== 'ACTIVE') {
@@ -135,15 +149,39 @@ class AgentCashOutService
                 ->lockForUpdate()
                 ->first();
 
-            if (! $balance || (float) $balance->declared_physical_cash < $amount) {
-                throw new Exception("Agent {$agent->agent_code} has insufficient physical cash liquidity for this transaction.");
+            if (
+                ! $balance
+                || (float) $balance->declared_physical_cash < $amount
+            ) {
+                throw new Exception(
+                    "Agent {$agent->agent_code} has insufficient physical cash liquidity for this transaction."
+                );
             }
 
             $transactionDate = now();
             $transactionNo = $this->transactionNumberService->generate('AGT');
 
-            $feeAmount = $this->feeCalculationService->calculateFee($agent, 'CASH_OUT');
-            $commissionAmount = $this->feeCalculationService->calculateCommission($agent, 'CASH_OUT');
+            $feeAmount = $this->feeCalculationService->calculateFee(
+                $agent,
+                'CASH_OUT'
+            );
+
+            $commissionAmount = $this->feeCalculationService
+                ->calculateCommission(
+                    $agent,
+                    'CASH_OUT'
+                );
+
+            // Risk is observational at this stage: assess the transaction and
+            // persist the result for audit/monitoring, but do not block processing
+            // based on the resulting risk level until an explicit enforcement
+            // policy is introduced.
+            $riskAssessment = $this->riskService->assess(
+                $agent,
+                $terminal,
+                'CASH_OUT',
+                $amount
+            );
 
             $agentTransaction = AgentTransaction::create([
                 'transaction_no' => $transactionNo,
@@ -165,6 +203,7 @@ class AgentCashOutService
                 'geo_fence_passed' => $geoFencePassed,
                 'transaction_date' => $transactionDate,
                 'performed_by' => $performedBy,
+                'risk_metadata' => $riskAssessment,
             ]);
 
             // This is called BEFORE crediting the agent's float, so it

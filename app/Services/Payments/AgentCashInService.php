@@ -40,9 +40,9 @@ class AgentCashInService
         protected TransactionNumberService $transactionNumberService,
         protected GlPostingService $glPostingService,
         protected AgentFeeCalculationService $feeCalculationService,
-        protected AgentTransactionIdempotencyService $idempotencyService
-    ) {
-    }
+        protected AgentTransactionIdempotencyService $idempotencyService,
+        protected AgentTransactionRiskService $riskService
+    ) {}
 
     /**
      * @throws Exception
@@ -139,8 +139,19 @@ class AgentCashInService
             // collection is out of scope for this pass.
             $feeAmount = $this->feeCalculationService->calculateFee($agent, 'CASH_IN');
             $commissionAmount = $this->feeCalculationService->calculateCommission($agent, 'CASH_IN');
+            // Risk is observational at this stage: assess the transaction and
+            // persist the result for audit/monitoring, but do not block processing
+            // based on the resulting risk level until an explicit enforcement
+            // policy is introduced.
+            $riskAssessment = $this->riskService->assess(
+                $agent,
+                $terminal,
+                'CASH_IN',
+                $amount
+            );
 
             $agentTransaction = AgentTransaction::create([
+
                 'transaction_no' => $transactionNo,
                 'idempotency_key' => $idempotencyKey,
                 'agent_id' => $agent->id,
@@ -160,6 +171,7 @@ class AgentCashInService
                 'geo_fence_passed' => $geoFencePassed,
                 'transaction_date' => $transactionDate,
                 'performed_by' => $performedBy,
+                'risk_metadata' => $riskAssessment,
             ]);
 
             // Blueprint §13.2 exact direction.

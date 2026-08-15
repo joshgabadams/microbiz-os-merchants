@@ -2,6 +2,7 @@
 
 namespace App\Services\Payments;
 
+use App\Models\AgentBalance;
 use App\Models\AgentOperator;
 use App\Models\AgentTerminal;
 use App\Models\AgentTransaction;
@@ -37,9 +38,9 @@ class AgentTransferService
         protected CustomerAccountService $customerAccountService,
         protected TransactionNumberService $transactionNumberService,
         protected AgentFeeCalculationService $feeCalculationService,
-        protected AgentTransactionIdempotencyService $idempotencyService
-    ) {
-    }
+        protected AgentTransactionIdempotencyService $idempotencyService,
+        protected AgentTransactionRiskService $riskService
+    ) {}
 
     /**
      * @throws Exception
@@ -94,7 +95,13 @@ class AgentTransferService
             throw new Exception("This terminal is not assigned to the operator's location.");
         }
 
-        $this->guard->guardTransferOperation($agent, $location, $operator, $terminal, $amount);
+        $this->guard->guardTransferOperation(
+            $agent,
+            $location,
+            $operator,
+            $terminal,
+            $amount
+        );
 
         $geoFencePassed = $this->isWithinGeoFence(
             $latitude,
@@ -105,7 +112,9 @@ class AgentTransferService
         );
 
         if (! $geoFencePassed) {
-            throw new Exception("Transaction rejected: device is outside the terminal's approved geo-fence.");
+            throw new Exception(
+                "Transaction rejected: device is outside the terminal's approved geo-fence."
+            );
         }
 
         if ($fromAccount->status !== 'ACTIVE') {
@@ -138,7 +147,10 @@ class AgentTransferService
                 ? [$fromAccount->id, $toAccount->id]
                 : [$toAccount->id, $fromAccount->id];
 
-            CustomerAccountBalance::whereIn('customer_account_id', $orderedIds)
+            CustomerAccountBalance::whereIn(
+                'customer_account_id',
+                $orderedIds
+            )
                 ->orderBy('customer_account_id')
                 ->lockForUpdate()
                 ->get();
@@ -146,8 +158,26 @@ class AgentTransferService
             $transactionDate = now();
             $transactionNo = $this->transactionNumberService->generate('AGT');
 
-            $feeAmount = $this->feeCalculationService->calculateFee($agent, 'TRANSFER');
-            $commissionAmount = $this->feeCalculationService->calculateCommission($agent, 'TRANSFER');
+            $feeAmount = $this->feeCalculationService->calculateFee(
+                $agent,
+                'TRANSFER'
+            );
+
+            $commissionAmount = $this->feeCalculationService->calculateCommission(
+                $agent,
+                'TRANSFER'
+            );
+
+            // Risk is observational at this stage: assess the transaction and
+            // persist the result for audit/monitoring, but do not block processing
+            // based on the resulting risk level until an explicit enforcement
+            // policy is introduced.
+            $riskAssessment = $this->riskService->assess(
+                $agent,
+                $terminal,
+                'TRANSFER',
+                $amount
+            );
 
             $agentTransaction = AgentTransaction::create([
                 'transaction_no' => $transactionNo,
@@ -168,6 +198,7 @@ class AgentTransferService
                 'geo_fence_passed' => $geoFencePassed,
                 'transaction_date' => $transactionDate,
                 'performed_by' => $performedBy,
+                'risk_metadata' => $riskAssessment,
                 'channel_metadata' => [
                     'to_customer_account_id' => $toAccount->id,
                     'to_account_no' => $toAccount->account_no,
@@ -196,12 +227,15 @@ class AgentTransferService
             ]);
 
             if ($commissionAmount > 0) {
-                $balance = \App\Models\AgentBalance::firstOrCreate(
+                $balance = AgentBalance::firstOrCreate(
                     ['agent_id' => $agent->id],
                     ['currency' => 'NGN']
                 );
 
-                $balance = \App\Models\AgentBalance::where('agent_id', $agent->id)
+                $balance = AgentBalance::where(
+                    'agent_id',
+                    $agent->id
+                )
                     ->lockForUpdate()
                     ->first();
 

@@ -15,6 +15,7 @@ use App\Models\CustomerAccountBalance;
 use App\Models\GlJournal;
 use App\Models\User;
 use App\Services\Branch\BranchBusinessDayService;
+use App\Services\Payments\AgentServiceConfigurationService;
 use App\Services\Payments\AgentTransferService;
 use Database\Seeders\GlAccountSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -45,10 +46,10 @@ class AgentTransferServiceTest extends TestCase
         $registrant = User::factory()->create();
 
         app(BranchBusinessDayService::class)->open(
-    $branch->id,
-    now()->toDateString(),
-    $registrant->id
-);
+            $branch->id,
+            now()->toDateString(),
+            $registrant->id
+        );
 
         $agent = Agent::create(array_merge([
             'agent_code' => 'AGT-'.uniqid(),
@@ -109,7 +110,7 @@ class AgentTransferServiceTest extends TestCase
         ]);
 
         $serviceEnabler = User::factory()->create();
-        app(\App\Services\Payments\AgentServiceConfigurationService::class)->enableService(
+        app(AgentServiceConfigurationService::class)->enableService(
             $agent, 'TRANSFER', $serviceEnabler->id
         );
 
@@ -220,7 +221,7 @@ class AgentTransferServiceTest extends TestCase
         $from = $this->makeCustomerAccount(100000);
         $to = $this->makeCustomerAccount(0);
         $user = User::factory()->create();
-        $freshOperator = \App\Models\AgentOperator::find($context['operator']->id);
+        $freshOperator = AgentOperator::find($context['operator']->id);
 
         $this->expectException(\Exception::class);
         $this->expectExceptionMessage('is not ACTIVE');
@@ -381,5 +382,32 @@ class AgentTransferServiceTest extends TestCase
             3.3792000,
             $user->id
         );
+    }
+
+    public function test_transfer_persists_risk_metadata(): void
+    {
+        $context = $this->makeReadyAgentContext();
+        $from = $this->makeCustomerAccount(100000);
+        $to = $this->makeCustomerAccount(0);
+        $user = User::factory()->create();
+
+        $transaction = app(AgentTransferService::class)->transfer(
+            $context['operator'],
+            $context['terminal'],
+            $from,
+            $to,
+            30000,
+            (string) Str::uuid(),
+            6.5244000,
+            3.3792000,
+            $user->id
+        );
+
+        $transaction->refresh();
+
+        $this->assertIsArray($transaction->risk_metadata);
+        $this->assertArrayHasKey('score', $transaction->risk_metadata);
+        $this->assertArrayHasKey('level', $transaction->risk_metadata);
+        $this->assertArrayHasKey('rules', $transaction->risk_metadata);
     }
 }

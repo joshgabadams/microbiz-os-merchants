@@ -52,9 +52,9 @@ class AgentInterbankTransferService
     public function __construct(
         protected AgentOperationGuard $guard,
         protected TransactionNumberService $transactionNumberService,
-        protected AgentTransactionIdempotencyService $idempotencyService
-    ) {
-    }
+        protected AgentTransactionIdempotencyService $idempotencyService,
+        protected AgentTransactionRiskService $riskService
+    ) {}
 
     /**
      * @throws Exception
@@ -135,6 +135,17 @@ class AgentInterbankTransferService
 
         $transactionNo = $this->transactionNumberService->generate('AGT');
 
+        // Risk is observational at this stage: assess the transaction and
+        // persist the result for audit/monitoring, but do not block processing
+        // based on the resulting risk level until an explicit enforcement
+        // policy is introduced.
+        $riskAssessment = $this->riskService->assess(
+            $agent,
+            $terminal,
+            'INTERBANK_TRANSFER',
+            $amount
+        );
+
         $agentTransaction = AgentTransaction::create([
             'transaction_no' => $transactionNo,
             'idempotency_key' => $idempotencyKey,
@@ -152,6 +163,7 @@ class AgentInterbankTransferService
             'geo_fence_passed' => $geoFencePassed,
             'transaction_date' => now(),
             'performed_by' => $performedBy,
+            'risk_metadata' => $riskAssessment,
             'channel_metadata' => [
                 // Never the full card number -- a masked/tokenised
                 // reference only, per Blueprint §16.5.

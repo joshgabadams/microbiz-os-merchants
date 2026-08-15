@@ -6,7 +6,6 @@ use App\Domain\MPay\Enums\AgentStatus;
 use App\Models\Agent;
 use App\Models\AgentLocation;
 use App\Models\AgentOperator;
-use App\Models\AgentService;
 use App\Models\AgentTerminal;
 use App\Models\AgentTransaction;
 use App\Models\Branch;
@@ -14,6 +13,7 @@ use App\Models\Customer;
 use App\Models\CustomerAccount;
 use App\Models\CustomerAccountBalance;
 use App\Models\User;
+use App\Models\Vault;
 use App\Services\Branch\BranchBusinessDayService;
 use App\Services\CashManagement\AgentFloatService;
 use App\Services\Payments\AgentCashInService;
@@ -205,6 +205,7 @@ class AgentServiceConfigurationTest extends TestCase
             'registered_longitude' => 3.3792000,
             'geo_fence_radius_metres' => 100,
             'activated_at' => now(),
+            'last_heartbeat_at' => now(),
         ]);
 
         return ['location' => $location, 'operator' => $operator, 'terminal' => $terminal];
@@ -348,10 +349,11 @@ public function test_cash_in_is_blocked_end_to_end_without_service_enabled(): vo
             'registered_longitude' => 3.3792000,
             'geo_fence_radius_metres' => 100,
             'activated_at' => now(),
+            'last_heartbeat_at' => now(),
         ]);
 
         $vaultBranch = Branch::create(['name' => 'Vault Branch', 'code' => 'VB-'.uniqid(), 'office_id' => 1]);
-        $vault = \App\Models\Vault::create([
+        $vault = Vault::create([
             'branch_id' => $vaultBranch->id,
             'code' => 'VLT-'.uniqid(),
             'name' => 'Test Vault',

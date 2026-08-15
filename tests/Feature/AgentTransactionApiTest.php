@@ -126,6 +126,7 @@ class AgentTransactionApiTest extends TestCase
             'registered_longitude' => 3.3792000,
             'geo_fence_radius_metres' => 100,
             'activated_at' => now(),
+            'last_heartbeat_at' => now(),
         ]);
 
         $serviceEnabler = User::factory()->create();
