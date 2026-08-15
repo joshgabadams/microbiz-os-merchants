@@ -82,7 +82,7 @@ class AgentOperationGuard
     public function checkAgreementActive(Agent $agent): void
     {
         $hasActiveAgreement = $agent->agreements()
-            ->where('status', 'ACTIVE')
+            ->where('status', 'EXECUTED')
             ->exists();
 
         if (! $hasActiveAgreement) {

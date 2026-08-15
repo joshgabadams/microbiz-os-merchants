@@ -64,7 +64,7 @@ class AgentServiceConfigurationTest extends TestCase
         $agent->agreements()->create([
             'agreement_number' => 'AGR-'.uniqid(),
             'version' => 1,
-            'status' => 'ACTIVE',
+            'status' => 'EXECUTED',
             'created_by' => $creator->id,
         ]);
 
@@ -310,7 +310,7 @@ public function test_cash_in_is_blocked_end_to_end_without_service_enabled(): vo
         $agent->agreements()->create([
             'agreement_number' => 'AGR-'.uniqid(),
             'version' => 1,
-            'status' => 'ACTIVE',
+            'status' => 'EXECUTED',
             'created_by' => $agreementCreator->id,
         ]);
 

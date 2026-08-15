@@ -91,7 +91,7 @@ class AgentTransactionApiTest extends TestCase
         $agent->agreements()->create([
             'agreement_number' => 'AGR-'.uniqid(),
             'version' => 1,
-            'status' => 'ACTIVE',
+            'status' => 'EXECUTED',
             'created_by' => User::factory()->create()->id,
         ]);
 

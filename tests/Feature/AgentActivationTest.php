@@ -61,7 +61,7 @@ class AgentActivationTest extends TestCase
             'agent_id' => $agent->id,
             'agreement_number' => 'AGR-'.uniqid(),
             'version' => 1,
-            'status' => 'ACTIVE',
+            'status' => 'EXECUTED',
             'effective_date' => now()->toDateString(),
             'created_by' => User::factory()->create()->id,
             'executed_by' => User::factory()->create()->id,
