@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\AgentAgreementTemplateController;
 use App\Http\Controllers\Api\TrainingDocumentController;
 use App\Http\Controllers\Api\WalletController;
 use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\Api\AgentDashboardController;
 use App\Http\Controllers\Api\MfaController;
 use App\Http\Controllers\Api\FixedDepositController;
 use App\Http\Controllers\Api\TessaAlertController;
@@ -406,6 +407,7 @@ Route::post(
         Route::get('/reports/vault-transactions', [ReportController::class, 'vaultTransactions']);
         Route::get('/reports/teller-ledger', [ReportController::class, 'tellerLedger']);
         Route::get('/reports/vault-ledger', [ReportController::class, 'vaultLedger']);
+        Route::get('/reports/agency-dashboard', [AgentDashboardController::class, 'agencyDashboard']);
 
         Route::get('/fixed-deposits', [FixedDepositController::class, 'index']);
         Route::get('/fixed-deposits/{fixedDeposit}', [FixedDepositController::class, 'show']);
