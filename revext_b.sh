@@ -1,3 +1,8 @@
+#!/bin/sh
+set -e
+cd /Users/user/microbiz/microbiz-os
+
+cat > tests/Feature/AgentTransactionReversalServiceTest.php << 'MBOS_EOF'
 <?php
 
 namespace Tests\Feature;
@@ -718,3 +723,6 @@ class AgentTransactionReversalServiceTest extends TestCase
         $this->assertEquals(0, (float) $balanceAfterReversal->pending_commission);
     }
 }
+MBOS_EOF
+
+echo "Test file updated: replaced the one test whose premise changed, added CASH_OUT/TRANSFER/commission-clawback coverage. Next: php artisan test"

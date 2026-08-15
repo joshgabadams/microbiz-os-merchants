@@ -1,3 +1,8 @@
+#!/bin/sh
+set -e
+cd /Users/user/microbiz/microbiz-os
+
+cat > app/Services/Payments/AgentTransactionReversalService.php << 'MBOS_EOF'
 <?php
 
 namespace App\Services\Payments;
@@ -450,3 +455,6 @@ class AgentTransactionReversalService
         return $reversedTransaction;
     }
 }
+MBOS_EOF
+
+echo "Extended reverse() to cover CASH_OUT and TRANSFER, plus commission clawback for all three types. Public interface unchanged."
