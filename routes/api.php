@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\AgentDashboardController;
 use App\Http\Controllers\Api\MfaController;
 use App\Http\Controllers\Api\FixedDepositController;
+use App\Http\Controllers\Api\AgentComplaintController;
 use App\Http\Controllers\Api\TessaAlertController;
 use App\Http\Controllers\Api\TransactionReversalController;
 use App\Http\Controllers\Api\AuthController;
@@ -399,6 +400,31 @@ Route::post(
     '/agent-transactions/{transaction}/reversal/request',
     [AgentTransactionController::class, 'requestReversal']
 )->middleware('permission:agents.transactions.reverse');
+
+/*
+|--------------------------------------------------------------------------
+| Agent Complaints
+|--------------------------------------------------------------------------
+|
+| General complaints-management endpoints for agency banking operations.
+| Complaints receive a trackable reference and move through the controlled
+| acknowledgement, assignment, investigation, escalation and resolution
+| lifecycle implemented by AgentComplaintService.
+|
+*/
+
+Route::prefix('agent-complaints')->group(function () {
+    Route::get('/', [AgentComplaintController::class, 'index']);
+    Route::post('/', [AgentComplaintController::class, 'store']);
+    Route::get('/{complaint}', [AgentComplaintController::class, 'show']);
+
+    Route::post('/{complaint}/acknowledge', [AgentComplaintController::class, 'acknowledge']);
+    Route::post('/{complaint}/assign', [AgentComplaintController::class, 'assign']);
+    Route::post('/{complaint}/start-progress', [AgentComplaintController::class, 'startProgress']);
+    Route::post('/{complaint}/escalate', [AgentComplaintController::class, 'escalate']);
+    Route::post('/{complaint}/resolve', [AgentComplaintController::class, 'resolve']);
+    Route::post('/{complaint}/close', [AgentComplaintController::class, 'close']);
+});
 
 
         Route::get('/wallets', [WalletController::class, 'index']);
