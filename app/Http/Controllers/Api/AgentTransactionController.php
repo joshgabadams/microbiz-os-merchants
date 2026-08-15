@@ -30,6 +30,17 @@ class AgentTransactionController extends Controller
         protected ApprovalRequestService $approvalRequestService
     ) {}
 
+    public function list(Agent $agent)
+    {
+        return $this->success(
+            $agent->transactions()
+                ->with(['terminal', 'operator'])
+                ->orderByDesc('created_at')
+                ->get(),
+            'Agent transactions retrieved successfully.'
+        );
+    }
+
     public function cashIn(
         Agent $agent,
         AgentCashInRequest $request

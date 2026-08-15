@@ -64,7 +64,7 @@ class AgentController extends Controller
     public function show(Agent $agent)
     {
         return $this->success(
-            $agent->load(['branch', 'supervisor']),
+            $agent->load(['branch', 'supervisor', 'trainingRecords.trainingDocument']),
             'Agent retrieved successfully.'
         );
     }
@@ -430,6 +430,23 @@ public function recordAgreementSignature(
         );
 
         return $this->success($result, 'Signature recorded.', 201);
+    } catch (Exception $e) {
+        return $this->error($e->getMessage());
+    }
+}
+
+public function uploadAgreementSignatureEvidence(
+    Agent $agent,
+    AgentAgreement $agreement,
+    \App\Http\Requests\Agent\UploadAgreementSignatureEvidenceRequest $request
+) {
+    try {
+        $path = $this->agreementService->uploadSignatureEvidence(
+            $agreement,
+            $request->file('evidence')
+        );
+
+        return $this->success(['path' => $path], 'Evidence uploaded.', 201);
     } catch (Exception $e) {
         return $this->error($e->getMessage());
     }

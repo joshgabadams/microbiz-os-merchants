@@ -26,7 +26,11 @@ class TrainingDocumentController extends Controller
 
     public function store(CreateTrainingDocumentRequest $request)
     {
-        $document = $this->trainingDocumentService->create($request->validated(), $request->user()->id);
+        $document = $this->trainingDocumentService->create(
+            $request->validated(),
+            $request->file('file'),
+            $request->user()->id
+        );
 
         return $this->success($document, 'Training document created successfully.', 201);
     }

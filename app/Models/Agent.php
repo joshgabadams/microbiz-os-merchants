@@ -115,5 +115,9 @@ public function trainingRecords()
     return $this->hasMany(AgentTrainingRecord::class);
 }
 
+public function transactions()
+{
+    return $this->hasMany(AgentTransaction::class);
+}
 
 }

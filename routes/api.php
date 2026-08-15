@@ -270,6 +270,11 @@ Route::post(
 )->middleware('permission:agents.agreements.send-for-signature');
 
 Route::post(
+    '/agents/{agent}/agreements/{agreement}/signature-evidence',
+    [AgentController::class, 'uploadAgreementSignatureEvidence']
+)->middleware('permission:agents.agreements.sign');
+
+Route::post(
     '/agents/{agent}/agreements/{agreement}/signatures',
     [AgentController::class, 'recordAgreementSignature']
 )->middleware('permission:agents.agreements.sign');
@@ -369,6 +374,11 @@ Route::post(
 );
 
 // ---------- Agent operational transactions ----------
+
+Route::get(
+    '/agents/{agent}/transactions',
+    [AgentTransactionController::class, 'list']
+)->middleware('permission:agents.transactions.view');
 
 Route::post(
     '/agents/{agent}/transactions/cash-in',
