@@ -125,4 +125,9 @@ public function complaints()
     return $this->hasMany(AgentComplaint::class);
 }
 
+public function inspections()
+{
+    return $this->hasMany(AgentInspection::class);
+}
+
 }
