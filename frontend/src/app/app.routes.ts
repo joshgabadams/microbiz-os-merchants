@@ -120,6 +120,20 @@ export const routes: Routes = [
             (m) => m.TessaDashboardComponent
           ),
       },
+      {
+        path: 'complaints',
+        loadComponent: () =>
+          import('./features/complaints/complaint-list.component').then(
+            (m) => m.ComplaintListComponent
+          ),
+      },
+      {
+        path: 'inspections',
+        loadComponent: () =>
+          import('./features/inspections/inspection-list.component').then(
+            (m) => m.InspectionListComponent
+          ),
+      },
     ],
   },
   { path: '**', redirectTo: '' },
