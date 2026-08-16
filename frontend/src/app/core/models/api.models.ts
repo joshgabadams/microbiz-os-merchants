@@ -159,6 +159,7 @@ export interface Agent {
   activated_at: string | null;
   suspended_at: string | null;
   suspension_reason: string | null;
+  training_records?: AgentTrainingRecord[];
 }
 export type AgentLocationVerificationStatus =
   | 'PENDING'
@@ -311,6 +312,99 @@ export interface AgentDocument {
   created_at?: string;
   updated_at?: string;
 }
+export interface TrainingDocument {
+  id: number;
+  name: string;
+  version: string;
+  status: string;
+  file_path: string;
+  created_by: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface AgentTrainingRecord {
+  id: number;
+  agent_id: number;
+  operator_id?: number | null;
+  training_document_id: number;
+  training_document_version: string;
+  downloaded_at: string | null;
+  acknowledged_at: string | null;
+  acknowledged_by?: number | null;
+  recorded_by: number;
+  completion_method?: string | null;
+  training_document?: TrainingDocument;
+}
+
+export interface AgentOperator {
+  id: number;
+  agent_id: number;
+  agent_location_id: number;
+  user_id: number;
+  role: string;
+  status: 'PENDING' | 'ACTIVE' | 'SUSPENDED';
+  training_completed_at?: string | null;
+  activated_at?: string | null;
+  suspended_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface AgentTerminal {
+  id: number;
+  agent_id: number;
+  agent_location_id: number;
+  terminal_id: string;
+  serial_number: string;
+  device_model?: string | null;
+  provider?: string | null;
+  application_version?: string | null;
+  status: 'PENDING_ACTIVATION' | 'ACTIVE' | 'SUSPENDED';
+  registered_latitude: string | number;
+  registered_longitude: string | number;
+  geo_fence_radius_metres: number;
+  activated_at?: string | null;
+  last_heartbeat_at?: string | null;
+  last_transaction_at?: string | null;
+  geo_fence_compliant?: boolean | null;
+  last_ip_address?: string | null;
+  ip_city?: string | null;
+  ip_state?: string | null;
+  ip_country?: string | null;
+  ip_location_mismatch?: boolean | null;
+  ip_checked_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export type AgentTransactionType = 'CASH_IN' | 'CASH_OUT' | 'TRANSFER';
+
+export interface AgentTransaction {
+  id: number;
+  transaction_no: string;
+  idempotency_key: string;
+  agent_id: number;
+  agent_location_id?: number | null;
+  agent_terminal_id: number;
+  agent_operator_id: number;
+  transaction_type: AgentTransactionType;
+  status: string;
+  amount: string | number;
+  fee_amount?: string | number | null;
+  commission_amount?: string | number | null;
+  currency?: string;
+  customer_account_id: number;
+  customer_reference?: string | null;
+  latitude?: string | number | null;
+  longitude?: string | number | null;
+  geo_fence_passed?: boolean | null;
+  transaction_date?: string | null;
+  created_at?: string;
+  terminal?: AgentTerminal;
+  operator?: AgentOperator;
+}
+
 export interface Wallet {
   id: number;
   wallet_no: string;
@@ -338,12 +432,92 @@ export interface AuthUser {
   email: string;
 }
 
-export interface LoginResponse {
-  success: boolean;
-  message: string;
-  data: {
-    user: AuthUser;
-    token: string;
-    token_type: string;
-  };
+/**
+ * agent-complaints and agent-inspections respond with Laravel's bare
+ * default paginator shape (response()->json($query->paginate(...))),
+ * not the {success,message,data} ApiResponse envelope used elsewhere.
+ */
+export interface PaginatedResponse<T> {
+  data: T[];
+  current_page: number;
+  last_page: number;
+  per_page: number;
+  total: number;
 }
+
+export type AgentComplaintStatus =
+  | 'OPEN'
+  | 'ACKNOWLEDGED'
+  | 'IN_PROGRESS'
+  | 'RESOLVED'
+  | 'CLOSED'
+  | 'ESCALATED';
+
+export interface AgentComplaint {
+  id: number;
+  complaint_no: string;
+  agent_id: number | null;
+  branch_id: number | null;
+  agent_location_id: number | null;
+  agent_transaction_id: number | null;
+  complainant_name: string;
+  complainant_phone: string | null;
+  complainant_email: string | null;
+  channel: string;
+  category: string;
+  subject: string;
+  description: string;
+  disputed_amount: string | number | null;
+  priority: string;
+  status: AgentComplaintStatus;
+  assigned_to: number | null;
+  created_by: number | null;
+  acknowledged_at: string | null;
+  due_at: string | null;
+  resolution_summary: string | null;
+  resolved_at: string | null;
+  closed_at: string | null;
+  escalation_level: number;
+  escalation_reason: string | null;
+  escalated_at: string | null;
+  agent?: Agent | null;
+  assignedTo?: AuthUser | null;
+  createdBy?: AuthUser | null;
+}
+
+export type AgentInspectionStatus =
+  | 'SCHEDULED'
+  | 'IN_PROGRESS'
+  | 'COMPLETED'
+  | 'CANCELLED';
+
+export type AgentInspectionFollowUpStatus =
+  | 'NOT_REQUIRED'
+  | 'PENDING'
+  | 'IN_PROGRESS'
+  | 'COMPLETED';
+
+export interface AgentInspection {
+  id: number;
+  inspection_no: string;
+  agent_id: number;
+  agent_location_id: number | null;
+  inspector_id: number;
+  inspection_type: string;
+  inspection_date: string;
+  status: AgentInspectionStatus;
+  findings: string | null;
+  compliance_outcome: string | null;
+  corrective_action: string | null;
+  corrective_action_deadline: string | null;
+  follow_up_status: AgentInspectionFollowUpStatus;
+  follow_up_notes: string | null;
+  created_by: number | null;
+  started_at: string | null;
+  completed_at: string | null;
+  cancelled_at: string | null;
+  cancellation_reason: string | null;
+  agent?: Agent | null;
+  inspector?: AuthUser | null;
+}
+

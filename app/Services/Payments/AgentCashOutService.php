@@ -14,15 +14,39 @@ use App\Services\Customer\CustomerAccountService;
 use Exception;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * AG-08: Cash-Out. Follows Module 10's exact workflow and Blueprint
+ * §13.3's exact accounting model -- the reverse of AG-07's cash-in:
+ *
+ *   Debit: Customer deposit liability
+ *   Credit: Agent electronic-float liability
+ *
+ * The agent pays physical cash to the customer, so
+ * declared_physical_cash decreases here -- the same automatic
+ * derivation AG-07 uses on the cash-in side, not a separate manual
+ * declaration step.
+ *
+ * Physical liquidity is a real, load-bearing guard check here (unlike
+ * cash-in, where it isn't relevant) -- an agent with sufficient
+ * electronic float but no real cash on hand must not be able to hand
+ * out cash that doesn't exist.
+ *
+ * No real customer-authentication subsystem exists yet in this
+ * codebase, so this service requires explicit proof of authentication
+ * as an input rather than inventing one -- the caller must have
+ * already verified the customer before calling this.
+ */
 class AgentCashOutService
 {
     public function __construct(
         protected AgentOperationGuard $guard,
         protected CustomerAccountService $customerAccountService,
         protected TransactionNumberService $transactionNumberService,
-        protected GlPostingService $glPostingService
-    ) {
-    }
+        protected GlPostingService $glPostingService,
+        protected AgentFeeCalculationService $feeCalculationService,
+        protected AgentTransactionIdempotencyService $idempotencyService,
+        protected AgentTransactionRiskService $riskService
+    ) {}
 
     /**
      * @throws Exception
@@ -45,27 +69,48 @@ class AgentCashOutService
         }
 
         if (! $customerAuthenticated) {
-            throw new Exception('Customer authentication is required before cash-out can proceed.');
-        }
-
-        $existing = AgentTransaction::where('idempotency_key', $idempotencyKey)->first();
-
-        if ($existing) {
-            return $existing;
+            throw new Exception(
+                'Customer authentication is required before cash-out can proceed.'
+            );
         }
 
         $agent = $operator->agent;
         $location = $operator->location;
 
+        $existing = $this->idempotencyService->findExisting(
+            $idempotencyKey,
+            'CASH_OUT',
+            $agent->id,
+            $location->id,
+            $terminal->id,
+            $operator->id,
+            $customerAccount->id,
+            $amount
+        );
+
+        if ($existing) {
+            return $existing;
+        }
+
         if ($terminal->agent_id !== $agent->id) {
-            throw new Exception('This terminal does not belong to the specified agent.');
+            throw new Exception(
+                'This terminal does not belong to the specified agent.'
+            );
         }
 
         if ($terminal->agent_location_id !== $location->id) {
-            throw new Exception("This terminal is not assigned to the operator's location.");
+            throw new Exception(
+                "This terminal is not assigned to the operator's location."
+            );
         }
 
-        $this->guard->guardCashOutOperation($agent, $location, $operator, $terminal, $amount);
+        $this->guard->guardCashOutOperation(
+            $agent,
+            $location,
+            $operator,
+            $terminal,
+            $amount
+        );
 
         $geoFencePassed = $this->isWithinGeoFence(
             $latitude,
@@ -76,7 +121,9 @@ class AgentCashOutService
         );
 
         if (! $geoFencePassed) {
-            throw new Exception("Transaction rejected: device is outside the terminal's approved geo-fence.");
+            throw new Exception(
+                "Transaction rejected: device is outside the terminal's approved geo-fence."
+            );
         }
 
         if ($customerAccount->status !== 'ACTIVE') {
@@ -102,12 +149,39 @@ class AgentCashOutService
                 ->lockForUpdate()
                 ->first();
 
-            if (! $balance || (float) $balance->declared_physical_cash < $amount) {
-                throw new Exception("Agent {$agent->agent_code} has insufficient physical cash liquidity for this transaction.");
+            if (
+                ! $balance
+                || (float) $balance->declared_physical_cash < $amount
+            ) {
+                throw new Exception(
+                    "Agent {$agent->agent_code} has insufficient physical cash liquidity for this transaction."
+                );
             }
 
             $transactionDate = now();
             $transactionNo = $this->transactionNumberService->generate('AGT');
+
+            $feeAmount = $this->feeCalculationService->calculateFee(
+                $agent,
+                'CASH_OUT'
+            );
+
+            $commissionAmount = $this->feeCalculationService
+                ->calculateCommission(
+                    $agent,
+                    'CASH_OUT'
+                );
+
+            // Risk is observational at this stage: assess the transaction and
+            // persist the result for audit/monitoring, but do not block processing
+            // based on the resulting risk level until an explicit enforcement
+            // policy is introduced.
+            $riskAssessment = $this->riskService->assess(
+                $agent,
+                $terminal,
+                'CASH_OUT',
+                $amount
+            );
 
             $agentTransaction = AgentTransaction::create([
                 'transaction_no' => $transactionNo,
@@ -119,6 +193,8 @@ class AgentCashOutService
                 'transaction_type' => 'CASH_OUT',
                 'status' => 'INITIATED',
                 'amount' => $amount,
+                'fee_amount' => $feeAmount,
+                'commission_amount' => $commissionAmount,
                 'currency' => $balance->currency,
                 'customer_account_id' => $customerAccount->id,
                 'customer_reference' => $customerReference,
@@ -127,8 +203,13 @@ class AgentCashOutService
                 'geo_fence_passed' => $geoFencePassed,
                 'transaction_date' => $transactionDate,
                 'performed_by' => $performedBy,
+                'risk_metadata' => $riskAssessment,
             ]);
 
+            // This is called BEFORE crediting the agent's float, so it
+            // performs its own real, tested customer-balance-sufficiency
+            // check (Customer balance checked, per Module 10) without
+            // duplicating that logic here.
             $this->customerAccountService->withdraw(
                 $customerAccount,
                 $amount,
@@ -137,9 +218,15 @@ class AgentCashOutService
                 $narration ?? 'Agent cash-out'
             );
 
+            // Blueprint §13.3 exact direction -- the reverse of AG-07.
             $balance->ledger_float += $amount;
             $balance->available_float += $amount;
             $balance->declared_physical_cash -= $amount;
+
+            if ($commissionAmount > 0) {
+                $balance->pending_commission += $commissionAmount;
+            }
+
             $balance->save();
 
             $cashLedger = CashLedger::create([
@@ -189,6 +276,9 @@ class AgentCashOutService
         });
     }
 
+    /**
+     * Same haversine-distance geo-fence check as AgentCashInService.
+     */
     protected function isWithinGeoFence(
         float $lat1,
         float $lon1,

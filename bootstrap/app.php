@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\AuthenticateBasicOnce;
 use App\Http\Middleware\EnsurePermission;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -16,6 +17,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'permission' => EnsurePermission::class,
+            'auth.basic.once' => AuthenticateBasicOnce::class,
         ]);
         $middleware->redirectGuestsTo(null);
     })

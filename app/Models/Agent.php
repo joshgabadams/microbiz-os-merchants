@@ -90,7 +90,7 @@ public function agreements()
 public function activeAgreement()
 {
     return $this->hasOne(AgentAgreement::class)
-        ->where('status', 'ACTIVE')
+        ->where('status', 'EXECUTED')
         ->latestOfMany();
 }
 
@@ -115,5 +115,19 @@ public function trainingRecords()
     return $this->hasMany(AgentTrainingRecord::class);
 }
 
+public function transactions()
+{
+    return $this->hasMany(AgentTransaction::class);
+}
+
+public function complaints()
+{
+    return $this->hasMany(AgentComplaint::class);
+}
+
+public function inspections()
+{
+    return $this->hasMany(AgentInspection::class);
+}
 
 }

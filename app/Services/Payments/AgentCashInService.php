@@ -14,15 +14,35 @@ use App\Services\Customer\CustomerAccountService;
 use Exception;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * AG-07: Cash-In. Follows Module 9's exact workflow and Blueprint
+ * §13.2's exact accounting model:
+ *
+ *   Debit: Agent electronic-float liability
+ *   Credit: Customer deposit liability
+ *
+ * This is the non-obvious direction -- cash-in DECREASES the agent's
+ * tracked electronic float, not increases it, because the agent now
+ * holds untracked physical cash while the customer's balance moves
+ * electronically. Physical cash itself is not tracked here (no
+ * declared-physical-cash workflow exists yet); only the electronic
+ * float liability moves.
+ *
+ * Reuses CustomerAccountService::deposit() (no second cash engine),
+ * and the same CashLedger/GlPostingService pipeline as every other
+ * financial movement in this codebase.
+ */
 class AgentCashInService
 {
     public function __construct(
         protected AgentOperationGuard $guard,
         protected CustomerAccountService $customerAccountService,
         protected TransactionNumberService $transactionNumberService,
-        protected GlPostingService $glPostingService
-    ) {
-    }
+        protected GlPostingService $glPostingService,
+        protected AgentFeeCalculationService $feeCalculationService,
+        protected AgentTransactionIdempotencyService $idempotencyService,
+        protected AgentTransactionRiskService $riskService
+    ) {}
 
     /**
      * @throws Exception
@@ -43,14 +63,23 @@ class AgentCashInService
             throw new Exception('Cash-in amount must be greater than zero.');
         }
 
-        $existing = AgentTransaction::where('idempotency_key', $idempotencyKey)->first();
+        $agent = $operator->agent;
+        $location = $operator->location;
+
+        $existing = $this->idempotencyService->findExisting(
+            $idempotencyKey,
+            'CASH_IN',
+            $agent->id,
+            $location->id,
+            $terminal->id,
+            $operator->id,
+            $customerAccount->id,
+            $amount
+        );
 
         if ($existing) {
             return $existing;
         }
-
-        $agent = $operator->agent;
-        $location = $operator->location;
 
         if ($terminal->agent_id !== $agent->id) {
             throw new Exception('This terminal does not belong to the specified agent.');
@@ -104,7 +133,25 @@ class AgentCashInService
             $transactionDate = now();
             $transactionNo = $this->transactionNumberService->generate('AGT');
 
+            // Blueprint Module 14: fee/commission calculated and stored
+            // for disclosure/audit here. Deliberately NOT deducted from
+            // the customer -- see class-level note on why fee
+            // collection is out of scope for this pass.
+            $feeAmount = $this->feeCalculationService->calculateFee($agent, 'CASH_IN');
+            $commissionAmount = $this->feeCalculationService->calculateCommission($agent, 'CASH_IN');
+            // Risk is observational at this stage: assess the transaction and
+            // persist the result for audit/monitoring, but do not block processing
+            // based on the resulting risk level until an explicit enforcement
+            // policy is introduced.
+            $riskAssessment = $this->riskService->assess(
+                $agent,
+                $terminal,
+                'CASH_IN',
+                $amount
+            );
+
             $agentTransaction = AgentTransaction::create([
+
                 'transaction_no' => $transactionNo,
                 'idempotency_key' => $idempotencyKey,
                 'agent_id' => $agent->id,
@@ -114,6 +161,8 @@ class AgentCashInService
                 'transaction_type' => 'CASH_IN',
                 'status' => 'INITIATED',
                 'amount' => $amount,
+                'fee_amount' => $feeAmount,
+                'commission_amount' => $commissionAmount,
                 'currency' => $balance->currency,
                 'customer_account_id' => $customerAccount->id,
                 'customer_reference' => $customerReference,
@@ -122,11 +171,23 @@ class AgentCashInService
                 'geo_fence_passed' => $geoFencePassed,
                 'transaction_date' => $transactionDate,
                 'performed_by' => $performedBy,
+                'risk_metadata' => $riskAssessment,
             ]);
 
+            // Blueprint §13.2 exact direction.
             $balance->ledger_float -= $amount;
             $balance->available_float -= $amount;
+            // The agent physically receives cash from the customer here
+            // -- declared_physical_cash is derived from real cash-in/
+            // cash-out flow rather than requiring a separate manual
+            // "declare cash" workflow, which makes the physical-liquidity
+            // check AG-08's cash-out relies on meaningful by default.
             $balance->declared_physical_cash += $amount;
+
+            if ($commissionAmount > 0) {
+                $balance->pending_commission += $commissionAmount;
+            }
+
             $balance->save();
 
             $this->customerAccountService->deposit(
@@ -184,6 +245,12 @@ class AgentCashInService
         });
     }
 
+    /**
+     * Haversine-distance geo-fence check. A dedicated
+     * AgentGeoFenceService (Blueprint §9) would be the real home for
+     * this once terminal heartbeat/remote-suspension logic (AG-05)
+     * exists too -- this is the minimal, correct version needed now.
+     */
     protected function isWithinGeoFence(
         float $lat1,
         float $lon1,

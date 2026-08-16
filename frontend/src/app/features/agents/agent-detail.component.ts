@@ -15,6 +15,12 @@ import {
   AgentBeneficialOwner,
   AgentDocument,
   AgentLocation,
+  AgentOperator,
+  AgentTerminal,
+  AgentTransaction,
+  AgentTransactionType,
+  AgentTrainingRecord,
+  TrainingDocument,
 } from '../../core/models/api.models';
 
 @Component({
@@ -1021,6 +1027,7 @@ import {
               'AGREEMENT_PENDING'
             ) {
               <button
+                [class.btn-outline]="showAgreementForm()"
                 (click)="toggleAgreementForm()"
                 [disabled]="working()"
               >
@@ -1212,17 +1219,9 @@ import {
                       <td>
                         <span
                           class="status-badge"
-                          [class]="
-                            agreement.status === 'EXECUTED'
-                              ? 'status-active'
-                              : agreement.status === 'REJECTED'
-                                ? 'status-danger'
-                                : agreement.status === 'DRAFT'
-                                  ? 'status-pending'
-                                  : 'status-neutral'
-                          "
+                          [class]="agreementStatusClass(agreement.status)"
                         >
-                          {{ agreement.status }}
+                          {{ displayStatus(agreement.status) }}
                         </span>
                       </td>
 
@@ -1249,6 +1248,7 @@ import {
 
                       <td>
                         <button
+                          class="btn-outline"
                           (click)="toggleAgreementExpanded(agreement.id)"
                         >
                           {{
@@ -1276,12 +1276,30 @@ import {
                             @if (agreement.status === 'PENDING_INTERNAL_REVIEW') {
                               <h4>Internal Approvals</h4>
 
-                              <div class="approval-grid">
+                              <div class="checklist">
                                 @for (
                                   type of approvalTypes;
                                   track type
                                 ) {
-                                  <div class="approval-row">
+                                  <div
+                                    class="checklist-item"
+                                    [class.done]="approvalStatus(agreement, type) === 'APPROVED'"
+                                    [class.rejected]="approvalStatus(agreement, type) === 'REJECTED'"
+                                  >
+                                    <span class="checklist-icon">
+                                      {{
+                                        approvalStatus(agreement, type) === 'APPROVED'
+                                          ? '✓'
+                                          : approvalStatus(agreement, type) === 'REJECTED'
+                                            ? '✕'
+                                            : '•'
+                                      }}
+                                    </span>
+
+                                    <span class="checklist-label">
+                                      {{ displayStatus(type) }}
+                                    </span>
+
                                     <span
                                       class="status-badge"
                                       [class]="
@@ -1292,27 +1310,31 @@ import {
                                             : 'status-pending'
                                       "
                                     >
-                                      {{ type }}: {{ approvalStatus(agreement, type) }}
+                                      {{ displayStatus(approvalStatus(agreement, type)) }}
                                     </span>
 
                                     @if (approvalStatus(agreement, type) === 'PENDING') {
-                                      <input
-                                        class="notes-input"
-                                        placeholder="Notes (optional)"
-                                        [(ngModel)]="approvalNotes[type]"
-                                      />
-                                      <button
-                                        (click)="recordApproval(agreement, type, 'APPROVED')"
-                                        [disabled]="working()"
-                                      >
-                                        Approve
-                                      </button>
-                                      <button
-                                        (click)="recordApproval(agreement, type, 'REJECTED')"
-                                        [disabled]="working()"
-                                      >
-                                        Reject
-                                      </button>
+                                      <div class="checklist-actions">
+                                        <input
+                                          class="notes-input"
+                                          placeholder="Notes (optional)"
+                                          [(ngModel)]="approvalNotes[type]"
+                                        />
+                                        <button
+                                          class="btn-success"
+                                          (click)="recordApproval(agreement, type, 'APPROVED')"
+                                          [disabled]="working()"
+                                        >
+                                          Approve
+                                        </button>
+                                        <button
+                                          class="btn-danger-outline"
+                                          (click)="recordApproval(agreement, type, 'REJECTED')"
+                                          [disabled]="working()"
+                                        >
+                                          Reject
+                                        </button>
+                                      </div>
                                     }
                                   </div>
                                 }
@@ -1331,16 +1353,27 @@ import {
                             @if (agreement.status === 'AWAITING_SIGNATURES') {
                               <h4>Signatures</h4>
 
-                              <div class="approval-grid">
+                              <div class="checklist">
                                 @for (party of signatoryParties; track party) {
-                                  <div class="approval-row">
+                                  <div
+                                    class="checklist-item"
+                                    [class.done]="signatoryFor(agreement, party)"
+                                  >
+                                    <span class="checklist-icon">
+                                      {{ signatoryFor(agreement, party) ? '✓' : '•' }}
+                                    </span>
+
+                                    <span class="checklist-label">
+                                      {{ displayStatus(party) }}
+                                    </span>
+
                                     @if (signatoryFor(agreement, party); as sig) {
                                       <span class="status-badge status-active">
-                                        {{ party }} signed by {{ sig.signatory_name }}
+                                        Signed by {{ sig.signatory_name }}
                                       </span>
                                     } @else {
                                       <span class="status-badge status-pending">
-                                        {{ party }}: not yet signed
+                                        Not yet signed
                                       </span>
                                     }
                                   </div>
@@ -1373,24 +1406,40 @@ import {
                                   </select>
                                 </label>
                                 <label class="full-width">
-                                  Signature Evidence Path
+                                  Signature Evidence
                                   <input
-                                    placeholder="/storage/agreements/..."
-                                    [(ngModel)]="signatureEvidencePath"
+                                    type="file"
+                                    accept=".pdf,.jpg,.jpeg,.png"
+                                    [disabled]="uploadingEvidence()"
+                                    (change)="onSignatureEvidenceSelected($event, agreement)"
                                   />
+                                  @if (uploadingEvidence()) {
+                                    <span class="muted">Uploading...</span>
+                                  } @else if (signatureEvidenceFileName()) {
+                                    <span class="muted">
+                                      ✓ Uploaded: {{ signatureEvidenceFileName() }}
+                                    </span>
+                                  } @else {
+                                    <span class="muted">
+                                      Upload a scanned wet signature or an
+                                      already e-signed document (PDF/JPG/PNG, max 10MB).
+                                    </span>
+                                  }
                                 </label>
                                 <div class="form-actions">
                                   <button
+                                    class="btn-outline"
                                     (click)="recordAgreementSignature(agreement)"
-                                    [disabled]="working()"
+                                    [disabled]="working() || !signatureEvidencePath"
                                   >
                                     Record Signature
                                   </button>
                                   <button
+                                    class="btn-success"
                                     (click)="executeAgreement(agreement)"
                                     [disabled]="working()"
                                   >
-                                    Execute
+                                    Execute Agreement
                                   </button>
                                 </div>
                               </div>
@@ -1409,10 +1458,701 @@ import {
                                 internal review.
                               </div>
                             }
+
+                            @if (agreement.status === 'SUPERSEDED') {
+                              <div class="empty-state">
+                                This version was replaced by a later
+                                executed agreement and is kept for record
+                                only.
+                              </div>
+                            }
                           </div>
                         </td>
                       </tr>
                     }
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </section>
+
+        <!-- ===================================================== -->
+        <!-- AG-04: TRAINING -->
+        <!-- ===================================================== -->
+
+        <section class="card">
+          <div class="section-header">
+            <div>
+              <h2>Training</h2>
+
+              <p>
+                Agency banking training guide delivery and
+                acknowledgement.
+              </p>
+            </div>
+
+            <button
+              class="btn-outline"
+              (click)="toggleTrainingDocumentForm()"
+              [disabled]="uploadingTrainingDocument()"
+            >
+              {{
+                showTrainingDocumentForm()
+                  ? 'Cancel'
+                  : '+ Upload Training Guide'
+              }}
+            </button>
+          </div>
+
+          @if (showTrainingDocumentForm()) {
+            <div class="form-grid">
+              <label>
+                Guide Name
+                <input [(ngModel)]="trainingDocumentName" />
+              </label>
+
+              <label>
+                Version
+                <input
+                  [(ngModel)]="trainingDocumentVersion"
+                  placeholder="v1"
+                />
+              </label>
+
+              <label class="full-width">
+                Guide File
+                <input
+                  type="file"
+                  accept=".pdf,.doc,.docx"
+                  [disabled]="uploadingTrainingDocument()"
+                  (change)="onTrainingDocumentFileSelected($event)"
+                />
+                <span class="muted">
+                  PDF/DOC/DOCX, max 10MB.
+                </span>
+              </label>
+
+              <div class="form-actions">
+                <button
+                  (click)="uploadTrainingDocument()"
+                  [disabled]="uploadingTrainingDocument()"
+                >
+                  {{
+                    uploadingTrainingDocument()
+                      ? 'Uploading...'
+                      : 'Add Training Guide'
+                  }}
+                </button>
+              </div>
+            </div>
+          }
+
+          @if ((agent()!.training_records ?? []).length === 0) {
+            <div class="empty-state">
+              No training activity recorded.
+            </div>
+          } @else {
+            <div class="checklist">
+              @for (
+                record of agent()!.training_records!;
+                track record.id
+              ) {
+                <div
+                  class="checklist-item"
+                  [class.done]="record.acknowledged_at"
+                >
+                  <span class="checklist-icon">
+                    {{ record.acknowledged_at ? '✓' : '•' }}
+                  </span>
+
+                  <span class="checklist-label">
+                    {{ record.training_document?.name }}
+                    (v{{ record.training_document_version }})
+                  </span>
+
+                  <span
+                    class="status-badge"
+                    [class]="
+                      record.acknowledged_at
+                        ? 'status-active'
+                        : 'status-pending'
+                    "
+                  >
+                    {{
+                      record.acknowledged_at
+                        ? 'Acknowledged ' + record.acknowledged_at
+                        : 'Downloaded, awaiting acknowledgement'
+                    }}
+                  </span>
+
+                  @if (
+                    !record.acknowledged_at &&
+                    agent()!.status === 'TRAINING_PENDING'
+                  ) {
+                    <button
+                      class="btn-success"
+                      (click)="acknowledgeTraining(record)"
+                      [disabled]="working()"
+                    >
+                      Acknowledge
+                    </button>
+                  }
+                </div>
+              }
+            </div>
+          }
+
+          @if (
+            agent()!.status === 'TRAINING_PENDING' &&
+            !hasPendingTrainingRecord()
+          ) {
+            <div class="form-grid">
+              <label class="full-width">
+                Issue Training Guide
+                <select [(ngModel)]="selectedTrainingDocumentId">
+                  <option [ngValue]="null">
+                    — select a guide —
+                  </option>
+                  @for (
+                    doc of trainingDocuments();
+                    track doc.id
+                  ) {
+                    <option [ngValue]="doc.id">
+                      {{ doc.name }} (v{{ doc.version }})
+                    </option>
+                  }
+                </select>
+              </label>
+
+              <div class="form-actions">
+                <button
+                  (click)="recordTrainingDownload()"
+                  [disabled]="working()"
+                >
+                  Record Download
+                </button>
+              </div>
+            </div>
+          }
+        </section>
+
+        <!-- ===================================================== -->
+        <!-- AG-04: OPERATORS -->
+        <!-- ===================================================== -->
+
+        <section class="card">
+          <div class="section-header">
+            <div>
+              <h2>Operators</h2>
+
+              <p>
+                Platform users authorised to operate this agent's
+                locations.
+              </p>
+            </div>
+
+            <button
+              class="btn-outline"
+              (click)="toggleOperatorForm()"
+              [disabled]="working()"
+            >
+              {{
+                showOperatorForm()
+                  ? 'Cancel'
+                  : '+ Assign Operator'
+              }}
+            </button>
+          </div>
+
+          @if (showOperatorForm()) {
+            <div class="form-grid">
+              <label>
+                Location
+                <select [(ngModel)]="operatorLocationId">
+                  <option [ngValue]="null">
+                    — select a location —
+                  </option>
+                  @for (loc of locations(); track loc.id) {
+                    <option [ngValue]="loc.id">
+                      {{ loc.address_line_1 }}, {{ loc.city }}
+                    </option>
+                  }
+                </select>
+              </label>
+
+              <label>
+                User ID
+                <input
+                  type="number"
+                  [(ngModel)]="operatorUserId"
+                  placeholder="platform user ID"
+                />
+                <span class="muted">
+                  The numeric ID of an existing platform login
+                  account -- confirm it with the user directly,
+                  there's no user directory here.
+                </span>
+              </label>
+
+              <label>
+                Role
+                <input
+                  [(ngModel)]="operatorRole"
+                  placeholder="e.g. Cashier, Manager"
+                />
+              </label>
+
+              <div class="form-actions">
+                <button
+                  (click)="createOperator()"
+                  [disabled]="working()"
+                >
+                  Assign Operator
+                </button>
+              </div>
+            </div>
+          }
+
+          @if (operators().length === 0) {
+            <div class="empty-state">
+              No operators assigned.
+            </div>
+          } @else {
+            <div class="checklist">
+              @for (operator of operators(); track operator.id) {
+                <div
+                  class="checklist-item"
+                  [class.done]="operator.status === 'ACTIVE'"
+                  [class.rejected]="operator.status === 'SUSPENDED'"
+                >
+                  <span class="checklist-icon">
+                    {{
+                      operator.status === 'ACTIVE'
+                        ? '✓'
+                        : operator.status === 'SUSPENDED'
+                          ? '✕'
+                          : '•'
+                    }}
+                  </span>
+
+                  <span class="checklist-label">
+                    {{ operator.role }} (user #{{ operator.user_id }})
+                  </span>
+
+                  <span
+                    class="status-badge"
+                    [class]="
+                      operator.status === 'ACTIVE'
+                        ? 'status-active'
+                        : operator.status === 'SUSPENDED'
+                          ? 'status-danger'
+                          : 'status-pending'
+                    "
+                  >
+                    {{ displayStatus(operator.status) }}
+                  </span>
+
+                  <div class="checklist-actions">
+                    @if (operator.status !== 'ACTIVE') {
+                      <button
+                        class="btn-success"
+                        (click)="activateOperator(operator)"
+                        [disabled]="working()"
+                      >
+                        Activate
+                      </button>
+                    }
+
+                    @if (operator.status === 'ACTIVE') {
+                      <button
+                        class="btn-danger-outline"
+                        (click)="suspendOperator(operator)"
+                        [disabled]="working()"
+                      >
+                        Suspend
+                      </button>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          }
+        </section>
+
+        <!-- ===================================================== -->
+        <!-- AG-04/05: TERMINALS -->
+        <!-- ===================================================== -->
+
+        <section class="card">
+          <div class="section-header">
+            <div>
+              <h2>Terminals</h2>
+
+              <p>
+                POS/device registry and geo-fence status per
+                location.
+              </p>
+            </div>
+
+            <button
+              class="btn-outline"
+              (click)="toggleTerminalForm()"
+              [disabled]="working()"
+            >
+              {{
+                showTerminalForm()
+                  ? 'Cancel'
+                  : '+ Register Terminal'
+              }}
+            </button>
+          </div>
+
+          @if (showTerminalForm()) {
+            <div class="form-grid">
+              <label>
+                Location
+                <select [(ngModel)]="terminalLocationId">
+                  <option [ngValue]="null">
+                    — select a location —
+                  </option>
+                  @for (loc of locations(); track loc.id) {
+                    <option [ngValue]="loc.id">
+                      {{ loc.address_line_1 }}, {{ loc.city }}
+                    </option>
+                  }
+                </select>
+              </label>
+
+              <label>
+                Terminal ID
+                <input [(ngModel)]="terminalIdValue" />
+              </label>
+
+              <label>
+                Serial Number
+                <input [(ngModel)]="terminalSerialNumber" />
+              </label>
+
+              <label>
+                Device Model
+                <input [(ngModel)]="terminalDeviceModel" />
+              </label>
+
+              <label>
+                Provider
+                <input [(ngModel)]="terminalProvider" />
+              </label>
+
+              <label>
+                Registered Latitude
+                <input
+                  type="number"
+                  [(ngModel)]="terminalLatitude"
+                />
+              </label>
+
+              <label>
+                Registered Longitude
+                <input
+                  type="number"
+                  [(ngModel)]="terminalLongitude"
+                />
+              </label>
+
+              <div class="form-actions">
+                <button
+                  (click)="createTerminal()"
+                  [disabled]="working()"
+                >
+                  Register Terminal
+                </button>
+              </div>
+            </div>
+          }
+
+          @if (terminals().length === 0) {
+            <div class="empty-state">
+              No terminals registered.
+            </div>
+          } @else {
+            <div class="record-list">
+              @for (terminal of terminals(); track terminal.id) {
+                <div class="record-card">
+                  <div>
+                    <strong>{{ terminal.terminal_id }}</strong>
+
+                    <div class="muted">
+                      Serial: {{ terminal.serial_number }}
+                      @if (terminal.device_model) {
+                        · {{ terminal.device_model }}
+                      }
+                    </div>
+
+                    <div class="muted">
+                      Geo-fence radius:
+                      {{ terminal.geo_fence_radius_metres }}m
+                    </div>
+
+                    @if (terminal.last_ip_address) {
+                      <div class="muted">
+                        Last seen from IP
+                        {{ terminal.last_ip_address }}
+                        @if (terminal.ip_city) {
+                          ({{ terminal.ip_city }},
+                          {{ terminal.ip_state }},
+                          {{ terminal.ip_country }})
+                        }
+                        @if (terminal.ip_location_mismatch) {
+                          <span class="status-badge status-danger">
+                            IP location mismatch
+                          </span>
+                        }
+                      </div>
+                    } @else {
+                      <div class="muted">
+                        No IP location signal yet -- recorded on
+                        the terminal's next heartbeat.
+                      </div>
+                    }
+                  </div>
+
+                  <div class="record-meta">
+                    <span
+                      class="status-badge"
+                      [class]="
+                        terminal.status === 'ACTIVE'
+                          ? 'status-active'
+                          : terminal.status === 'SUSPENDED'
+                            ? 'status-danger'
+                            : 'status-pending'
+                      "
+                    >
+                      {{ displayStatus(terminal.status) }}
+                    </span>
+
+                    @if (terminal.status !== 'ACTIVE') {
+                      <button
+                        class="btn-success"
+                        (click)="activateTerminal(terminal)"
+                        [disabled]="working()"
+                      >
+                        Activate
+                      </button>
+                    }
+
+                    @if (terminal.status === 'ACTIVE') {
+                      <button
+                        class="btn-danger-outline"
+                        (click)="suspendTerminal(terminal)"
+                        [disabled]="working()"
+                      >
+                        Suspend
+                      </button>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          }
+        </section>
+
+        <!-- ===================================================== -->
+        <!-- AG-07/08/09: TRANSACTIONS -->
+        <!-- ===================================================== -->
+
+        <section class="card">
+          <div class="section-header">
+            <div>
+              <h2>Transactions</h2>
+
+              <p>
+                Cash-in, cash-out and transfer, routed through the
+                agent operation guard.
+              </p>
+            </div>
+
+            <button
+              class="btn-outline"
+              (click)="toggleTransactionForm()"
+              [disabled]="working()"
+            >
+              {{
+                showTransactionForm()
+                  ? 'Cancel'
+                  : '+ New Transaction'
+              }}
+            </button>
+          </div>
+
+          @if (showTransactionForm()) {
+            <div class="form-grid">
+              <label>
+                Type
+                <select [(ngModel)]="transactionType">
+                  <option value="CASH_IN">Cash-In</option>
+                  <option value="CASH_OUT">Cash-Out</option>
+                  <option value="TRANSFER">Transfer</option>
+                </select>
+              </label>
+
+              <label>
+                Operator
+                <select [(ngModel)]="txOperatorId">
+                  <option [ngValue]="null">
+                    — select an operator —
+                  </option>
+                  @for (op of operators(); track op.id) {
+                    <option [ngValue]="op.id">
+                      {{ op.role }} (user #{{ op.user_id }}) --
+                      {{ displayStatus(op.status) }}
+                    </option>
+                  }
+                </select>
+              </label>
+
+              <label>
+                Terminal
+                <select
+                  [(ngModel)]="txTerminalId"
+                  (ngModelChange)="onTransactionTerminalChange()"
+                >
+                  <option [ngValue]="null">
+                    — select a terminal —
+                  </option>
+                  @for (t of terminals(); track t.id) {
+                    <option [ngValue]="t.id">
+                      {{ t.terminal_id }} -- {{ displayStatus(t.status) }}
+                    </option>
+                  }
+                </select>
+              </label>
+
+              @if (transactionType === 'CASH_IN' || transactionType === 'CASH_OUT') {
+                <label>
+                  Customer Account ID
+                  <input
+                    type="number"
+                    [(ngModel)]="txCustomerAccountId"
+                  />
+                  <span class="muted">
+                    Numeric customer account ID from FINCORE360 --
+                    no lookup here yet.
+                  </span>
+                </label>
+              }
+
+              @if (transactionType === 'CASH_OUT') {
+                <label class="checkbox-field">
+                  <input
+                    type="checkbox"
+                    [(ngModel)]="txCustomerAuthenticated"
+                  />
+                  Customer authenticated
+                </label>
+              }
+
+              @if (transactionType === 'TRANSFER') {
+                <label>
+                  From Account ID
+                  <input
+                    type="number"
+                    [(ngModel)]="txFromAccountId"
+                  />
+                </label>
+
+                <label>
+                  To Account ID
+                  <input
+                    type="number"
+                    [(ngModel)]="txToAccountId"
+                  />
+                </label>
+              }
+
+              <label>
+                Amount
+                <input
+                  type="number"
+                  [(ngModel)]="txAmount"
+                />
+              </label>
+
+              <label>
+                Latitude
+                <input
+                  type="number"
+                  [(ngModel)]="txLatitude"
+                />
+                <span class="muted">
+                  Auto-filled from the selected terminal's
+                  registered position.
+                </span>
+              </label>
+
+              <label>
+                Longitude
+                <input
+                  type="number"
+                  [(ngModel)]="txLongitude"
+                />
+              </label>
+
+              <label>
+                Customer Reference
+                <input [(ngModel)]="txCustomerReference" />
+              </label>
+
+              <label class="full-width">
+                Narration
+                <input [(ngModel)]="txNarration" />
+              </label>
+
+              <div class="form-actions">
+                <button
+                  (click)="submitTransaction()"
+                  [disabled]="working()"
+                >
+                  {{
+                    working() ? 'Processing...' : 'Submit Transaction'
+                  }}
+                </button>
+              </div>
+            </div>
+          }
+
+          @if (transactions().length === 0) {
+            <div class="empty-state">
+              No transactions recorded.
+            </div>
+          } @else {
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Transaction No</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Amount</th>
+                    <th>Terminal</th>
+                    <th>Date</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  @for (tx of transactions(); track tx.id) {
+                    <tr>
+                      <td>{{ tx.transaction_no }}</td>
+                      <td>{{ displayStatus(tx.transaction_type) }}</td>
+                      <td>
+                        <span class="status-badge status-neutral">
+                          {{ displayStatus(tx.status) }}
+                        </span>
+                      </td>
+                      <td>{{ tx.amount }}</td>
+                      <td>{{ tx.terminal?.terminal_id ?? '—' }}</td>
+                      <td>{{ tx.transaction_date ?? tx.created_at ?? '—' }}</td>
+                    </tr>
                   }
                 </tbody>
               </table>
@@ -1459,9 +2199,19 @@ import {
               </h2>
 
               <p>
-                Training has been completed. Terminal controls
-                belong to the AG-04 workflow.
+                Training has been completed. Assign an active
+                operator and an active terminal above, then
+                activate the agent -- the server re-checks all of
+                agreement, training, location, operator and
+                terminal before allowing it.
               </p>
+
+              <button
+                (click)="activateAgent()"
+                [disabled]="working()"
+              >
+                Activate Agent
+              </button>
             </div>
           </section>
         }
@@ -1488,6 +2238,8 @@ import {
   styles: [`
     :host {
       display: block;
+      font-family: var(--font-sans);
+      color: var(--color-foreground);
     }
 
     .page {
@@ -1498,74 +2250,83 @@ import {
     .page-header {
       display: flex;
       justify-content: space-between;
-      gap: 20px;
+      gap: var(--space-5);
       align-items: flex-start;
-      margin-bottom: 22px;
+      margin-bottom: var(--space-5);
     }
 
     h1 {
       margin: 6px 0 4px;
-      font-size: 1.7rem;
-      color: #1e2761;
+      font-size: var(--font-size-2xl);
+      font-weight: 700;
+      color: var(--color-primary);
     }
 
     h2 {
       margin: 0 0 8px;
-      font-size: 1.05rem;
-      color: #1e2761;
+      font-size: var(--font-size-lg);
+      font-weight: 600;
+      color: var(--color-primary);
     }
 
     h3 {
       margin: 0 0 5px;
-      color: #1e2761;
-      font-size: 0.95rem;
+      color: var(--color-primary);
+      font-size: var(--font-size-base);
+      font-weight: 600;
     }
 
     p {
-      line-height: 1.5;
+      line-height: var(--line-height-base);
     }
 
     .back-link {
       text-decoration: none;
-      color: #1e2761;
-      font-size: 0.9rem;
+      color: var(--color-primary);
+      font-size: var(--font-size-sm);
+      font-weight: 500;
+    }
+
+    .back-link:hover {
+      text-decoration: underline;
     }
 
     .agent-meta {
       display: flex;
       flex-wrap: wrap;
-      gap: 8px;
-      color: #666;
-      font-size: 0.88rem;
+      gap: var(--space-2);
+      color: var(--color-muted);
+      font-size: var(--font-size-sm);
     }
 
     .card {
-      background: white;
-      border: 1px solid #e1e5ee;
-      border-radius: 10px;
-      padding: 18px;
-      margin-bottom: 18px;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+      padding: var(--space-5);
+      margin-bottom: var(--space-4);
     }
 
     .section-header {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      gap: 16px;
-      margin-bottom: 14px;
+      gap: var(--space-4);
+      margin-bottom: var(--space-4);
     }
 
     .section-header p {
       margin: 0;
-      color: #666;
-      font-size: 0.87rem;
+      color: var(--color-muted);
+      font-size: var(--font-size-sm);
     }
 
     .details-grid {
       display: grid;
       grid-template-columns:
         repeat(auto-fit, minmax(180px, 1fr));
-      gap: 16px;
+      gap: var(--space-4);
     }
 
     .details-grid > div {
@@ -1575,8 +2336,10 @@ import {
     }
 
     .label {
-      font-size: 0.78rem;
-      color: #777;
+      font-size: var(--font-size-xs);
+      color: var(--color-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
     }
 
     /* ---------- Lifecycle ---------- */
@@ -1585,33 +2348,34 @@ import {
       display: grid;
       grid-template-columns:
         repeat(auto-fit, minmax(190px, 1fr));
-      gap: 12px;
+      gap: var(--space-3);
     }
 
     .lifecycle-step {
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      padding: 12px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: var(--space-3);
       display: flex;
-      gap: 10px;
+      gap: var(--space-2);
       min-width: 0;
-      font-size: 0.78rem;
-      color: #777;
-      background: #fafafa;
+      font-size: var(--font-size-xs);
+      color: var(--color-muted);
+      background: var(--color-background);
+      transition: background var(--transition-fast), border-color var(--transition-fast);
     }
 
     .lifecycle-step.complete {
-      background: #e7f6ec;
-      border-color: #b9dfc7;
-      color: #26623c;
+      background: var(--color-success-bg);
+      border-color: var(--color-success);
+      color: var(--color-success);
     }
 
     .lifecycle-step.current {
-      background: #fff3d5;
-      border-color: #eccb77;
-      color: #795900;
+      background: var(--color-warning-bg);
+      border-color: var(--color-warning);
+      color: var(--color-warning);
       box-shadow:
-        0 0 0 1px rgba(236, 203, 119, 0.2);
+        0 0 0 1px rgba(146, 64, 14, 0.15);
     }
 
     .step-dot {
@@ -1627,6 +2391,7 @@ import {
     .step-content strong {
       display: block;
       margin-bottom: 4px;
+      color: var(--color-foreground);
     }
 
     .step-status {
@@ -1640,61 +2405,79 @@ import {
 
     .status-badge {
       display: inline-block;
-      font-size: 0.76rem;
-      padding: 5px 10px;
-      border-radius: 14px;
+      font-size: var(--font-size-xs);
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 999px;
       white-space: nowrap;
     }
 
     .status-active {
-      background: #d7f0dd;
-      color: #1f6f5c;
+      background: var(--color-success-bg);
+      color: var(--color-success);
     }
 
     .status-pending {
-      background: #fbe9c9;
-      color: #8a5d00;
+      background: var(--color-warning-bg);
+      color: var(--color-warning);
+    }
+
+    .status-info {
+      background: var(--color-info-bg);
+      color: var(--color-info);
     }
 
     .status-danger {
-      background: #f6d9d5;
-      color: #a6432f;
+      background: var(--color-danger-bg);
+      color: var(--color-danger);
     }
 
     .status-neutral {
-      background: #eef1f8;
-      color: #4d5875;
+      background: var(--color-muted-bg);
+      color: var(--color-muted);
     }
 
     /* ---------- Forms ---------- */
 
     .form-grid {
-      margin: 15px 0;
+      margin: var(--space-4) 0;
       display: grid;
       grid-template-columns:
         repeat(auto-fit, minmax(200px, 1fr));
-      gap: 12px;
-      padding: 14px;
-      background: #f8f9fc;
-      border-radius: 8px;
+      gap: var(--space-3);
+      padding: var(--space-4);
+      background: var(--color-background);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
     }
 
     .form-grid label {
       display: flex;
       flex-direction: column;
       gap: 5px;
-      font-size: 0.8rem;
-      color: #555;
+      font-size: var(--font-size-sm);
+      font-weight: 500;
+      color: var(--color-foreground);
     }
 
     .form-grid input,
-    .form-grid select {
+    .form-grid select,
+    .form-grid textarea {
       box-sizing: border-box;
       width: 100%;
       padding: 8px 10px;
-      border: 1px solid #ccc;
-      border-radius: 5px;
-      background: white;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-sm);
+      background: var(--color-surface);
+      font-size: var(--font-size-sm);
+      color: var(--color-foreground);
+      transition: border-color var(--transition-fast);
+    }
+
+    .form-grid input:focus-visible,
+    .form-grid select:focus-visible,
+    .form-grid textarea:focus-visible {
+      border-color: var(--color-primary);
     }
 
     .full-width {
@@ -1703,6 +2486,8 @@ import {
 
     .form-actions {
       grid-column: 1 / -1;
+      display: flex;
+      gap: var(--space-2);
     }
 
     .checkbox-field {
@@ -1716,12 +2501,19 @@ import {
     }
 
     button {
-      padding: 7px 12px;
-      border: 0;
-      border-radius: 5px;
-      background: #1e2761;
-      color: white;
+      padding: 8px 14px;
+      border: 1px solid transparent;
+      border-radius: var(--radius-sm);
+      background: var(--color-primary);
+      color: var(--color-on-primary);
+      font-size: var(--font-size-sm);
+      font-weight: 600;
       cursor: pointer;
+      transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+    }
+
+    button:hover:not(:disabled) {
+      background: var(--color-primary-hover);
     }
 
     button:disabled {
@@ -1730,38 +2522,69 @@ import {
     }
 
     button.danger {
-      background: #a6432f;
+      background: var(--color-danger);
+    }
+
+    button.btn-outline {
+      background: transparent;
+      border-color: var(--color-border);
+      color: var(--color-foreground);
+    }
+
+    button.btn-outline:hover:not(:disabled) {
+      background: var(--color-muted-bg);
+      border-color: var(--color-muted);
+    }
+
+    button.btn-danger-outline {
+      background: transparent;
+      border-color: var(--color-danger-bg);
+      color: var(--color-danger);
+    }
+
+    button.btn-danger-outline:hover:not(:disabled) {
+      background: var(--color-danger-bg);
+      border-color: var(--color-danger);
+    }
+
+    button.btn-success {
+      background: var(--color-success);
+    }
+
+    button.btn-success:hover:not(:disabled) {
+      background: var(--color-success);
+      filter: brightness(0.92);
     }
 
     .actions {
       display: flex;
       flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 12px;
+      gap: var(--space-2);
+      margin-top: var(--space-3);
     }
 
     /* ---------- Workflow ---------- */
 
     .action-card {
-      border-left: 4px solid #1e2761;
+      border-left: 4px solid var(--color-primary);
     }
 
     .pending-card {
-      border-left: 4px solid #d0a22c;
-      background: #fffdf7;
+      border-left: 4px solid var(--color-accent);
+      background: var(--color-warning-bg);
     }
 
     .action-heading {
       display: flex;
-      gap: 12px;
+      gap: var(--space-3);
       align-items: flex-start;
-      margin-bottom: 12px;
+      margin-bottom: var(--space-3);
     }
 
     .action-heading p {
       margin: 0;
-      color: #666;
-      font-size: 0.88rem;
+      color: var(--color-muted);
+      font-size: var(--font-size-sm);
     }
 
     .action-number {
@@ -1769,12 +2592,12 @@ import {
       height: 28px;
       flex: 0 0 28px;
       border-radius: 50%;
-      background: #1e2761;
-      color: white;
+      background: var(--color-primary);
+      color: var(--color-on-primary);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 0.8rem;
+      font-size: var(--font-size-xs);
       font-weight: 600;
     }
 
@@ -1784,50 +2607,50 @@ import {
       display: grid;
       grid-template-columns:
         repeat(auto-fit, minmax(220px, 1fr));
-      gap: 10px;
-      margin: 15px 0 20px;
+      gap: var(--space-2);
+      margin: var(--space-4) 0 var(--space-5);
     }
 
     .readiness-item {
-      border: 1px solid #e1e5ee;
-      border-radius: 8px;
-      padding: 12px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: var(--space-3);
       display: flex;
       flex-direction: column;
       gap: 4px;
-      color: #777;
-      background: white;
+      color: var(--color-muted);
+      background: var(--color-surface);
     }
 
     .readiness-item.ready {
-      background: #e7f6ec;
-      border-color: #b9dfc7;
-      color: #26623c;
+      background: var(--color-success-bg);
+      border-color: var(--color-success);
+      color: var(--color-success);
     }
 
     .readiness-item span {
-      font-size: 0.78rem;
+      font-size: var(--font-size-xs);
     }
 
     .kyc-section {
-      border-top: 1px solid #eee;
-      padding-top: 18px;
-      margin-top: 18px;
+      border-top: 1px solid var(--color-border);
+      padding-top: var(--space-4);
+      margin-top: var(--space-4);
     }
 
     .record-list {
       display: grid;
-      gap: 10px;
+      gap: var(--space-2);
     }
 
     .record-card {
-      border: 1px solid #e1e5ee;
-      border-radius: 8px;
-      padding: 12px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: var(--space-3);
       display: flex;
       justify-content: space-between;
-      gap: 14px;
-      background: white;
+      gap: var(--space-3);
+      background: var(--color-surface);
     }
 
     .record-meta {
@@ -1836,98 +2659,100 @@ import {
       justify-content: flex-end;
       align-items: center;
       gap: 6px;
-      font-size: 0.78rem;
+      font-size: var(--font-size-xs);
     }
 
     .meta-pill,
     .warning-pill,
     .danger-pill {
-      border-radius: 12px;
-      padding: 3px 7px;
-      font-size: 0.72rem;
+      border-radius: 999px;
+      padding: 3px 8px;
+      font-size: var(--font-size-xs);
+      font-weight: 600;
     }
 
     .meta-pill {
-      background: #eef1f8;
-      color: #4d5875;
+      background: var(--color-muted-bg);
+      color: var(--color-muted);
     }
 
     .warning-pill {
-      background: #fff3d5;
-      color: #795900;
+      background: var(--color-warning-bg);
+      color: var(--color-warning);
     }
 
     .danger-pill {
-      background: #f6d9d5;
-      color: #a6432f;
+      background: var(--color-danger-bg);
+      color: var(--color-danger);
     }
 
     .kyc-completion {
-      margin-top: 20px;
-      border-top: 1px solid #eee;
-      padding-top: 18px;
+      margin-top: var(--space-5);
+      border-top: 1px solid var(--color-border);
+      padding-top: var(--space-4);
       display: flex;
       justify-content: space-between;
       align-items: center;
-      gap: 15px;
+      gap: var(--space-4);
     }
 
     .kyc-completion p {
       margin: 4px 0 0;
-      color: #666;
-      font-size: 0.84rem;
+      color: var(--color-muted);
+      font-size: var(--font-size-sm);
     }
 
     /* ---------- Locations ---------- */
 
     .location-list {
       display: grid;
-      gap: 10px;
+      gap: var(--space-2);
     }
 
     .location-card {
-      border: 1px solid #e1e5ee;
-      border-radius: 8px;
-      padding: 13px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: var(--space-3);
     }
 
     .location-top {
       display: flex;
       justify-content: space-between;
-      gap: 15px;
+      gap: var(--space-4);
     }
 
     .location-details {
-      margin-top: 8px;
+      margin-top: var(--space-2);
       display: flex;
       flex-wrap: wrap;
-      gap: 14px;
-      color: #666;
-      font-size: 0.8rem;
+      gap: var(--space-4);
+      color: var(--color-muted);
+      font-size: var(--font-size-sm);
     }
 
     .verification-notes {
-      margin-top: 10px;
+      margin-top: var(--space-2);
       padding: 8px 10px;
-      border-radius: 5px;
-      background: #f8f9fc;
-      color: #555;
-      font-size: 0.8rem;
+      border-radius: var(--radius-sm);
+      background: var(--color-background);
+      color: var(--color-foreground);
+      font-size: var(--font-size-sm);
     }
 
     .muted {
-      color: #777;
-      font-size: 0.82rem;
+      color: var(--color-muted);
+      font-size: var(--font-size-sm);
       margin-top: 2px;
     }
 
     .empty-state {
-      padding: 14px;
-      border: 1px dashed #ccd3e5;
-      border-radius: 7px;
-      color: #777;
-      background: #fafbfe;
-      font-size: 0.85rem;
+      padding: var(--space-4);
+      border: 1px dashed var(--color-border);
+      border-radius: var(--radius-md);
+      color: var(--color-muted);
+      background: var(--color-background);
+      font-size: var(--font-size-sm);
+      text-align: center;
     }
 
     /* ---------- Agreements ---------- */
@@ -1944,40 +2769,46 @@ import {
 
     th,
     td {
-      padding: 9px;
-      border-bottom: 1px solid #eee;
+      padding: var(--space-2) var(--space-2);
+      border-bottom: 1px solid var(--color-border);
       text-align: left;
-      font-size: 0.83rem;
+      font-size: var(--font-size-sm);
       white-space: nowrap;
     }
 
     th {
-      color: #555;
-      background: #fafbfe;
+      color: var(--color-muted);
+      background: var(--color-background);
+      font-size: var(--font-size-xs);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
     }
 
     /* ---------- Agreement workflow ---------- */
 
     .schedule-block {
-      border: 1px solid #e3e7f1;
-      border-radius: 8px;
-      padding: 12px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: var(--space-3);
       margin-top: 6px;
+      background: var(--color-surface);
     }
 
     .schedule-block h4 {
       margin: 0 0 10px;
-      font-size: 0.85rem;
-      color: #4d5875;
+      font-size: var(--font-size-sm);
+      font-weight: 600;
+      color: var(--color-foreground);
     }
 
     .service-row {
       display: flex;
       flex-wrap: wrap;
-      gap: 12px;
+      gap: var(--space-3);
       align-items: flex-end;
-      padding: 8px 0;
-      border-top: 1px solid #f0f2f8;
+      padding: var(--space-2) 0;
+      border-top: 1px solid var(--color-border);
     }
 
     .service-row:first-of-type {
@@ -1985,8 +2816,8 @@ import {
     }
 
     .service-row label {
-      font-size: 0.78rem;
-      color: #555;
+      font-size: var(--font-size-xs);
+      color: var(--color-muted);
       display: flex;
       flex-direction: column;
       gap: 3px;
@@ -2003,58 +2834,118 @@ import {
     }
 
     .expanded-row td {
-      background: #fafbfe;
-      padding: 14px;
+      background: var(--color-background);
+      padding: var(--space-4);
     }
 
     .agreement-detail h4 {
-      margin: 10px 0 8px;
-      font-size: 0.85rem;
-      color: #4d5875;
+      margin: var(--space-2) 0 var(--space-2);
+      font-size: var(--font-size-sm);
+      font-weight: 600;
+      color: var(--color-foreground);
     }
 
-    .approval-grid {
+    .checklist {
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      margin-bottom: 10px;
+      gap: var(--space-2);
+      margin-bottom: var(--space-3);
     }
 
-    .approval-row {
+    .checklist-item {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: var(--space-3);
+      flex-wrap: wrap;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: var(--space-2) var(--space-3);
+      background: var(--color-surface);
+    }
+
+    .checklist-item.done {
+      border-color: var(--color-success);
+      background: var(--color-success-bg);
+    }
+
+    .checklist-item.rejected {
+      border-color: var(--color-danger);
+      background: var(--color-danger-bg);
+    }
+
+    .checklist-icon {
+      width: 22px;
+      height: 22px;
+      flex: 0 0 22px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: var(--font-size-xs);
+      font-weight: 700;
+      background: var(--color-muted-bg);
+      color: var(--color-muted);
+    }
+
+    .checklist-item.done .checklist-icon {
+      background: var(--color-success);
+      color: var(--color-on-primary);
+    }
+
+    .checklist-item.rejected .checklist-icon {
+      background: var(--color-danger);
+      color: var(--color-on-primary);
+    }
+
+    .checklist-label {
+      font-size: var(--font-size-sm);
+      font-weight: 600;
+      color: var(--color-foreground);
+      flex: 1 1 auto;
+      min-width: 140px;
+    }
+
+    .checklist-actions {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
       flex-wrap: wrap;
     }
 
     .notes-input {
       flex: 1;
       min-width: 160px;
+      padding: 6px 10px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-sm);
+      font-size: var(--font-size-sm);
+      background: var(--color-surface);
     }
 
     /* ---------- General ---------- */
 
     .error-box {
-      padding: 12px;
-      background: #f6d9d5;
-      color: #a6432f;
-      border-radius: 7px;
-      margin-bottom: 15px;
+      padding: var(--space-3);
+      background: var(--color-danger-bg);
+      color: var(--color-danger);
+      border-radius: var(--radius-md);
+      margin-bottom: var(--space-4);
+      font-size: var(--font-size-sm);
     }
 
     .next-stage {
-      background: #eef3ff;
-      border-color: #bcccf2;
+      background: var(--color-info-bg);
+      border-color: var(--color-info);
       display: flex;
-      gap: 14px;
+      gap: var(--space-4);
       align-items: flex-start;
     }
 
     .active-card {
-      background: #e7f6ec;
-      border-color: #b9dfc7;
+      background: var(--color-success-bg);
+      border-color: var(--color-success);
       display: flex;
-      gap: 14px;
+      gap: var(--space-4);
       align-items: flex-start;
     }
 
@@ -2063,8 +2954,8 @@ import {
       height: 34px;
       flex: 0 0 34px;
       border-radius: 50%;
-      background: #1f6f5c;
-      color: white;
+      background: var(--color-success);
+      color: var(--color-on-primary);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -2090,6 +2981,11 @@ import {
 
       .lifecycle {
         grid-template-columns: 1fr;
+      }
+
+      .checklist-item {
+        flex-direction: column;
+        align-items: flex-start;
       }
     }
   `],
@@ -2201,6 +3097,60 @@ export class AgentDetailComponent implements OnInit {
   signatureMethod: 'WET_SIGNATURE_UPLOAD' | 'E_SIGNATURE' =
     'WET_SIGNATURE_UPLOAD';
   signatureEvidencePath = '';
+  signatureEvidenceFileName = signal<string | null>(null);
+  uploadingEvidence = signal(false);
+
+  // ---------- Training (AG-04) ----------
+
+  trainingDocuments = signal<TrainingDocument[]>([]);
+  showTrainingDocumentForm = signal(false);
+  uploadingTrainingDocument = signal(false);
+
+  trainingDocumentName = '';
+  trainingDocumentVersion = '';
+  trainingDocumentFile: File | null = null;
+
+  selectedTrainingDocumentId: number | null = null;
+
+  // ---------- Operators (AG-04) ----------
+
+  operators = signal<AgentOperator[]>([]);
+  showOperatorForm = signal(false);
+
+  operatorLocationId: number | null = null;
+  operatorUserId: number | null = null;
+  operatorRole = '';
+
+  // ---------- Terminals (AG-04/05) ----------
+
+  terminals = signal<AgentTerminal[]>([]);
+  showTerminalForm = signal(false);
+
+  terminalLocationId: number | null = null;
+  terminalIdValue = '';
+  terminalSerialNumber = '';
+  terminalDeviceModel = '';
+  terminalProvider = '';
+  terminalLatitude: number | null = null;
+  terminalLongitude: number | null = null;
+
+  // ---------- Transactions (AG-07/08/09) ----------
+
+  transactions = signal<AgentTransaction[]>([]);
+  showTransactionForm = signal(false);
+  transactionType: AgentTransactionType = 'CASH_IN';
+
+  txOperatorId: number | null = null;
+  txTerminalId: number | null = null;
+  txCustomerAccountId: number | null = null;
+  txFromAccountId: number | null = null;
+  txToAccountId: number | null = null;
+  txAmount: number | null = null;
+  txCustomerAuthenticated = false;
+  txCustomerReference = '';
+  txNarration = '';
+  txLatitude: number | null = null;
+  txLongitude: number | null = null;
 
   // ---------- Lifecycle ----------
 
@@ -2305,6 +3255,18 @@ export class AgentDetailComponent implements OnInit {
 
       templates:
         this.api.listAgreementTemplates(),
+
+      trainingDocuments:
+        this.api.listTrainingDocuments(),
+
+      operators:
+        this.api.listOperators(this.agentId),
+
+      terminals:
+        this.api.listTerminals(this.agentId),
+
+      transactions:
+        this.api.listTransactions(this.agentId),
     }).subscribe({
       next: (result) => {
         this.agent.set(
@@ -2329,6 +3291,22 @@ export class AgentDetailComponent implements OnInit {
 
         this.templates.set(
           result.templates.data
+        );
+
+        this.trainingDocuments.set(
+          result.trainingDocuments.data
+        );
+
+        this.operators.set(
+          result.operators.data
+        );
+
+        this.terminals.set(
+          result.terminals.data
+        );
+
+        this.transactions.set(
+          result.transactions.data
         );
 
         this.loading.set(false);
@@ -2388,6 +3366,32 @@ export class AgentDetailComponent implements OnInit {
       status === 'TERMINAL_PENDING'
     ) {
       return 'status-pending';
+    }
+
+    return 'status-neutral';
+  }
+
+  agreementStatusClass(status: string): string {
+    if (status === 'EXECUTED') {
+      return 'status-active';
+    }
+
+    if (status === 'REJECTED') {
+      return 'status-danger';
+    }
+
+    if (
+      status === 'DRAFT' ||
+      status === 'PENDING_INTERNAL_REVIEW'
+    ) {
+      return 'status-pending';
+    }
+
+    if (
+      status === 'APPROVED_FOR_EXECUTION' ||
+      status === 'AWAITING_SIGNATURES'
+    ) {
+      return 'status-info';
     }
 
     return 'status-neutral';
@@ -3181,10 +4185,46 @@ export class AgentDetailComponent implements OnInit {
       });
   }
 
+  onSignatureEvidenceSelected(
+    event: Event,
+    agreement: AgentAgreement
+  ): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    this.uploadingEvidence.set(true);
+    this.error.set(null);
+
+    this.api
+      .uploadAgreementSignatureEvidence(
+        this.agentId,
+        agreement.id,
+        file
+      )
+      .subscribe({
+        next: (result) => {
+          this.signatureEvidencePath = result.data.path;
+          this.signatureEvidenceFileName.set(file.name);
+          this.uploadingEvidence.set(false);
+        },
+        error: (err) => {
+          this.error.set(
+            err?.error?.message ?? 'Failed to upload signature evidence.'
+          );
+          this.uploadingEvidence.set(false);
+          input.value = '';
+        },
+      });
+  }
+
   recordAgreementSignature(agreement: AgentAgreement): void {
     if (!this.signatoryName.trim() || !this.signatureEvidencePath.trim()) {
       this.error.set(
-        'Signatory name and signature evidence are required.'
+        'Signatory name and uploaded signature evidence are required.'
       );
 
       return;
@@ -3206,6 +4246,7 @@ export class AgentDetailComponent implements OnInit {
           this.signatoryName = '';
           this.signatoryTitle = '';
           this.signatureEvidencePath = '';
+          this.signatureEvidenceFileName.set(null);
           this.working.set(false);
           this.reload();
         },
@@ -3314,5 +4355,479 @@ export class AgentDetailComponent implements OnInit {
     this.agreementDisputeMethod = 'ARBITRATION';
     this.agreementSpecialConditions = '';
     this.agreementDocumentPath = '';
+  }
+
+  // ---------- AG-04: Training ----------
+
+  toggleTrainingDocumentForm(): void {
+    this.showTrainingDocumentForm.update(
+      (current) => !current
+    );
+  }
+
+  onTrainingDocumentFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.trainingDocumentFile = input.files?.[0] ?? null;
+  }
+
+  uploadTrainingDocument(): void {
+    if (
+      !this.trainingDocumentName.trim() ||
+      !this.trainingDocumentVersion.trim() ||
+      !this.trainingDocumentFile
+    ) {
+      this.error.set(
+        'Guide name, version and file are all required.'
+      );
+
+      return;
+    }
+
+    this.uploadingTrainingDocument.set(true);
+    this.error.set(null);
+
+    this.api
+      .createTrainingDocument(
+        this.trainingDocumentName.trim(),
+        this.trainingDocumentVersion.trim(),
+        this.trainingDocumentFile
+      )
+      .subscribe({
+        next: () => {
+          this.trainingDocumentName = '';
+          this.trainingDocumentVersion = '';
+          this.trainingDocumentFile = null;
+          this.showTrainingDocumentForm.set(false);
+          this.uploadingTrainingDocument.set(false);
+          this.reload();
+        },
+        error: (err) => {
+          this.error.set(
+            err?.error?.message ??
+              'Failed to upload training guide.'
+          );
+          this.uploadingTrainingDocument.set(false);
+        },
+      });
+  }
+
+  hasPendingTrainingRecord(): boolean {
+    return (
+      this.agent()?.training_records?.some(
+        (record) => !record.acknowledged_at
+      ) ?? false
+    );
+  }
+
+  recordTrainingDownload(): void {
+    if (!this.selectedTrainingDocumentId) {
+      this.error.set(
+        'Select a training guide to issue.'
+      );
+
+      return;
+    }
+
+    this.working.set(true);
+    this.error.set(null);
+
+    this.api
+      .recordTrainingDownload(
+        this.agentId,
+        this.selectedTrainingDocumentId
+      )
+      .subscribe({
+        next: () => {
+          this.selectedTrainingDocumentId = null;
+          this.working.set(false);
+          this.reload();
+        },
+        error: (err) => {
+          this.error.set(
+            err?.error?.message ??
+              'Failed to record training download.'
+          );
+          this.working.set(false);
+        },
+      });
+  }
+
+  acknowledgeTraining(record: AgentTrainingRecord): void {
+    this.working.set(true);
+    this.error.set(null);
+
+    this.api
+      .acknowledgeTraining(this.agentId, record.id)
+      .subscribe({
+        next: () => {
+          this.working.set(false);
+          this.reload();
+        },
+        error: (err) => {
+          this.error.set(
+            err?.error?.message ??
+              'Failed to acknowledge training.'
+          );
+          this.working.set(false);
+        },
+      });
+  }
+
+  // ---------- AG-04: Operators ----------
+
+  toggleOperatorForm(): void {
+    this.showOperatorForm.update(
+      (current) => !current
+    );
+  }
+
+  createOperator(): void {
+    if (
+      !this.operatorLocationId ||
+      !this.operatorUserId ||
+      !this.operatorRole.trim()
+    ) {
+      this.error.set(
+        'Location, user ID and role are all required.'
+      );
+
+      return;
+    }
+
+    this.working.set(true);
+    this.error.set(null);
+
+    this.api
+      .createOperator(this.agentId, {
+        agent_location_id: this.operatorLocationId,
+        user_id: this.operatorUserId,
+        role: this.operatorRole.trim(),
+      })
+      .subscribe({
+        next: () => {
+          this.operatorLocationId = null;
+          this.operatorUserId = null;
+          this.operatorRole = '';
+          this.showOperatorForm.set(false);
+          this.working.set(false);
+          this.reload();
+        },
+        error: (err) => {
+          this.error.set(
+            err?.error?.message ??
+              'Failed to assign operator.'
+          );
+          this.working.set(false);
+        },
+      });
+  }
+
+  activateOperator(operator: AgentOperator): void {
+    this.working.set(true);
+    this.error.set(null);
+
+    this.api
+      .activateOperator(operator.id)
+      .subscribe({
+        next: () => {
+          this.working.set(false);
+          this.reload();
+        },
+        error: (err) => {
+          this.error.set(
+            err?.error?.message ??
+              'Failed to activate operator.'
+          );
+          this.working.set(false);
+        },
+      });
+  }
+
+  suspendOperator(operator: AgentOperator): void {
+    this.working.set(true);
+    this.error.set(null);
+
+    this.api
+      .suspendOperator(operator.id)
+      .subscribe({
+        next: () => {
+          this.working.set(false);
+          this.reload();
+        },
+        error: (err) => {
+          this.error.set(
+            err?.error?.message ??
+              'Failed to suspend operator.'
+          );
+          this.working.set(false);
+        },
+      });
+  }
+
+  // ---------- AG-04/05: Terminals ----------
+
+  toggleTerminalForm(): void {
+    this.showTerminalForm.update(
+      (current) => !current
+    );
+  }
+
+  createTerminal(): void {
+    if (
+      !this.terminalLocationId ||
+      !this.terminalIdValue.trim() ||
+      !this.terminalSerialNumber.trim() ||
+      this.terminalLatitude === null ||
+      this.terminalLongitude === null
+    ) {
+      this.error.set(
+        'Location, terminal ID, serial number and GPS coordinates are all required.'
+      );
+
+      return;
+    }
+
+    this.working.set(true);
+    this.error.set(null);
+
+    this.api
+      .createTerminal({
+        agent_id: this.agentId,
+        agent_location_id: this.terminalLocationId,
+        terminal_id: this.terminalIdValue.trim(),
+        serial_number: this.terminalSerialNumber.trim(),
+        device_model: this.terminalDeviceModel.trim() || undefined,
+        provider: this.terminalProvider.trim() || undefined,
+        registered_latitude: this.terminalLatitude,
+        registered_longitude: this.terminalLongitude,
+      })
+      .subscribe({
+        next: () => {
+          this.terminalLocationId = null;
+          this.terminalIdValue = '';
+          this.terminalSerialNumber = '';
+          this.terminalDeviceModel = '';
+          this.terminalProvider = '';
+          this.terminalLatitude = null;
+          this.terminalLongitude = null;
+          this.showTerminalForm.set(false);
+          this.working.set(false);
+          this.reload();
+        },
+        error: (err) => {
+          this.error.set(
+            err?.error?.message ??
+              'Failed to register terminal.'
+          );
+          this.working.set(false);
+        },
+      });
+  }
+
+  activateTerminal(terminal: AgentTerminal): void {
+    this.working.set(true);
+    this.error.set(null);
+
+    this.api
+      .activateTerminal(terminal.id)
+      .subscribe({
+        next: () => {
+          this.working.set(false);
+          this.reload();
+        },
+        error: (err) => {
+          this.error.set(
+            err?.error?.message ??
+              'Failed to activate terminal.'
+          );
+          this.working.set(false);
+        },
+      });
+  }
+
+  suspendTerminal(terminal: AgentTerminal): void {
+    this.working.set(true);
+    this.error.set(null);
+
+    this.api
+      .suspendTerminal(terminal.id)
+      .subscribe({
+        next: () => {
+          this.working.set(false);
+          this.reload();
+        },
+        error: (err) => {
+          this.error.set(
+            err?.error?.message ??
+              'Failed to suspend terminal.'
+          );
+          this.working.set(false);
+        },
+      });
+  }
+
+  // ---------- AG-07/08/09: Transactions ----------
+
+  toggleTransactionForm(): void {
+    this.showTransactionForm.update(
+      (current) => !current
+    );
+  }
+
+  onTransactionTerminalChange(): void {
+    const terminal = this.terminals().find(
+      (t) => t.id === this.txTerminalId
+    );
+
+    if (terminal) {
+      this.txLatitude = Number(terminal.registered_latitude);
+      this.txLongitude = Number(terminal.registered_longitude);
+    }
+  }
+
+  submitTransaction(): void {
+    if (
+      !this.txOperatorId ||
+      !this.txTerminalId ||
+      !this.txAmount ||
+      this.txLatitude === null ||
+      this.txLongitude === null
+    ) {
+      this.error.set(
+        'Operator, terminal, amount and GPS coordinates are all required.'
+      );
+
+      return;
+    }
+
+    const idempotencyKey = crypto.randomUUID();
+
+    this.working.set(true);
+    this.error.set(null);
+
+    if (this.transactionType === 'CASH_IN') {
+      if (!this.txCustomerAccountId) {
+        this.error.set('Customer account is required.');
+        this.working.set(false);
+
+        return;
+      }
+
+      this.api
+        .cashIn(this.agentId, {
+          operator_id: this.txOperatorId,
+          terminal_id: this.txTerminalId,
+          customer_account_id: this.txCustomerAccountId,
+          amount: this.txAmount,
+          idempotency_key: idempotencyKey,
+          latitude: this.txLatitude,
+          longitude: this.txLongitude,
+          customer_reference: this.txCustomerReference.trim() || undefined,
+          narration: this.txNarration.trim() || undefined,
+        })
+        .subscribe(this.transactionObserver());
+
+      return;
+    }
+
+    if (this.transactionType === 'CASH_OUT') {
+      if (!this.txCustomerAccountId) {
+        this.error.set('Customer account is required.');
+        this.working.set(false);
+
+        return;
+      }
+
+      this.api
+        .cashOut(this.agentId, {
+          operator_id: this.txOperatorId,
+          terminal_id: this.txTerminalId,
+          customer_account_id: this.txCustomerAccountId,
+          amount: this.txAmount,
+          idempotency_key: idempotencyKey,
+          latitude: this.txLatitude,
+          longitude: this.txLongitude,
+          customer_authenticated: this.txCustomerAuthenticated,
+          customer_reference: this.txCustomerReference.trim() || undefined,
+          narration: this.txNarration.trim() || undefined,
+        })
+        .subscribe(this.transactionObserver());
+
+      return;
+    }
+
+    if (!this.txFromAccountId || !this.txToAccountId) {
+      this.error.set(
+        'Both the source and destination customer accounts are required.'
+      );
+      this.working.set(false);
+
+      return;
+    }
+
+    this.api
+      .transfer(this.agentId, {
+        operator_id: this.txOperatorId,
+        terminal_id: this.txTerminalId,
+        from_account_id: this.txFromAccountId,
+        to_account_id: this.txToAccountId,
+        amount: this.txAmount,
+        idempotency_key: idempotencyKey,
+        latitude: this.txLatitude,
+        longitude: this.txLongitude,
+        narration: this.txNarration.trim() || undefined,
+      })
+      .subscribe(this.transactionObserver());
+  }
+
+  private transactionObserver() {
+    return {
+      next: () => {
+        this.resetTransactionForm();
+        this.working.set(false);
+        this.reload();
+      },
+      error: (err: any) => {
+        this.error.set(
+          err?.error?.message ?? 'Transaction failed.'
+        );
+        this.working.set(false);
+      },
+    };
+  }
+
+  activateAgent(): void {
+    this.working.set(true);
+    this.error.set(null);
+
+    this.api
+      .activate(this.agentId)
+      .subscribe({
+        next: () => {
+          this.working.set(false);
+          this.reload();
+        },
+        error: (err) => {
+          this.error.set(
+            err?.error?.message ?? 'Failed to activate agent.'
+          );
+          this.working.set(false);
+        },
+      });
+  }
+
+  private resetTransactionForm(): void {
+    this.txOperatorId = null;
+    this.txTerminalId = null;
+    this.txCustomerAccountId = null;
+    this.txFromAccountId = null;
+    this.txToAccountId = null;
+    this.txAmount = null;
+    this.txCustomerAuthenticated = false;
+    this.txCustomerReference = '';
+    this.txNarration = '';
+    this.txLatitude = null;
+    this.txLongitude = null;
+    this.showTransactionForm.set(false);
   }
 }

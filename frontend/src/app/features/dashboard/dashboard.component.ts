@@ -25,6 +25,8 @@ import { AuthService } from '../../core/auth.service';
           <a routerLink="/fixed-deposits" routerLinkActive="active">Fixed Deposits</a>
           <a routerLink="/merchants" routerLinkActive="active">Merchants</a>
           <a routerLink="/wallets" routerLinkActive="active">Wallets</a>
+          <a routerLink="/complaints" routerLinkActive="active">Complaints</a>
+          <a routerLink="/inspections" routerLinkActive="active">Inspections</a>
         </nav>
         <div class="user">
           <span>{{ auth.user()?.name }}</span>

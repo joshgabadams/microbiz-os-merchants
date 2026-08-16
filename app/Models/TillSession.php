@@ -11,6 +11,7 @@ class TillSession extends Model
         'teller_id',
         'branch_id',
         'vault_id',
+        'branch_business_day_id',
         'opened_by',
         'closed_by',
         'opening_float',
@@ -60,8 +61,16 @@ class TillSession extends Model
         return $this->belongsTo(User::class, 'closed_by');
     }
 
-    public function transactions()
+        public function transactions()
     {
         return $this->hasMany(TillTransaction::class);
+    }
+
+    public function businessDay()
+    {
+        return $this->belongsTo(
+            BranchBusinessDay::class,
+            'branch_business_day_id'
+        );
     }
 }

@@ -3,12 +3,14 @@
 namespace App\Services\Approval;
 
 use App\Models\Agent;
+use App\Models\AgentTransaction;
 use App\Models\ApprovalRequest;
 use App\Models\Teller;
 use App\Models\Vault;
 use App\Services\CashManagement\AgentFloatService;
 use App\Services\CashManagement\VaultTellerFloatService;
 use App\Services\Common\TransactionNumberService;
+use App\Services\Payments\AgentTransactionReversalService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
@@ -18,9 +20,9 @@ class ApprovalRequestService
     public function __construct(
         protected TransactionNumberService $transactionNumberService,
         protected VaultTellerFloatService $vaultTellerFloatService,
-        protected AgentFloatService $agentFloatService
-    ) {
-    }
+        protected AgentFloatService $agentFloatService,
+        protected AgentTransactionReversalService $agentTransactionReversalService
+    ) {}
 
     public function createRequest(
         string $requestType,
@@ -96,7 +98,7 @@ class ApprovalRequestService
 
             $payload = $approvalRequest->payload;
 
-            if (!is_array($payload)) {
+            if (! is_array($payload)) {
                 throw new RuntimeException(
                     'The approval request payload is invalid.'
                 );
@@ -105,8 +107,16 @@ class ApprovalRequestService
             $result = match ($approvalRequest->request_type) {
                 'ALLOCATE_FLOAT' => $this->executeAllocateFloat($payload),
                 'RETURN_FLOAT' => $this->executeReturnFloat($payload),
-                'AGENT_ALLOCATE_FLOAT' => $this->executeAgentAllocateFloat($payload),
-                'AGENT_RETURN_FLOAT' => $this->executeAgentReturnFloat($payload),
+                'AGENT_ALLOCATE_FLOAT' => $this->executeAgentAllocateFloat(
+                    $payload
+                ),
+                'AGENT_RETURN_FLOAT' => $this->executeAgentReturnFloat(
+                    $payload
+                ),
+                'AGENT_TRANSACTION_REVERSAL' => $this->executeAgentTransactionReversal(
+                    $payload,
+                    $checkerId
+                ),
 
                 default => throw new RuntimeException(
                     "Unsupported approval request type: {$approvalRequest->request_type}."
@@ -115,6 +125,7 @@ class ApprovalRequestService
 
             $executedTransaction = $result['vault_transaction']
                 ?? $result['teller_transaction']
+                ?? $result['agent_transaction']
                 ?? null;
 
             $approvalRequest->update([
@@ -189,6 +200,29 @@ class ApprovalRequestService
         );
     }
 
+    protected function executeAgentTransactionReversal(
+        array $payload,
+        int $checkerId
+    ): array {
+        if (! array_key_exists('agent_transaction_id', $payload)) {
+            throw new RuntimeException(
+                'The approval payload is missing the agent_transaction_id field.'
+            );
+        }
+
+        $transaction = $this->agentTransactionReversalService->reverse(
+            AgentTransaction::findOrFail(
+                $payload['agent_transaction_id']
+            ),
+            $checkerId,
+            $payload['narration'] ?? null
+        );
+
+        return [
+            'agent_transaction' => $transaction,
+        ];
+    }
+
     protected function ensureRequestIsPending(
         ApprovalRequest $approvalRequest
     ): void {
@@ -224,7 +258,7 @@ class ApprovalRequestService
         ];
 
         foreach ($requiredFields as $field) {
-            if (!array_key_exists($field, $payload)) {
+            if (! array_key_exists($field, $payload)) {
                 throw new RuntimeException(
                     "The approval payload is missing the {$field} field."
                 );
@@ -248,7 +282,7 @@ class ApprovalRequestService
         ];
 
         foreach ($requiredFields as $field) {
-            if (!array_key_exists($field, $payload)) {
+            if (! array_key_exists($field, $payload)) {
                 throw new RuntimeException(
                     "The approval payload is missing the {$field} field."
                 );

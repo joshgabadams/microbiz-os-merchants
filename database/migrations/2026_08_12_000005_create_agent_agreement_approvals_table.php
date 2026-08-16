@@ -16,15 +16,35 @@ return new class extends Migration
     {
         Schema::create('agent_agreement_approvals', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('agent_agreement_id')->constrained()->cascadeOnDelete();
+
+            $table->foreignId('agent_agreement_id')
+                ->constrained()
+                ->cascadeOnDelete();
+
             $table->string('approval_type');
-            $table->string('status')->default('PENDING');
-            $table->foreignId('approved_by')->nullable()->constrained('users')->restrictOnDelete();
-            $table->timestamp('approved_at')->nullable();
-            $table->text('notes')->nullable();
+
+            $table->string('status')
+                ->default('PENDING');
+
+            $table->foreignId('approved_by')
+                ->nullable()
+                ->constrained('users')
+                ->restrictOnDelete();
+
+            $table->timestamp('approved_at')
+                ->nullable();
+
+            $table->text('notes')
+                ->nullable();
+
             $table->timestamps();
 
-            $table->unique(['agent_agreement_id', 'approval_type']);
+            // Explicit short index name avoids MySQL's 64-character
+            // identifier limit for automatically generated index names.
+            $table->unique(
+                ['agent_agreement_id', 'approval_type'],
+                'agent_agreement_approval_type_uq'
+            );
         });
     }
 

@@ -11,21 +11,21 @@ use App\Http\Controllers\Api\BalancingController;
 use App\Http\Controllers\Api\BranchEodController;
 use App\Http\Controllers\Api\MerchantController;
 use App\Http\Controllers\Api\AgentController;
+use App\Http\Controllers\Api\AgentTransactionController;
 use App\Http\Controllers\Api\AgentAgreementTemplateController;
 use App\Http\Controllers\Api\TrainingDocumentController;
 use App\Http\Controllers\Api\WalletController;
 use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\Api\AgentDashboardController;
 use App\Http\Controllers\Api\MfaController;
 use App\Http\Controllers\Api\FixedDepositController;
+use App\Http\Controllers\Api\AgentComplaintController;
+use App\Http\Controllers\Api\AgentInspectionController;
 use App\Http\Controllers\Api\TessaAlertController;
 use App\Http\Controllers\Api\TransactionReversalController;
 use App\Http\Controllers\Api\AuthController;
 
-Route::prefix('v1')->group(function () {
-    Route::post('/login', [AuthController::class, 'login']);
-});
-
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware('auth.basic.once')->group(function () {
     Route::get('/sync/offices', [OfficeSyncController::class, 'sync'])
         ->middleware('permission:offices.sync');
     Route::get('/sync/glaccounts', [GlAccountSyncController::class, 'sync'])
@@ -42,7 +42,6 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware('permission:tellers.manage');
 
     Route::prefix('v1')->group(function () {
-        Route::post('/logout', [AuthController::class, 'logout']);
         Route::get('/me', [AuthController::class, 'me']);
 
         Route::post('/mfa/setup', [MfaController::class, 'setup']);
@@ -268,6 +267,11 @@ Route::post(
 )->middleware('permission:agents.agreements.send-for-signature');
 
 Route::post(
+    '/agents/{agent}/agreements/{agreement}/signature-evidence',
+    [AgentController::class, 'uploadAgreementSignatureEvidence']
+)->middleware('permission:agents.agreements.sign');
+
+Route::post(
     '/agents/{agent}/agreements/{agreement}/signatures',
     [AgentController::class, 'recordAgreementSignature']
 )->middleware('permission:agents.agreements.sign');
@@ -363,7 +367,93 @@ Route::post(
 Route::post(
     '/agent-terminals/{terminal}/location-check',
     [AgentController::class, 'terminalLocationCheck']
+
 );
+
+// ---------- Agent operational transactions ----------
+
+Route::get(
+    '/agents/{agent}/transactions',
+    [AgentTransactionController::class, 'list']
+)->middleware('permission:agents.transactions.view');
+
+Route::post(
+    '/agents/{agent}/transactions/cash-in',
+    [AgentTransactionController::class, 'cashIn']
+)->middleware('permission:agents.transactions.cash-in');
+
+Route::post(
+    '/agents/{agent}/transactions/cash-out',
+    [AgentTransactionController::class, 'cashOut']
+)->middleware('permission:agents.transactions.cash-out');
+
+Route::post(
+    '/agents/{agent}/transactions/transfer',
+    [AgentTransactionController::class, 'transfer']
+)->middleware('permission:agents.transactions.transfer');
+
+Route::post(
+    '/agent-transactions/{transaction}/reversal/request',
+    [AgentTransactionController::class, 'requestReversal']
+)->middleware('permission:agents.transactions.reverse');
+
+/*
+|--------------------------------------------------------------------------
+| Agent Complaints
+|--------------------------------------------------------------------------
+|
+| General complaints-management endpoints for agency banking operations.
+| Complaints receive a trackable reference and move through the controlled
+| acknowledgement, assignment, investigation, escalation and resolution
+| lifecycle implemented by AgentComplaintService.
+|
+*/
+
+Route::prefix('agent-complaints')->group(function () {
+    Route::get('/', [AgentComplaintController::class, 'index']);
+    Route::post('/', [AgentComplaintController::class, 'store']);
+    Route::get('/{complaint}', [AgentComplaintController::class, 'show']);
+
+    Route::post('/{complaint}/acknowledge', [AgentComplaintController::class, 'acknowledge']);
+    Route::post('/{complaint}/assign', [AgentComplaintController::class, 'assign']);
+    Route::post('/{complaint}/start-progress', [AgentComplaintController::class, 'startProgress']);
+    Route::post('/{complaint}/escalate', [AgentComplaintController::class, 'escalate']);
+    Route::post('/{complaint}/resolve', [AgentComplaintController::class, 'resolve']);
+    Route::post('/{complaint}/close', [AgentComplaintController::class, 'close']);
+});
+
+/*
+|--------------------------------------------------------------------------
+| Agent Inspections (AG-12 supervision, the other half alongside
+| Agent Complaints above)
+|--------------------------------------------------------------------------
+|
+| Site-visit records: schedule, start, complete with findings/compliance
+| grading/corrective action, cancel, and track corrective-action
+| follow-up separately from the inspection's own lifecycle.
+|
+*/
+
+Route::prefix('agent-inspections')->group(function () {
+    Route::get('/', [AgentInspectionController::class, 'index'])
+        ->middleware('permission:agents.inspections.view');
+    Route::post('/', [AgentInspectionController::class, 'store'])
+        ->middleware('permission:agents.inspections.manage');
+    Route::get('/{inspection}', [AgentInspectionController::class, 'show'])
+        ->middleware('permission:agents.inspections.view');
+
+    Route::post('/{inspection}/start', [AgentInspectionController::class, 'start'])
+        ->middleware('permission:agents.inspections.manage');
+    Route::post('/{inspection}/complete', [AgentInspectionController::class, 'complete'])
+        ->middleware('permission:agents.inspections.manage');
+    Route::post('/{inspection}/cancel', [AgentInspectionController::class, 'cancel'])
+        ->middleware('permission:agents.inspections.manage');
+    Route::post('/{inspection}/follow-up/start', [AgentInspectionController::class, 'startFollowUp'])
+        ->middleware('permission:agents.inspections.manage');
+    Route::post('/{inspection}/follow-up/complete', [AgentInspectionController::class, 'completeFollowUp'])
+        ->middleware('permission:agents.inspections.manage');
+});
+
 
         Route::get('/wallets', [WalletController::class, 'index']);
         Route::get('/wallets/{wallet}', [WalletController::class, 'show']);
@@ -381,6 +471,7 @@ Route::post(
         Route::get('/reports/vault-transactions', [ReportController::class, 'vaultTransactions']);
         Route::get('/reports/teller-ledger', [ReportController::class, 'tellerLedger']);
         Route::get('/reports/vault-ledger', [ReportController::class, 'vaultLedger']);
+        Route::get('/reports/agency-dashboard', [AgentDashboardController::class, 'agencyDashboard']);
 
         Route::get('/fixed-deposits', [FixedDepositController::class, 'index']);
         Route::get('/fixed-deposits/{fixedDeposit}', [FixedDepositController::class, 'show']);
