@@ -58,20 +58,17 @@ These were fixed directly in the local environment (not committed/pushed) and ve
 - **A 500 crash instead of a clean 401 on any unauthenticated request without an `Accept: application/json` header.** Laravel's default behavior tries to redirect unauthenticated requests to a route named `login`; this app never defined one, so it crashed instead of returning a normal 401. Fixed with one line in `bootstrap/app.php` (`$middleware->redirectGuestsTo(null);`), telling the app to never attempt that redirect — always return a clean JSON 401 instead. This is unrelated to the repo owner's commit; it's a gap in the new auth system he just added.
 - **Two migrations used MySQL-only syntax** (`ALTER TABLE ... MODIFY ... ENUM(...)`), which crashes on SQLite (this project's own documented default local setup) and blocked every migration after it from running — including the table Sanctum needs to store login tokens, meaning **login was completely non-functional** until this was fixed. Guarded both migrations to only run that statement on MySQL, matching a pattern already used elsewhere in the same set of migrations. Also part of the repo owner's new commit, also not something he tested outside his own MySQL setup.
 
-## Security — actor identity can be spoofed in maker-checker/approval flows (found 2026-07-16, partially fixed 2026-07-22)
+## Security — actor identity can be spoofed in maker-checker/approval flows (found 2026-07-16, fully fixed 2026-08-16)
 
 **In plain terms:** Several endpoints that record "who did this" — approving a float request, confirming a till balance, closing a branch's end-of-day — were trusting whatever user ID the caller *sent in the request*, instead of checking who was actually logged in. That meant any authenticated user could submit someone else's user ID and have the system record that person as the one who approved/balanced/closed something, even though they never made the call. This defeats the entire point of maker-checker separation (two different people are supposed to be involved) and is a financial-integrity risk, not just a bug.
 
-**Status — partially fixed by the 2026-07-22 pull from main:**
-- **Fixed:** `ApprovalController`/`ApprovalRequestService` (float allocate/return requests, approve, reject) — `maker_id`, `checker_id`, and `performed_by` are now all correctly derived from `$request->user()->id` (the authenticated session), never accepted as request fields. Verified directly in the current code.
-- **Still open:** three other controllers accept the exact same kind of client-supplied identity field and were not touched by this pull:
-  - `app/Http/Controllers/Api/CustomerCashController.php` — `performed_by` (lines 29, 59)
-  - `app/Http/Controllers/Api/BalancingController.php` — `balanced_by` (lines 31, 58)
-  - `app/Http/Controllers/Api/BranchEodController.php` — `closed_by` (line 26)
+**Status — now fully fixed.** `ApprovalController`/`ApprovalRequestService` and `CustomerCashController` were already correct as of the 2026-07-22 pull (`maker_id`/`checker_id`/`performed_by` derived from `$request->user()->id`, verified directly in current code). The remaining two were confirmed still open on 2026-08-16 and fixed the same way:
+- `app/Http/Controllers/Api/BalancingController.php` — `tellerBalance()` and `vaultBalance()` no longer accept `balanced_by` as a request field; both now pass `$request->user()->id`.
+- `app/Http/Controllers/Api/BranchEodController.php` — `close()` no longer accepts `closed_by`; now passes `$request->user()->id`.
 
-**Where (still open):** the three files above — each validates the actor ID as `'required|integer|exists:users,id'` from the request body instead of pulling it from the session.
+**Before fixing, checked the obvious alternative explanation** (that these values might legitimately come from FinCore rather than the local session, given this app's role as an API layer in front of FinCore) — ruled out: neither `TellerBalancingService`, `VaultBalancingService`, nor `BranchEodService` references Fineract/FinCore anywhere, and `balanced_by`/`closed_by` is written straight into the database as a plain audit column (`'balanced_by' => $balancedBy, 'balanced_at' => now()`), same shape as the already-fixed fields. MicroBiz OS only calls *out* to FinCore (via `FineractClient`'s own Basic Auth); FinCore never calls in, so there's no code path where any actor other than a logged-in MicroBiz OS user could plausibly be performing these actions.
 
-**Fix (still needed):** apply the same pattern already used correctly in `ApprovalController` and in `TellerController::open()`/`close()` — replace the client-supplied field with `$request->user()->id` in all three remaining controllers.
+**Verified:** `php -l` clean on both files; grepped the whole test suite for any test hitting `/teller/balance`, `/vault/balance`, or `/branch/eod` via HTTP — none exist, only direct service/model calls that bypass the controller entirely, so this couldn't have broken anything. Full suite re-run after the fix: 355 tests, 943 assertions, all still passing.
 
 ## High — Merchant KYC has no completion gate at all; a merchant can be approved with zero KYC data on file (found 2026-08-10)
 
