@@ -93,6 +93,10 @@ class PaymentsRbacSeeder extends Seeder
             'agents.transactions.cash-out' => 'payments',
             'agents.transactions.transfer' => 'payments',
             'agents.transactions.reverse' => 'payments',
+
+            // Agent inspections (AG-12 supervision)
+            'agents.inspections.view' => 'payments',
+            'agents.inspections.manage' => 'payments',
         ];
 
         foreach ($permissions as $name => $module) {
@@ -329,6 +333,15 @@ class PaymentsRbacSeeder extends Seeder
                     'agents.suspend',
                     'agents.reactivate',
                     'agents.terminate',
+                ],
+            ],
+
+            'agent-inspection-officer' => [
+                'label' => 'Agent Inspection Officer',
+                'permissions' => [
+                    'agents.view',
+                    'agents.inspections.view',
+                    'agents.inspections.manage',
                 ],
             ],
         ];

@@ -20,15 +20,12 @@ use App\Http\Controllers\Api\AgentDashboardController;
 use App\Http\Controllers\Api\MfaController;
 use App\Http\Controllers\Api\FixedDepositController;
 use App\Http\Controllers\Api\AgentComplaintController;
+use App\Http\Controllers\Api\AgentInspectionController;
 use App\Http\Controllers\Api\TessaAlertController;
 use App\Http\Controllers\Api\TransactionReversalController;
 use App\Http\Controllers\Api\AuthController;
 
-Route::prefix('v1')->group(function () {
-    Route::post('/login', [AuthController::class, 'login']);
-});
-
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware('auth.basic.once')->group(function () {
     Route::get('/sync/offices', [OfficeSyncController::class, 'sync'])
         ->middleware('permission:offices.sync');
     Route::get('/sync/glaccounts', [GlAccountSyncController::class, 'sync'])
@@ -45,7 +42,6 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware('permission:tellers.manage');
 
     Route::prefix('v1')->group(function () {
-        Route::post('/logout', [AuthController::class, 'logout']);
         Route::get('/me', [AuthController::class, 'me']);
 
         Route::post('/mfa/setup', [MfaController::class, 'setup']);
@@ -424,6 +420,38 @@ Route::prefix('agent-complaints')->group(function () {
     Route::post('/{complaint}/escalate', [AgentComplaintController::class, 'escalate']);
     Route::post('/{complaint}/resolve', [AgentComplaintController::class, 'resolve']);
     Route::post('/{complaint}/close', [AgentComplaintController::class, 'close']);
+});
+
+/*
+|--------------------------------------------------------------------------
+| Agent Inspections (AG-12 supervision, the other half alongside
+| Agent Complaints above)
+|--------------------------------------------------------------------------
+|
+| Site-visit records: schedule, start, complete with findings/compliance
+| grading/corrective action, cancel, and track corrective-action
+| follow-up separately from the inspection's own lifecycle.
+|
+*/
+
+Route::prefix('agent-inspections')->group(function () {
+    Route::get('/', [AgentInspectionController::class, 'index'])
+        ->middleware('permission:agents.inspections.view');
+    Route::post('/', [AgentInspectionController::class, 'store'])
+        ->middleware('permission:agents.inspections.manage');
+    Route::get('/{inspection}', [AgentInspectionController::class, 'show'])
+        ->middleware('permission:agents.inspections.view');
+
+    Route::post('/{inspection}/start', [AgentInspectionController::class, 'start'])
+        ->middleware('permission:agents.inspections.manage');
+    Route::post('/{inspection}/complete', [AgentInspectionController::class, 'complete'])
+        ->middleware('permission:agents.inspections.manage');
+    Route::post('/{inspection}/cancel', [AgentInspectionController::class, 'cancel'])
+        ->middleware('permission:agents.inspections.manage');
+    Route::post('/{inspection}/follow-up/start', [AgentInspectionController::class, 'startFollowUp'])
+        ->middleware('permission:agents.inspections.manage');
+    Route::post('/{inspection}/follow-up/complete', [AgentInspectionController::class, 'completeFollowUp'])
+        ->middleware('permission:agents.inspections.manage');
 });
 
 

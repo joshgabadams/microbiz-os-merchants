@@ -10,7 +10,6 @@ use App\Models\Role;
 use App\Models\User;
 use Database\Seeders\PaymentsRbacSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class AgentAgreementApiTest extends TestCase
@@ -185,7 +184,7 @@ class AgentAgreementApiTest extends TestCase
             'agent-kyc-officer'
         );
 
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $agent = $this->makeAgentAgreementPending(
             $registrant->id
@@ -217,7 +216,7 @@ class AgentAgreementApiTest extends TestCase
             'agent-agreement-officer'
         );
 
-        Sanctum::actingAs($agreementOfficer);
+        $this->actingAsBasicAuth($agreementOfficer);
 
         $agent = $this->makeAgentAgreementPending(
             $registrant->id
@@ -258,7 +257,7 @@ class AgentAgreementApiTest extends TestCase
             'agent-agreement-executor'
         );
 
-        Sanctum::actingAs($officer);
+        $this->actingAsBasicAuth($officer);
 
         $agent = $this->makeAgentAgreementPending(
             $registrant->id
@@ -325,7 +324,7 @@ class AgentAgreementApiTest extends TestCase
             $registrant->id
         );
 
-        Sanctum::actingAs($agreementOfficer);
+        $this->actingAsBasicAuth($agreementOfficer);
 
         $template = $this->makeApprovedTemplate(
             $agreementOfficer
@@ -345,7 +344,7 @@ class AgentAgreementApiTest extends TestCase
         /*
          * Switch identity to the independent executor.
          */
-        Sanctum::actingAs($executor);
+        $this->actingAsBasicAuth($executor);
 
         /*
          * Independence alone is insufficient.
@@ -476,7 +475,7 @@ class AgentAgreementApiTest extends TestCase
      * 1. DRAFT AGREEMENT
      * ---------------------------------------------------------
      */
-    Sanctum::actingAs($agreementOfficer);
+    $this->actingAsBasicAuth($agreementOfficer);
 
     $createResponse = $this->postJson(
         "/api/v1/agents/{$agent->id}/agreements",
@@ -505,7 +504,7 @@ class AgentAgreementApiTest extends TestCase
      * The executor role currently owns the
      * agents.agreements.submit-review permission.
      */
-    Sanctum::actingAs($executor);
+    $this->actingAsBasicAuth($executor);
 
     $submitResponse = $this->postJson(
         "/api/v1/agents/{$agent->id}/agreements/{$agreementId}/submit-review"
@@ -538,7 +537,7 @@ class AgentAgreementApiTest extends TestCase
      * 3. RISK APPROVAL
      * ---------------------------------------------------------
      */
-    Sanctum::actingAs($riskApprover);
+    $this->actingAsBasicAuth($riskApprover);
 
     $riskResponse = $this->postJson(
         "/api/v1/agents/{$agent->id}/agreements/{$agreementId}/approve/risk",
@@ -565,7 +564,7 @@ class AgentAgreementApiTest extends TestCase
      * 4. COMPLIANCE APPROVAL
      * ---------------------------------------------------------
      */
-    Sanctum::actingAs($complianceApprover);
+    $this->actingAsBasicAuth($complianceApprover);
 
     $complianceResponse = $this->postJson(
         "/api/v1/agents/{$agent->id}/agreements/{$agreementId}/approve/compliance",
@@ -592,7 +591,7 @@ class AgentAgreementApiTest extends TestCase
      * 5. LEGAL APPROVAL
      * ---------------------------------------------------------
      */
-    Sanctum::actingAs($legalApprover);
+    $this->actingAsBasicAuth($legalApprover);
 
     $legalResponse = $this->postJson(
         "/api/v1/agents/{$agent->id}/agreements/{$agreementId}/approve/legal",
@@ -619,7 +618,7 @@ class AgentAgreementApiTest extends TestCase
      * 6. BUSINESS OWNER APPROVAL
      * ---------------------------------------------------------
      */
-    Sanctum::actingAs($businessOwnerApprover);
+    $this->actingAsBasicAuth($businessOwnerApprover);
 
     $businessOwnerResponse = $this->postJson(
         "/api/v1/agents/{$agent->id}/agreements/{$agreementId}/approve/business-owner",
@@ -646,7 +645,7 @@ class AgentAgreementApiTest extends TestCase
      * 7. SEND FOR SIGNATURE
      * ---------------------------------------------------------
      */
-    Sanctum::actingAs($executor);
+    $this->actingAsBasicAuth($executor);
 
     $sendResponse = $this->postJson(
         "/api/v1/agents/{$agent->id}/agreements/{$agreementId}/send-for-signature"

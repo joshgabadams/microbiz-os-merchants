@@ -81,9 +81,13 @@ class AgentOperationGuard
      */
     public function checkAgreementActive(Agent $agent): void
     {
-        $hasActiveAgreement = $agent->agreements()
-            ->where('status', 'EXECUTED')
-            ->exists();
+        /*
+         * AgentAgreementService::executeAgreement() sets an executed
+         * agreement's status to EXECUTED (never ACTIVE) -- this must
+         * match that value or a legitimately executed agreement would
+         * never be found here.
+         */
+        $hasActiveAgreement = $agent->agreements()->where('status', 'EXECUTED')->exists();
 
         if (! $hasActiveAgreement) {
             throw new Exception(

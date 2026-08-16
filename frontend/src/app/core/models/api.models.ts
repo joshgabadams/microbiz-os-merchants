@@ -432,12 +432,92 @@ export interface AuthUser {
   email: string;
 }
 
-export interface LoginResponse {
-  success: boolean;
-  message: string;
-  data: {
-    user: AuthUser;
-    token: string;
-    token_type: string;
-  };
+/**
+ * agent-complaints and agent-inspections respond with Laravel's bare
+ * default paginator shape (response()->json($query->paginate(...))),
+ * not the {success,message,data} ApiResponse envelope used elsewhere.
+ */
+export interface PaginatedResponse<T> {
+  data: T[];
+  current_page: number;
+  last_page: number;
+  per_page: number;
+  total: number;
 }
+
+export type AgentComplaintStatus =
+  | 'OPEN'
+  | 'ACKNOWLEDGED'
+  | 'IN_PROGRESS'
+  | 'RESOLVED'
+  | 'CLOSED'
+  | 'ESCALATED';
+
+export interface AgentComplaint {
+  id: number;
+  complaint_no: string;
+  agent_id: number | null;
+  branch_id: number | null;
+  agent_location_id: number | null;
+  agent_transaction_id: number | null;
+  complainant_name: string;
+  complainant_phone: string | null;
+  complainant_email: string | null;
+  channel: string;
+  category: string;
+  subject: string;
+  description: string;
+  disputed_amount: string | number | null;
+  priority: string;
+  status: AgentComplaintStatus;
+  assigned_to: number | null;
+  created_by: number | null;
+  acknowledged_at: string | null;
+  due_at: string | null;
+  resolution_summary: string | null;
+  resolved_at: string | null;
+  closed_at: string | null;
+  escalation_level: number;
+  escalation_reason: string | null;
+  escalated_at: string | null;
+  agent?: Agent | null;
+  assignedTo?: AuthUser | null;
+  createdBy?: AuthUser | null;
+}
+
+export type AgentInspectionStatus =
+  | 'SCHEDULED'
+  | 'IN_PROGRESS'
+  | 'COMPLETED'
+  | 'CANCELLED';
+
+export type AgentInspectionFollowUpStatus =
+  | 'NOT_REQUIRED'
+  | 'PENDING'
+  | 'IN_PROGRESS'
+  | 'COMPLETED';
+
+export interface AgentInspection {
+  id: number;
+  inspection_no: string;
+  agent_id: number;
+  agent_location_id: number | null;
+  inspector_id: number;
+  inspection_type: string;
+  inspection_date: string;
+  status: AgentInspectionStatus;
+  findings: string | null;
+  compliance_outcome: string | null;
+  corrective_action: string | null;
+  corrective_action_deadline: string | null;
+  follow_up_status: AgentInspectionFollowUpStatus;
+  follow_up_notes: string | null;
+  created_by: number | null;
+  started_at: string | null;
+  completed_at: string | null;
+  cancelled_at: string | null;
+  cancellation_reason: string | null;
+  agent?: Agent | null;
+  inspector?: AuthUser | null;
+}
+

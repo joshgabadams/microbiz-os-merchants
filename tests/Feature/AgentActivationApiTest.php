@@ -15,7 +15,6 @@ use App\Models\TrainingDocument;
 use App\Models\User;
 use Database\Seeders\PaymentsRbacSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class AgentActivationApiTest extends TestCase
@@ -218,7 +217,7 @@ class AgentActivationApiTest extends TestCase
             'agent-kyc-officer'
         );
 
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $agent = $this->makeAgent();
 
@@ -240,7 +239,7 @@ class AgentActivationApiTest extends TestCase
 
         $this->attachActivationRole($user);
 
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $agent = $this->makeAgent(
             AgentStatus::APPROVED->value
@@ -264,7 +263,7 @@ class AgentActivationApiTest extends TestCase
 
         $this->attachActivationRole($user);
 
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $agent = $this->makeAgent();
 
@@ -286,7 +285,7 @@ class AgentActivationApiTest extends TestCase
 
         $this->attachActivationRole($user);
 
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $agent = $this->makeFullyReadyAgent();
 
@@ -319,7 +318,7 @@ class AgentActivationApiTest extends TestCase
 
         $this->attachActivationRole($user);
 
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $agent = $this->makeFullyReadyAgent();
 

@@ -40,7 +40,7 @@ class AgentDashboardControllerTest extends TestCase
     protected function authenticatedUser(): User
     {
         $user = User::factory()->create();
-        $this->actingAs($user, 'sanctum');
+        $this->actingAsBasicAuth($user);
 
         return $user;
     }

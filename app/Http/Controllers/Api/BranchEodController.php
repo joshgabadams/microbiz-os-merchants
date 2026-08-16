@@ -23,14 +23,13 @@ class BranchEodController extends Controller
             $validated = $request->validate([
                 'branch_id' => ['required', 'integer'],
                 'business_date' => ['required', 'date'],
-                'closed_by' => ['required', 'integer', 'exists:users,id'],
                 'note' => ['nullable', 'string'],
             ]);
 
             $result = $this->branchEodService->close(
                 $validated['branch_id'],
                 $validated['business_date'],
-                $validated['closed_by'],
+                $request->user()->id,
                 $validated['note'] ?? null
             );
 

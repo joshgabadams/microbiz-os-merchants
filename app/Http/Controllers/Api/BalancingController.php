@@ -28,7 +28,6 @@ class BalancingController extends Controller
                 'teller_id' => ['required', 'integer', 'exists:tellers,id'],
                 'business_date' => ['required', 'date'],
                 'physical_cash' => ['required', 'numeric', 'min:0'],
-                'balanced_by' => ['required', 'integer', 'exists:users,id'],
                 'note' => ['nullable', 'string'],
             ]);
 
@@ -38,7 +37,7 @@ class BalancingController extends Controller
                 $teller,
                 $validated['business_date'],
                 $validated['physical_cash'],
-                $validated['balanced_by'],
+                $request->user()->id,
                 $validated['note'] ?? null
             );
 
@@ -55,7 +54,6 @@ class BalancingController extends Controller
                 'vault_id' => ['required', 'integer', 'exists:vaults,id'],
                 'business_date' => ['required', 'date'],
                 'physical_cash' => ['required', 'numeric', 'min:0'],
-                'balanced_by' => ['required', 'integer', 'exists:users,id'],
                 'note' => ['nullable', 'string'],
             ]);
 
@@ -65,7 +63,7 @@ class BalancingController extends Controller
                 $vault,
                 $validated['business_date'],
                 $validated['physical_cash'],
-                $validated['balanced_by'],
+                $request->user()->id,
                 $validated['note'] ?? null
             );
 
