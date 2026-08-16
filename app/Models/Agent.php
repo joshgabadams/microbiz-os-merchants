@@ -120,4 +120,9 @@ public function transactions()
     return $this->hasMany(AgentTransaction::class);
 }
 
+public function complaints()
+{
+    return $this->hasMany(AgentComplaint::class);
+}
+
 }

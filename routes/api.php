@@ -16,8 +16,10 @@ use App\Http\Controllers\Api\AgentAgreementTemplateController;
 use App\Http\Controllers\Api\TrainingDocumentController;
 use App\Http\Controllers\Api\WalletController;
 use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\Api\AgentDashboardController;
 use App\Http\Controllers\Api\MfaController;
 use App\Http\Controllers\Api\FixedDepositController;
+use App\Http\Controllers\Api\AgentComplaintController;
 use App\Http\Controllers\Api\TessaAlertController;
 use App\Http\Controllers\Api\TransactionReversalController;
 use App\Http\Controllers\Api\AuthController;
@@ -372,7 +374,7 @@ Route::post(
 Route::get(
     '/agents/{agent}/transactions',
     [AgentTransactionController::class, 'list']
-);
+)->middleware('permission:agents.transactions.view');
 
 Route::post(
     '/agents/{agent}/transactions/cash-in',
@@ -389,6 +391,35 @@ Route::post(
     [AgentTransactionController::class, 'transfer']
 )->middleware('permission:agents.transactions.transfer');
 
+Route::post(
+    '/agent-transactions/{transaction}/reversal/request',
+    [AgentTransactionController::class, 'requestReversal']
+)->middleware('permission:agents.transactions.reverse');
+
+/*
+|--------------------------------------------------------------------------
+| Agent Complaints
+|--------------------------------------------------------------------------
+|
+| General complaints-management endpoints for agency banking operations.
+| Complaints receive a trackable reference and move through the controlled
+| acknowledgement, assignment, investigation, escalation and resolution
+| lifecycle implemented by AgentComplaintService.
+|
+*/
+
+Route::prefix('agent-complaints')->group(function () {
+    Route::get('/', [AgentComplaintController::class, 'index']);
+    Route::post('/', [AgentComplaintController::class, 'store']);
+    Route::get('/{complaint}', [AgentComplaintController::class, 'show']);
+
+    Route::post('/{complaint}/acknowledge', [AgentComplaintController::class, 'acknowledge']);
+    Route::post('/{complaint}/assign', [AgentComplaintController::class, 'assign']);
+    Route::post('/{complaint}/start-progress', [AgentComplaintController::class, 'startProgress']);
+    Route::post('/{complaint}/escalate', [AgentComplaintController::class, 'escalate']);
+    Route::post('/{complaint}/resolve', [AgentComplaintController::class, 'resolve']);
+    Route::post('/{complaint}/close', [AgentComplaintController::class, 'close']);
+});
 
 
         Route::get('/wallets', [WalletController::class, 'index']);
@@ -407,6 +438,7 @@ Route::post(
         Route::get('/reports/vault-transactions', [ReportController::class, 'vaultTransactions']);
         Route::get('/reports/teller-ledger', [ReportController::class, 'tellerLedger']);
         Route::get('/reports/vault-ledger', [ReportController::class, 'vaultLedger']);
+        Route::get('/reports/agency-dashboard', [AgentDashboardController::class, 'agencyDashboard']);
 
         Route::get('/fixed-deposits', [FixedDepositController::class, 'index']);
         Route::get('/fixed-deposits/{fixedDeposit}', [FixedDepositController::class, 'show']);

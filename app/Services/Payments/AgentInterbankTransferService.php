@@ -51,9 +51,10 @@ class AgentInterbankTransferService
 {
     public function __construct(
         protected AgentOperationGuard $guard,
-        protected TransactionNumberService $transactionNumberService
-    ) {
-    }
+        protected TransactionNumberService $transactionNumberService,
+        protected AgentTransactionIdempotencyService $idempotencyService,
+        protected AgentTransactionRiskService $riskService
+    ) {}
 
     /**
      * @throws Exception
@@ -82,14 +83,29 @@ class AgentInterbankTransferService
             throw new Exception('Card PIN verification is required before an interbank transfer can proceed.');
         }
 
-        $existing = AgentTransaction::where('idempotency_key', $idempotencyKey)->first();
+        $agent = $operator->agent;
+        $location = $operator->location;
+
+        $existing = $this->idempotencyService->findExisting(
+            $idempotencyKey,
+            'INTERBANK_TRANSFER',
+            $agent->id,
+            $location->id,
+            $terminal->id,
+            $operator->id,
+            $sourceAccount->id,
+            $amount,
+            [
+                'card_reference' => $cardReference,
+                'destination_bank_code' => $destinationBankCode,
+                'destination_account_number' => $destinationAccountNumber,
+                'destination_account_name' => $destinationAccountName,
+            ]
+        );
 
         if ($existing) {
             return $existing;
         }
-
-        $agent = $operator->agent;
-        $location = $operator->location;
 
         if ($terminal->agent_id !== $agent->id) {
             throw new Exception('This terminal does not belong to the specified agent.');
@@ -119,6 +135,17 @@ class AgentInterbankTransferService
 
         $transactionNo = $this->transactionNumberService->generate('AGT');
 
+        // Risk is observational at this stage: assess the transaction and
+        // persist the result for audit/monitoring, but do not block processing
+        // based on the resulting risk level until an explicit enforcement
+        // policy is introduced.
+        $riskAssessment = $this->riskService->assess(
+            $agent,
+            $terminal,
+            'INTERBANK_TRANSFER',
+            $amount
+        );
+
         $agentTransaction = AgentTransaction::create([
             'transaction_no' => $transactionNo,
             'idempotency_key' => $idempotencyKey,
@@ -136,6 +163,7 @@ class AgentInterbankTransferService
             'geo_fence_passed' => $geoFencePassed,
             'transaction_date' => now(),
             'performed_by' => $performedBy,
+            'risk_metadata' => $riskAssessment,
             'channel_metadata' => [
                 // Never the full card number -- a masked/tokenised
                 // reference only, per Blueprint §16.5.

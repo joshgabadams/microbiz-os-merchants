@@ -6,7 +6,6 @@ use App\Domain\MPay\Enums\AgentStatus;
 use App\Models\Agent;
 use App\Models\AgentLocation;
 use App\Models\AgentOperator;
-use App\Models\AgentService;
 use App\Models\AgentTerminal;
 use App\Models\AgentTransaction;
 use App\Models\Branch;
@@ -14,6 +13,8 @@ use App\Models\Customer;
 use App\Models\CustomerAccount;
 use App\Models\CustomerAccountBalance;
 use App\Models\User;
+use App\Models\Vault;
+use App\Services\Branch\BranchBusinessDayService;
 use App\Services\CashManagement\AgentFloatService;
 use App\Services\Payments\AgentCashInService;
 use App\Services\Payments\AgentOperationGuard;
@@ -63,7 +64,7 @@ class AgentServiceConfigurationTest extends TestCase
         $agent->agreements()->create([
             'agreement_number' => 'AGR-'.uniqid(),
             'version' => 1,
-            'status' => 'ACTIVE',
+            'status' => 'EXECUTED',
             'created_by' => $creator->id,
         ]);
 
@@ -204,6 +205,7 @@ class AgentServiceConfigurationTest extends TestCase
             'registered_longitude' => 3.3792000,
             'geo_fence_radius_metres' => 100,
             'activated_at' => now(),
+            'last_heartbeat_at' => now(),
         ]);
 
         return ['location' => $location, 'operator' => $operator, 'terminal' => $terminal];
@@ -275,28 +277,40 @@ class AgentServiceConfigurationTest extends TestCase
      * from cash-in until CASH_IN is explicitly enabled. Before today,
      * this agent would have been able to transact freely.
      */
-    public function test_cash_in_is_blocked_end_to_end_without_service_enabled(): void
-    {
-        $branch = Branch::create(['name' => 'Test Branch', 'code' => 'TB-'.uniqid(), 'office_id' => 1]);
-        $registrant = User::factory()->create();
 
-        $agent = Agent::create([
-            'agent_code' => 'AGT-'.uniqid(),
-            'agent_type' => 'INDIVIDUAL',
-            'legal_name' => 'Test Agent',
-            'phone' => '08000000000',
-            'branch_id' => $branch->id,
-            'status' => AgentStatus::ACTIVE->value,
-            'kyc_status' => 'COMPLETED',
-            'created_by' => $registrant->id,
-            'single_transaction_limit' => 1000000,
-        ]);
+public function test_cash_in_is_blocked_end_to_end_without_service_enabled(): void
+{
+    $branch = Branch::create([
+        'name' => 'Test Branch',
+        'code' => 'TB-'.uniqid(),
+        'office_id' => 1,
+    ]);
 
+    $registrant = User::factory()->create();
+
+    app(BranchBusinessDayService::class)->open(
+        $branch->id,
+        now()->toDateString(),
+        $registrant->id,
+        'Opened for agent service configuration test.'
+    );
+
+    $agent = Agent::create([
+        'agent_code' => 'AGT-'.uniqid(),
+        'agent_type' => 'INDIVIDUAL',
+        'legal_name' => 'Test Agent',
+        'phone' => '08000000000',
+        'branch_id' => $branch->id,
+        'status' => AgentStatus::ACTIVE->value,
+        'kyc_status' => 'COMPLETED',
+        'created_by' => $registrant->id,
+        'single_transaction_limit' => 1000000,
+    ]);
         $agreementCreator = User::factory()->create();
         $agent->agreements()->create([
             'agreement_number' => 'AGR-'.uniqid(),
             'version' => 1,
-            'status' => 'ACTIVE',
+            'status' => 'EXECUTED',
             'created_by' => $agreementCreator->id,
         ]);
 
@@ -335,10 +349,11 @@ class AgentServiceConfigurationTest extends TestCase
             'registered_longitude' => 3.3792000,
             'geo_fence_radius_metres' => 100,
             'activated_at' => now(),
+            'last_heartbeat_at' => now(),
         ]);
 
         $vaultBranch = Branch::create(['name' => 'Vault Branch', 'code' => 'VB-'.uniqid(), 'office_id' => 1]);
-        $vault = \App\Models\Vault::create([
+        $vault = Vault::create([
             'branch_id' => $vaultBranch->id,
             'code' => 'VLT-'.uniqid(),
             'name' => 'Test Vault',

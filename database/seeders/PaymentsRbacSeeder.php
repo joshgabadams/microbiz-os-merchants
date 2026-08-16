@@ -92,6 +92,7 @@ class PaymentsRbacSeeder extends Seeder
             'agents.transactions.cash-in' => 'payments',
             'agents.transactions.cash-out' => 'payments',
             'agents.transactions.transfer' => 'payments',
+            'agents.transactions.reverse' => 'payments',
         ];
 
         foreach ($permissions as $name => $module) {
@@ -287,8 +288,8 @@ class PaymentsRbacSeeder extends Seeder
             /*
              * Dedicated operational transaction role.
              *
-             * Keep money-moving permissions separate from onboarding,
-             * approval, KYC, agreement and terminal-administration roles.
+             * Keep day-to-day money movement separate from sensitive
+             * reversal initiation and approval authority.
              */
             'agent-transaction-operator' => [
                 'label' => 'Agent Transaction Operator',
@@ -298,6 +299,22 @@ class PaymentsRbacSeeder extends Seeder
                     'agents.transactions.cash-in',
                     'agents.transactions.cash-out',
                     'agents.transactions.transfer',
+                ],
+            ],
+
+            /*
+             * Dedicated reversal maker role.
+             *
+             * This role may request an agent transaction reversal but
+             * deliberately cannot approve the resulting approval request.
+             * Approval remains protected separately by approvals.approve.
+             */
+            'agent-transaction-reversal-maker' => [
+                'label' => 'Agent Transaction Reversal Maker',
+                'permissions' => [
+                    'agents.view',
+                    'agents.transactions.view',
+                    'agents.transactions.reverse',
                 ],
             ],
 

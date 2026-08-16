@@ -15,9 +15,12 @@ use App\Models\CustomerAccount;
 use App\Models\CustomerAccountBalance;
 use App\Models\GlJournal;
 use App\Models\User;
+use App\Models\Vault;
+use App\Services\Branch\BranchBusinessDayService;
 use App\Services\CashManagement\AgentFloatService;
 use App\Services\Payments\AgentCashInService;
 use App\Services\Payments\AgentCashOutService;
+use App\Services\Payments\AgentServiceConfigurationService;
 use App\Services\Vault\VaultTransactionService;
 use Database\Seeders\GlAccountSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -82,6 +85,12 @@ class AgentCashOutServiceTest extends TestCase
         $branch = Branch::create(['name' => 'Test Branch', 'code' => 'TB-'.uniqid(), 'office_id' => 1]);
         $registrant = User::factory()->create();
 
+        app(BranchBusinessDayService::class)->open(
+            $branch->id,
+            now()->toDateString(),
+            $registrant->id
+        );
+
         $agent = Agent::create(array_merge([
             'agent_code' => 'AGT-'.uniqid(),
             'agent_type' => 'INDIVIDUAL',
@@ -98,7 +107,7 @@ class AgentCashOutServiceTest extends TestCase
         $agent->agreements()->create([
             'agreement_number' => 'AGR-'.uniqid(),
             'version' => 1,
-            'status' => 'ACTIVE',
+            'status' => 'EXECUTED',
             'created_by' => $agreementCreator->id,
         ]);
 
@@ -133,6 +142,7 @@ class AgentCashOutServiceTest extends TestCase
             'terminal_id' => 'TERM-'.uniqid(),
             'serial_number' => 'SN-'.uniqid(),
             'status' => 'ACTIVE',
+            'last_heartbeat_at' => now(),
             'registered_latitude' => 6.5244000,
             'registered_longitude' => 3.3792000,
             'geo_fence_radius_metres' => 100,
@@ -140,16 +150,16 @@ class AgentCashOutServiceTest extends TestCase
         ]);
 
         $serviceEnabler = User::factory()->create();
-        app(\App\Services\Payments\AgentServiceConfigurationService::class)->enableService(
+        app(AgentServiceConfigurationService::class)->enableService(
             $agent, 'CASH_IN', $serviceEnabler->id
         );
-        app(\App\Services\Payments\AgentServiceConfigurationService::class)->enableService(
+        app(AgentServiceConfigurationService::class)->enableService(
             $agent, 'CASH_OUT', $serviceEnabler->id
         );
 
         if ($physicalCash > 0) {
             $vaultBranch = Branch::create(['name' => 'Vault Branch', 'code' => 'VB-'.uniqid(), 'office_id' => 1]);
-            $vault = \App\Models\Vault::create([
+            $vault = Vault::create([
                 'branch_id' => $vaultBranch->id,
                 'code' => 'VLT-'.uniqid(),
                 'name' => 'Test Vault',
@@ -254,7 +264,7 @@ class AgentCashOutServiceTest extends TestCase
     {
         $context = $this->makeReadyAgentContext(500000);
         $context['agent']->update(['single_transaction_limit' => 20000]);
-        $freshOperator = \App\Models\AgentOperator::find($context['operator']->id);
+        $freshOperator = AgentOperator::find($context['operator']->id);
         $customerAccount = $this->makeActiveCustomerAccount(200000);
         $user = User::factory()->create();
 
@@ -399,5 +409,67 @@ class AgentCashOutServiceTest extends TestCase
 
         $this->assertEquals($first->id, $second->id);
         $this->assertEquals(1, AgentTransaction::where('idempotency_key', $idempotencyKey)->count());
+    }
+
+    public function test_reused_idempotency_key_with_different_customer_account_is_rejected(): void
+    {
+        $context = $this->makeReadyAgentContext(100000);
+        $firstAccount = $this->makeActiveCustomerAccount(80000);
+        $secondAccount = $this->makeActiveCustomerAccount(80000);
+        $user = User::factory()->create();
+        $idempotencyKey = (string) Str::uuid();
+
+        app(AgentCashOutService::class)->cashOut(
+            $context['operator'],
+            $context['terminal'],
+            $firstAccount,
+            30000,
+            $idempotencyKey,
+            6.5244000,
+            3.3792000,
+            $user->id,
+            true
+        );
+
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('Idempotency key');
+
+        app(AgentCashOutService::class)->cashOut(
+            $context['operator'],
+            $context['terminal'],
+            $secondAccount,
+            30000,
+            $idempotencyKey,
+            6.5244000,
+            3.3792000,
+            $user->id,
+            true
+        );
+    }
+
+    public function test_cash_out_persists_risk_metadata(): void
+    {
+        $context = $this->makeReadyAgentContext(100000);
+        $customerAccount = $this->makeActiveCustomerAccount(80000);
+        $user = User::factory()->create();
+
+        $result = app(AgentCashOutService::class)->cashOut(
+            $context['operator'],
+            $context['terminal'],
+            $customerAccount,
+            50000,
+            (string) Str::uuid(),
+            6.5244000,
+            3.3792000,
+            $user->id,
+            true
+        );
+
+        $result->refresh();
+
+        $this->assertIsArray($result->risk_metadata);
+        $this->assertArrayHasKey('score', $result->risk_metadata);
+        $this->assertArrayHasKey('level', $result->risk_metadata);
+        $this->assertArrayHasKey('rules', $result->risk_metadata);
     }
 }

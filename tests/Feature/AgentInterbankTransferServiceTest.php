@@ -13,7 +13,9 @@ use App\Models\Customer;
 use App\Models\CustomerAccount;
 use App\Models\CustomerAccountBalance;
 use App\Models\User;
+use App\Services\Branch\BranchBusinessDayService;
 use App\Services\Payments\AgentInterbankTransferService;
+use App\Services\Payments\AgentServiceConfigurationService;
 use Database\Seeders\GlAccountSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -39,8 +41,19 @@ class AgentInterbankTransferServiceTest extends TestCase
 
     protected function makeReadyAgentContext(array $agentOverrides = []): array
     {
-        $branch = Branch::create(['name' => 'Test Branch', 'code' => 'TB-'.uniqid(), 'office_id' => 1]);
+        $branch = Branch::create([
+            'name' => 'Test Branch',
+            'code' => 'TB-'.uniqid(),
+            'office_id' => 1,
+        ]);
+
         $registrant = User::factory()->create();
+
+        app(BranchBusinessDayService::class)->open(
+            $branch->id,
+            now()->toDateString(),
+            $registrant->id
+        );
 
         $agent = Agent::create(array_merge([
             'agent_code' => 'AGT-'.uniqid(),
@@ -55,14 +68,16 @@ class AgentInterbankTransferServiceTest extends TestCase
         ], $agentOverrides));
 
         $agreementCreator = User::factory()->create();
+
         $agent->agreements()->create([
             'agreement_number' => 'AGR-'.uniqid(),
             'version' => 1,
-            'status' => 'ACTIVE',
+            'status' => 'EXECUTED',
             'created_by' => $agreementCreator->id,
         ]);
 
         $locationCreator = User::factory()->create();
+
         $location = AgentLocation::create([
             'agent_id' => $agent->id,
             'location_code' => 'LOC-'.uniqid(),
@@ -78,6 +93,7 @@ class AgentInterbankTransferServiceTest extends TestCase
         ]);
 
         $operatorUser = User::factory()->create();
+
         $operator = AgentOperator::create([
             'agent_id' => $agent->id,
             'agent_location_id' => $location->id,
@@ -93,6 +109,7 @@ class AgentInterbankTransferServiceTest extends TestCase
             'terminal_id' => 'TERM-'.uniqid(),
             'serial_number' => 'SN-'.uniqid(),
             'status' => 'ACTIVE',
+            'last_heartbeat_at' => now(),
             'registered_latitude' => 6.5244000,
             'registered_longitude' => 3.3792000,
             'geo_fence_radius_metres' => 100,
@@ -100,8 +117,11 @@ class AgentInterbankTransferServiceTest extends TestCase
         ]);
 
         $serviceEnabler = User::factory()->create();
-        app(\App\Services\Payments\AgentServiceConfigurationService::class)->enableService(
-            $agent, 'EXTERNAL_TRANSFER', $serviceEnabler->id
+
+        app(AgentServiceConfigurationService::class)->enableService(
+            $agent,
+            'EXTERNAL_TRANSFER',
+            $serviceEnabler->id
         );
 
         return [
@@ -158,13 +178,27 @@ class AgentInterbankTransferServiceTest extends TestCase
                 3.3792000,
                 $user->id
             );
-            $this->fail('Expected an exception since no PTSP/NIBSS integration exists.');
+
+            $this->fail(
+                'Expected an exception since no PTSP/NIBSS integration exists.'
+            );
         } catch (\Exception $e) {
-            $this->assertStringContainsString('PTSP/NIBSS', $e->getMessage());
+            $this->assertStringContainsString(
+                'PTSP/NIBSS',
+                $e->getMessage()
+            );
         }
 
-        $transaction = AgentTransaction::where('transaction_type', 'INTERBANK_TRANSFER')->first();
-        $this->assertNotNull($transaction, 'A real, audited transaction record should still exist even though processing failed.');
+        $transaction = AgentTransaction::where(
+            'transaction_type',
+            'INTERBANK_TRANSFER'
+        )->first();
+
+        $this->assertNotNull(
+            $transaction,
+            'A real, audited transaction record should still exist even though processing failed.'
+        );
+
         $this->assertEquals('FAILED', $transaction->status);
     }
 
@@ -194,8 +228,16 @@ class AgentInterbankTransferServiceTest extends TestCase
             // Expected.
         }
 
-        $balance = CustomerAccountBalance::where('customer_account_id', $account->id)->first();
-        $this->assertEquals(100000, (float) $balance->available_balance, 'The customer must not be debited for a transfer no real processor has confirmed.');
+        $balance = CustomerAccountBalance::where(
+            'customer_account_id',
+            $account->id
+        )->first();
+
+        $this->assertEquals(
+            100000,
+            (float) $balance->available_balance,
+            'The customer must not be debited for a transfer no real processor has confirmed.'
+        );
     }
 
     public function test_missing_pin_verification_is_rejected_before_any_transaction_is_created(): void
@@ -204,35 +246,56 @@ class AgentInterbankTransferServiceTest extends TestCase
         $account = $this->makeCustomerAccount();
         $user = User::factory()->create();
 
-        $this->expectException(\Exception::class);
-        $this->expectExceptionMessage('PIN verification is required');
+        try {
+            app(AgentInterbankTransferService::class)->transfer(
+                $context['operator'],
+                $context['terminal'],
+                $account,
+                'CARD-REF-1234',
+                false,
+                '058',
+                '0123456789',
+                'John Smith',
+                50000,
+                (string) Str::uuid(),
+                6.5244000,
+                3.3792000,
+                $user->id
+            );
 
-        app(AgentInterbankTransferService::class)->transfer(
-            $context['operator'],
-            $context['terminal'],
-            $account,
-            'CARD-REF-1234',
-            false,
-            '058',
-            '0123456789',
-            'John Smith',
-            50000,
-            (string) Str::uuid(),
-            6.5244000,
-            3.3792000,
-            $user->id
+            $this->fail(
+                'Expected cash-out to be rejected because PIN verification is required.'
+            );
+        } catch (\Exception $e) {
+            $this->assertStringContainsString(
+                'PIN verification is required',
+                $e->getMessage()
+            );
+        }
+
+        $this->assertEquals(
+            0,
+            AgentTransaction::where(
+                'transaction_type',
+                'INTERBANK_TRANSFER'
+            )->count()
         );
-
-        $this->assertEquals(0, AgentTransaction::where('transaction_type', 'INTERBANK_TRANSFER')->count());
     }
 
     public function test_rejected_for_inactive_agent(): void
     {
         $context = $this->makeReadyAgentContext();
-        $context['agent']->update(['status' => AgentStatus::SUSPENDED->value]);
+
+        $context['agent']->update([
+            'status' => AgentStatus::SUSPENDED->value,
+        ]);
+
         $account = $this->makeCustomerAccount();
         $user = User::factory()->create();
-        $freshOperator = \App\Models\AgentOperator::find($context['operator']->id);
+
+        $freshOperator = AgentOperator::find(
+            $context['operator']->id
+        );
 
         $this->expectException(\Exception::class);
         $this->expectExceptionMessage('is not ACTIVE');
@@ -280,8 +343,115 @@ class AgentInterbankTransferServiceTest extends TestCase
             // Expected.
         }
 
-        $transaction = AgentTransaction::where('transaction_type', 'INTERBANK_TRANSFER')->first();
-        $this->assertEquals('MASKED-1234', $transaction->channel_metadata['card_reference']);
-        $this->assertEquals('0123456789', $transaction->channel_metadata['destination_account_number']);
+        $transaction = AgentTransaction::where(
+            'transaction_type',
+            'INTERBANK_TRANSFER'
+        )->first();
+
+        $this->assertEquals(
+            'MASKED-1234',
+            $transaction->channel_metadata['card_reference']
+        );
+
+        $this->assertEquals(
+            '0123456789',
+            $transaction->channel_metadata['destination_account_number']
+        );
+    }
+
+    public function test_reused_idempotency_key_with_different_destination_is_rejected(): void
+    {
+        $context = $this->makeReadyAgentContext();
+        $account = $this->makeCustomerAccount();
+        $user = User::factory()->create();
+        $idempotencyKey = (string) Str::uuid();
+
+        try {
+            app(AgentInterbankTransferService::class)->transfer(
+                $context['operator'],
+                $context['terminal'],
+                $account,
+                'CARD-REF-1234',
+                true,
+                '058',
+                '0123456789',
+                'John Smith',
+                50000,
+                $idempotencyKey,
+                6.5244000,
+                3.3792000,
+                $user->id
+            );
+        } catch (\Exception $e) {
+            $this->assertStringContainsString(
+                'PTSP/NIBSS',
+                $e->getMessage()
+            );
+        }
+
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('Idempotency key');
+
+        app(AgentInterbankTransferService::class)->transfer(
+            $context['operator'],
+            $context['terminal'],
+            $account,
+            'CARD-REF-1234',
+            true,
+            '058',
+            '9999999999',
+            'Jane Smith',
+            50000,
+            $idempotencyKey,
+            6.5244000,
+            3.3792000,
+            $user->id
+        );
+    }
+
+    public function test_failed_interbank_transfer_persists_risk_metadata(): void
+    {
+        $context = $this->makeReadyAgentContext();
+        $account = $this->makeCustomerAccount();
+        $user = User::factory()->create();
+
+        try {
+            app(AgentInterbankTransferService::class)->transfer(
+                $context['operator'],
+                $context['terminal'],
+                $account,
+                'CARD-REF-RISK-1234',
+                true,
+                '058',
+                '0123456789',
+                'John Smith',
+                50000,
+                (string) Str::uuid(),
+                6.5244000,
+                3.3792000,
+                $user->id
+            );
+
+            $this->fail(
+                'Expected an exception since no PTSP/NIBSS integration exists.'
+            );
+        } catch (\Exception $e) {
+            $this->assertStringContainsString(
+                'PTSP/NIBSS',
+                $e->getMessage()
+            );
+        }
+
+        $transaction = AgentTransaction::where(
+            'transaction_type',
+            'INTERBANK_TRANSFER'
+        )->first();
+
+        $this->assertNotNull($transaction);
+        $this->assertEquals('FAILED', $transaction->status);
+        $this->assertIsArray($transaction->risk_metadata);
+        $this->assertArrayHasKey('score', $transaction->risk_metadata);
+        $this->assertArrayHasKey('level', $transaction->risk_metadata);
+        $this->assertArrayHasKey('rules', $transaction->risk_metadata);
     }
 }

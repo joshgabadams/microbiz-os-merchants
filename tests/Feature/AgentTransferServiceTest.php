@@ -14,6 +14,8 @@ use App\Models\CustomerAccount;
 use App\Models\CustomerAccountBalance;
 use App\Models\GlJournal;
 use App\Models\User;
+use App\Services\Branch\BranchBusinessDayService;
+use App\Services\Payments\AgentServiceConfigurationService;
 use App\Services\Payments\AgentTransferService;
 use Database\Seeders\GlAccountSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -43,6 +45,12 @@ class AgentTransferServiceTest extends TestCase
         $branch = Branch::create(['name' => 'Test Branch', 'code' => 'TB-'.uniqid(), 'office_id' => 1]);
         $registrant = User::factory()->create();
 
+        app(BranchBusinessDayService::class)->open(
+            $branch->id,
+            now()->toDateString(),
+            $registrant->id
+        );
+
         $agent = Agent::create(array_merge([
             'agent_code' => 'AGT-'.uniqid(),
             'agent_type' => 'INDIVIDUAL',
@@ -59,7 +67,7 @@ class AgentTransferServiceTest extends TestCase
         $agent->agreements()->create([
             'agreement_number' => 'AGR-'.uniqid(),
             'version' => 1,
-            'status' => 'ACTIVE',
+            'status' => 'EXECUTED',
             'created_by' => $agreementCreator->id,
         ]);
 
@@ -94,6 +102,7 @@ class AgentTransferServiceTest extends TestCase
             'terminal_id' => 'TERM-'.uniqid(),
             'serial_number' => 'SN-'.uniqid(),
             'status' => 'ACTIVE',
+            'last_heartbeat_at' => now(),
             'registered_latitude' => 6.5244000,
             'registered_longitude' => 3.3792000,
             'geo_fence_radius_metres' => 100,
@@ -101,7 +110,7 @@ class AgentTransferServiceTest extends TestCase
         ]);
 
         $serviceEnabler = User::factory()->create();
-        app(\App\Services\Payments\AgentServiceConfigurationService::class)->enableService(
+        app(AgentServiceConfigurationService::class)->enableService(
             $agent, 'TRANSFER', $serviceEnabler->id
         );
 
@@ -212,7 +221,7 @@ class AgentTransferServiceTest extends TestCase
         $from = $this->makeCustomerAccount(100000);
         $to = $this->makeCustomerAccount(0);
         $user = User::factory()->create();
-        $freshOperator = \App\Models\AgentOperator::find($context['operator']->id);
+        $freshOperator = AgentOperator::find($context['operator']->id);
 
         $this->expectException(\Exception::class);
         $this->expectExceptionMessage('is not ACTIVE');
@@ -336,5 +345,69 @@ class AgentTransferServiceTest extends TestCase
             3.9470000,
             $user->id
         );
+    }
+
+    public function test_reused_idempotency_key_with_different_destination_is_rejected(): void
+    {
+        $context = $this->makeReadyAgentContext();
+        $from = $this->makeCustomerAccount(100000);
+        $firstDestination = $this->makeCustomerAccount(0);
+        $secondDestination = $this->makeCustomerAccount(0);
+        $user = User::factory()->create();
+        $idempotencyKey = (string) Str::uuid();
+
+        app(AgentTransferService::class)->transfer(
+            $context['operator'],
+            $context['terminal'],
+            $from,
+            $firstDestination,
+            30000,
+            $idempotencyKey,
+            6.5244000,
+            3.3792000,
+            $user->id
+        );
+
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('Idempotency key');
+
+        app(AgentTransferService::class)->transfer(
+            $context['operator'],
+            $context['terminal'],
+            $from,
+            $secondDestination,
+            30000,
+            $idempotencyKey,
+            6.5244000,
+            3.3792000,
+            $user->id
+        );
+    }
+
+    public function test_transfer_persists_risk_metadata(): void
+    {
+        $context = $this->makeReadyAgentContext();
+        $from = $this->makeCustomerAccount(100000);
+        $to = $this->makeCustomerAccount(0);
+        $user = User::factory()->create();
+
+        $transaction = app(AgentTransferService::class)->transfer(
+            $context['operator'],
+            $context['terminal'],
+            $from,
+            $to,
+            30000,
+            (string) Str::uuid(),
+            6.5244000,
+            3.3792000,
+            $user->id
+        );
+
+        $transaction->refresh();
+
+        $this->assertIsArray($transaction->risk_metadata);
+        $this->assertArrayHasKey('score', $transaction->risk_metadata);
+        $this->assertArrayHasKey('level', $transaction->risk_metadata);
+        $this->assertArrayHasKey('rules', $transaction->risk_metadata);
     }
 }

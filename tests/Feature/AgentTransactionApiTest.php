@@ -4,9 +4,14 @@ namespace Tests\Feature;
 
 use App\Domain\MPay\Enums\AgentStatus;
 use App\Models\Agent;
+use App\Models\AgentBalance;
+use App\Models\ApprovalRequest;
+use App\Models\CashLedger;
+use App\Models\Permission;
 use App\Models\AgentLocation;
 use App\Models\AgentOperator;
 use App\Models\AgentTerminal;
+use App\Models\AgentTransaction;
 use App\Models\Branch;
 use App\Models\Customer;
 use App\Models\CustomerAccount;
@@ -14,6 +19,7 @@ use App\Models\CustomerAccountBalance;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\Vault;
+use App\Services\Branch\BranchBusinessDayService;
 use App\Services\CashManagement\AgentFloatService;
 use App\Services\Payments\AgentCashInService;
 use App\Services\Payments\AgentServiceConfigurationService;
@@ -52,33 +58,40 @@ class AgentTransactionApiTest extends TestCase
     }
 
     protected function makeReadyAgentContext(
-        array $services = ['CASH_IN', 'CASH_OUT', 'TRANSFER'],
-        float $floatAmount = 200000
-    ): array {
-        $branch = Branch::create([
-            'name' => 'Agent Transaction API Branch',
-            'code' => 'ATAB-'.uniqid(),
-            'office_id' => 1,
-        ]);
+    array $services = ['CASH_IN', 'CASH_OUT', 'TRANSFER'],
+    float $floatAmount = 200000
+): array {
+    $branch = Branch::create([
+        'name' => 'Agent Transaction API Branch',
+        'code' => 'ATAB-'.uniqid(),
+        'office_id' => 1,
+    ]);
 
-        $registrant = User::factory()->create();
+    $registrant = User::factory()->create();
 
-        $agent = Agent::create([
-            'agent_code' => 'AGT-'.uniqid(),
-            'agent_type' => 'INDIVIDUAL',
-            'legal_name' => 'Agent Transaction API Test Agent',
-            'phone' => '08000000000',
-            'branch_id' => $branch->id,
-            'status' => AgentStatus::ACTIVE->value,
-            'kyc_status' => 'COMPLETED',
-            'created_by' => $registrant->id,
-            'single_transaction_limit' => 1000000,
-        ]);
+    app(BranchBusinessDayService::class)->open(
+        $branch->id,
+        now()->toDateString(),
+        $registrant->id,
+        'Opened for agent transaction API test.'
+    );
+
+    $agent = Agent::create([
+        'agent_code' => 'AGT-'.uniqid(),
+        'agent_type' => 'INDIVIDUAL',
+        'legal_name' => 'Agent Transaction API Test Agent',
+        'phone' => '08000000000',
+        'branch_id' => $branch->id,
+        'status' => AgentStatus::ACTIVE->value,
+        'kyc_status' => 'COMPLETED',
+        'created_by' => $registrant->id,
+        'single_transaction_limit' => 1000000,
+    ]);
 
         $agent->agreements()->create([
             'agreement_number' => 'AGR-'.uniqid(),
             'version' => 1,
-            'status' => 'ACTIVE',
+            'status' => 'EXECUTED',
             'created_by' => User::factory()->create()->id,
         ]);
 
@@ -117,6 +130,7 @@ class AgentTransactionApiTest extends TestCase
             'registered_longitude' => 3.3792000,
             'geo_fence_radius_metres' => 100,
             'activated_at' => now(),
+            'last_heartbeat_at' => now(),
         ]);
 
         $serviceEnabler = User::factory()->create();
@@ -265,6 +279,30 @@ class AgentTransactionApiTest extends TestCase
             3.3792000,
             User::factory()->create()->id
         );
+    }
+
+    protected function createCompletedAgentTransaction(
+        array $context,
+        float $amount,
+        string $transactionType = 'CASH_IN'
+    ): AgentTransaction {
+        return AgentTransaction::create([
+            'transaction_no' => 'AGT-'.uniqid(),
+            'idempotency_key' => (string) Str::uuid(),
+            'agent_id' => $context['agent']->id,
+            'agent_location_id' => $context['location']->id,
+            'agent_terminal_id' => $context['terminal']->id,
+            'agent_operator_id' => $context['operator']->id,
+            'transaction_type' => $transactionType,
+            'status' => 'COMPLETED',
+            'amount' => $amount,
+            'currency' => 'NGN',
+            'latitude' => 6.5244000,
+            'longitude' => 3.3792000,
+            'geo_fence_passed' => true,
+            'transaction_date' => now(),
+            'performed_by' => User::factory()->create()->id,
+        ]);
     }
 
     public function test_unauthenticated_user_cannot_cash_in(): void
@@ -1067,6 +1105,730 @@ class AgentTransactionApiTest extends TestCase
             0
         );
     }
+    public function test_cash_in_rejects_when_daily_cumulative_limit_would_be_exceeded(): void
+    {
+    $user = User::factory()->create();
 
+    $this->attachRole(
+        $user,
+        'agent-transaction-operator'
+    );
 
+    Sanctum::actingAs($user);
+
+    $context = $this->makeReadyAgentContext(
+        ['CASH_IN'],
+        200000
+    );
+
+    $context['agent']->update([
+        'daily_transaction_limit' => 100000,
+    ]);
+
+    $this->createCompletedAgentTransaction(
+        $context,
+        80000
+    );
+
+    $account = $this->makeCustomerAccount();
+
+    $response = $this->postJson(
+        "/api/v1/agents/{$context['agent']->id}/transactions/cash-in",
+        $this->cashInPayload(
+            $context,
+            $account,
+            ['amount' => 30000]
+        )
+    );
+
+    $response->assertUnprocessable();
+
+    $this->assertStringContainsString(
+        'daily cumulative limit',
+        $response->getContent()
+    );
+
+    $this->assertDatabaseMissing('agent_transactions', [
+        'agent_id' => $context['agent']->id,
+        'amount' => 30000,
+        'status' => 'COMPLETED',
+    ]);
+}
+
+    public function test_cash_in_allows_transaction_at_exact_daily_cumulative_limit(): void
+    {
+    $user = User::factory()->create();
+
+    $this->attachRole(
+        $user,
+        'agent-transaction-operator'
+    );
+
+    Sanctum::actingAs($user);
+
+    $context = $this->makeReadyAgentContext(
+        ['CASH_IN'],
+        200000
+    );
+
+    $context['agent']->update([
+        'daily_transaction_limit' => 100000,
+    ]);
+
+    $this->createCompletedAgentTransaction(
+        $context,
+        80000
+    );
+
+    $account = $this->makeCustomerAccount();
+
+    $response = $this->postJson(
+        "/api/v1/agents/{$context['agent']->id}/transactions/cash-in",
+        $this->cashInPayload(
+            $context,
+            $account,
+            ['amount' => 20000]
+        )
+    );
+
+    $response->assertCreated();
+
+    $this->assertDatabaseHas('agent_transactions', [
+        'agent_id' => $context['agent']->id,
+        'transaction_type' => 'CASH_IN',
+        'status' => 'COMPLETED',
+        'amount' => 20000,
+    ]);
+}
+
+    public function test_transfer_rejects_when_daily_cumulative_limit_would_be_exceeded(): void
+    {
+    $user = User::factory()->create();
+
+    $this->attachRole(
+        $user,
+        'agent-transaction-operator'
+    );
+
+    Sanctum::actingAs($user);
+
+    $context = $this->makeReadyAgentContext(
+        ['TRANSFER']
+    );
+
+    $context['agent']->update([
+        'daily_transaction_limit' => 100000,
+    ]);
+
+    $this->createCompletedAgentTransaction(
+        $context,
+        80000
+    );
+
+    $fromAccount = $this->makeCustomerAccount(100000);
+    $toAccount = $this->makeCustomerAccount();
+
+    $response = $this->postJson(
+        "/api/v1/agents/{$context['agent']->id}/transactions/transfer",
+        $this->transferPayload(
+            $context,
+            $fromAccount,
+            $toAccount,
+            ['amount' => 30000]
+        )
+    );
+
+    $response->assertUnprocessable();
+
+    $this->assertStringContainsString(
+        'daily cumulative limit',
+        $response->getContent()
+    );
+}
+
+    public function test_prior_cash_in_does_not_consume_daily_cash_out_limit(): void
+    {
+        $user = User::factory()->create();
+
+        $this->attachRole(
+            $user,
+            'agent-transaction-operator'
+        );
+
+        Sanctum::actingAs($user);
+
+        $context = $this->makeReadyAgentContext(
+            ['CASH_IN', 'CASH_OUT'],
+            200000
+        );
+
+        $context['agent']->update([
+            'daily_transaction_limit' => 500000,
+            'daily_cash_out_limit' => 50000,
+        ]);
+
+        /*
+         * This cash-in creates genuine physical liquidity and contributes
+         * to the general daily transaction total, but it must not consume
+         * the cash-out-specific daily limit.
+         */
+        $this->fundPhysicalCash(
+            $context,
+            40000
+        );
+
+        $account = $this->makeCustomerAccount(100000);
+
+        $response = $this->postJson(
+            "/api/v1/agents/{$context['agent']->id}/transactions/cash-out",
+            $this->cashOutPayload(
+                $context,
+                $account,
+                ['amount' => 20000]
+            )
+        );
+
+        $response->assertCreated();
+
+        $this->assertDatabaseHas('agent_transactions', [
+            'agent_id' => $context['agent']->id,
+            'transaction_type' => 'CASH_OUT',
+            'status' => 'COMPLETED',
+            'amount' => 20000,
+        ]);
+    }
+
+    public function test_cash_out_rejects_when_daily_cash_out_limit_would_be_exceeded(): void
+    {
+        $user = User::factory()->create();
+
+        $this->attachRole(
+            $user,
+            'agent-transaction-operator'
+        );
+
+        Sanctum::actingAs($user);
+
+        $context = $this->makeReadyAgentContext(
+            ['CASH_IN', 'CASH_OUT'],
+            200000
+        );
+
+        $context['agent']->update([
+            'daily_transaction_limit' => 500000,
+            'daily_cash_out_limit' => 50000,
+        ]);
+
+        /*
+         * Build enough real physical liquidity to ensure the rejection
+         * comes from the cash-out daily limit rather than liquidity.
+         */
+        $this->fundPhysicalCash(
+            $context,
+            100000
+        );
+
+        $this->createCompletedAgentTransaction(
+            $context,
+            40000,
+            'CASH_OUT'
+        );
+
+        $account = $this->makeCustomerAccount(100000);
+
+        $response = $this->postJson(
+            "/api/v1/agents/{$context['agent']->id}/transactions/cash-out",
+            $this->cashOutPayload(
+                $context,
+                $account,
+                ['amount' => 20000]
+            )
+        );
+
+        $response->assertUnprocessable();
+
+        $this->assertStringContainsString(
+            'daily cumulative limit',
+            $response->getContent()
+        );
+    }
+
+    public function test_unauthenticated_user_cannot_request_agent_transaction_reversal(): void
+    {
+        $context = $this->makeReadyAgentContext(
+            ['CASH_IN']
+        );
+
+        $transaction = $this->createCompletedAgentTransaction(
+            $context,
+            10000
+        );
+
+        $response = $this->postJson(
+            "/api/v1/agent-transactions/{$transaction->id}/reversal/request",
+            [
+                'narration' => 'Reverse test cash-in.',
+            ]
+        );
+
+        $response->assertUnauthorized();
+
+        $this->assertDatabaseMissing(
+            'approval_requests',
+            [
+                'request_type' => 'AGENT_TRANSACTION_REVERSAL',
+            ]
+        );
+    }
+
+    public function test_user_without_reversal_permission_is_forbidden(): void
+    {
+        $user = User::factory()->create();
+
+        $this->attachRole(
+            $user,
+            'agent-kyc-officer'
+        );
+
+        Sanctum::actingAs($user);
+
+        $context = $this->makeReadyAgentContext(
+            ['CASH_IN']
+        );
+
+        $transaction = $this->createCompletedAgentTransaction(
+            $context,
+            10000
+        );
+
+        $response = $this->postJson(
+            "/api/v1/agent-transactions/{$transaction->id}/reversal/request",
+            [
+                'narration' => 'Reverse test cash-in.',
+            ]
+        );
+
+        $response->assertForbidden();
+
+        $this->assertDatabaseMissing(
+            'approval_requests',
+            [
+                'request_type' => 'AGENT_TRANSACTION_REVERSAL',
+            ]
+        );
+    }
+
+    public function test_authorized_user_can_request_cash_in_reversal_without_immediate_execution(): void
+    {
+        $user = User::factory()->create();
+
+        $this->attachRole(
+    $user,
+    'agent-transaction-reversal-maker'
+);
+
+        Sanctum::actingAs($user);
+
+        $context = $this->makeReadyAgentContext(
+            ['CASH_IN']
+        );
+
+        $transaction = $this->createCompletedAgentTransaction(
+            $context,
+            10000
+        );
+
+        $response = $this->postJson(
+            "/api/v1/agent-transactions/{$transaction->id}/reversal/request",
+            [
+                'narration' => 'Customer cash-in entered in error.',
+                'maker_note' => 'Please verify and approve reversal.',
+            ]
+        );
+
+        $response->assertCreated();
+
+        $this->assertDatabaseHas(
+            'approval_requests',
+            [
+                'request_type' => 'AGENT_TRANSACTION_REVERSAL',
+                'status' => 'PENDING',
+                'maker_id' => $user->id,
+                'amount' => 10000,
+                'currency' => 'NGN',
+            ]
+        );
+
+        $transaction->refresh();
+
+        $this->assertSame(
+            'COMPLETED',
+            $transaction->status
+        );
+
+        $this->assertNull(
+            $transaction->reversed_at
+        );
+    }
+
+    public function test_non_cash_in_transaction_cannot_be_submitted_for_reversal(): void
+    {
+        $user = User::factory()->create();
+
+        $this->attachRole(
+    $user,
+    'agent-transaction-reversal-maker'
+);
+
+        Sanctum::actingAs($user);
+
+        $context = $this->makeReadyAgentContext(
+            ['TRANSFER']
+        );
+
+        $transaction = $this->createCompletedAgentTransaction(
+            $context,
+            10000,
+            'TRANSFER'
+        );
+
+        $response = $this->postJson(
+            "/api/v1/agent-transactions/{$transaction->id}/reversal/request",
+            [
+                'narration' => 'Attempt unsupported reversal.',
+            ]
+        );
+
+        $response->assertUnprocessable();
+
+        $this->assertDatabaseMissing(
+            'approval_requests',
+            [
+                'request_type' => 'AGENT_TRANSACTION_REVERSAL',
+            ]
+        );
+    }
+
+    public function test_reversed_transaction_cannot_be_submitted_for_reversal(): void
+    {
+        $user = User::factory()->create();
+
+        $this->attachRole(
+    $user,
+    'agent-transaction-reversal-maker'
+);
+
+        Sanctum::actingAs($user);
+
+        $context = $this->makeReadyAgentContext(
+            ['CASH_IN']
+        );
+
+        $transaction = $this->createCompletedAgentTransaction(
+            $context,
+            10000
+        );
+
+        $transaction->update([
+            'status' => 'REVERSED',
+            'reversed_at' => now(),
+        ]);
+
+        $response = $this->postJson(
+            "/api/v1/agent-transactions/{$transaction->id}/reversal/request",
+            [
+                'narration' => 'Attempt duplicate reversal.',
+            ]
+        );
+
+        $response->assertUnprocessable();
+
+        $this->assertDatabaseMissing(
+            'approval_requests',
+            [
+                'request_type' => 'AGENT_TRANSACTION_REVERSAL',
+            ]
+        );
+    }
+
+    public function test_cash_in_reversal_completes_full_http_maker_checker_flow(): void
+    {
+        $context = $this->makeReadyAgentContext([
+            'CASH_IN',
+        ]);
+
+        $customerAccount = $this->makeCustomerAccount();
+
+        $maker = User::factory()->create();
+        $checker = User::factory()->create();
+
+        /*
+         * Keep maker and checker permissions deliberately separated.
+         *
+         * Users do not receive permissions directly in this RBAC model.
+         * Permissions are inherited through roles.
+         */
+        $makerRole = Role::firstOrCreate(
+            ['name' => 'agent-transaction-reversal-maker'],
+            ['label' => 'Agent Transaction Reversal Maker']
+        );
+
+        $checkerRole = Role::firstOrCreate(
+            ['name' => 'agent-transaction-reversal-checker'],
+            ['label' => 'Agent Transaction Reversal Checker']
+        );
+
+        $reversePermission = Permission::firstOrCreate(
+            ['name' => 'agents.transactions.reverse'],
+            ['module' => 'agency']
+        );
+
+        $approvePermission = Permission::firstOrCreate(
+            ['name' => 'approvals.approve'],
+            ['module' => 'approval']
+        );
+
+        $makerRole->permissions()->syncWithoutDetaching([
+            $reversePermission->id,
+        ]);
+
+        $checkerRole->permissions()->syncWithoutDetaching([
+            $approvePermission->id,
+        ]);
+
+        $maker->roles()->attach($makerRole->id, [
+            'assigned_at' => now(),
+            'assigned_by' => $maker->id,
+        ]);
+
+        $checker->roles()->attach($checkerRole->id, [
+            'assigned_at' => now(),
+            'assigned_by' => $checker->id,
+        ]);
+
+        /*
+         * Clear any already-loaded role relationships so permission checks
+         * always see the roles attached above.
+         */
+        $maker->unsetRelation('roles');
+        $checker->unsetRelation('roles');
+
+        $amount = 5000.00;
+
+        /*
+         * Create a real completed cash-in so that the reversal test exercises
+         * genuine balances and accounting entries rather than a synthetic
+         * AgentTransaction record.
+         */
+        $transaction = app(AgentCashInService::class)->cashIn(
+            $context['operator'],
+            $context['terminal'],
+            $customerAccount,
+            $amount,
+            (string) Str::uuid(),
+            6.5244000,
+            3.3792000,
+            $maker->id,
+            'E2E-REVERSAL',
+            'Cash-in for reversal E2E test'
+        );
+
+        $this->assertSame('COMPLETED', $transaction->status);
+
+        $customerBalanceAfterCashIn = CustomerAccountBalance::where(
+            'customer_account_id',
+            $customerAccount->id
+        )->firstOrFail();
+
+        $agentBalanceAfterCashIn = AgentBalance::where(
+            'agent_id',
+            $context['agent']->id
+        )->firstOrFail();
+
+        $customerBalanceBeforeReversal = (float) $customerBalanceAfterCashIn->available_balance;
+        $ledgerFloatBeforeReversal = (float) $agentBalanceAfterCashIn->ledger_float;
+        $availableFloatBeforeReversal = (float) $agentBalanceAfterCashIn->available_float;
+        $physicalCashBeforeReversal = (float) $agentBalanceAfterCashIn->declared_physical_cash;
+
+        /*
+         * Maker requests the reversal.
+         *
+         * This must only create the ApprovalRequest. No financial reversal
+         * may occur until a different authorized checker approves it.
+         */
+        $requestResponse = $this
+            ->actingAs($maker, 'sanctum')
+            ->postJson(
+                "/api/v1/agent-transactions/{$transaction->id}/reversal/request",
+                [
+                    'narration' => 'Customer cash-in entered in error',
+                    'maker_note' => 'Please verify and reverse',
+                ]
+            );
+
+        $requestResponse->assertCreated();
+
+        $approvalRequest = ApprovalRequest::where(
+            'request_type',
+            'AGENT_TRANSACTION_REVERSAL'
+        )
+            ->where('maker_id', $maker->id)
+            ->latest('id')
+            ->firstOrFail();
+
+        $this->assertSame('PENDING', $approvalRequest->status);
+
+        $this->assertSame(
+            $transaction->id,
+            (int) $approvalRequest->payload['agent_transaction_id']
+        );
+
+        /*
+         * Confirm the maker action itself did not execute the reversal.
+         */
+        $transaction->refresh();
+
+        $this->assertSame('COMPLETED', $transaction->status);
+        $this->assertNull($transaction->reversed_at);
+
+        /*
+         * A different user with approvals.approve now performs the checker
+         * side of the maker/checker flow through the real HTTP endpoint.
+         */
+        $approveResponse = $this
+            ->actingAs($checker, 'sanctum')
+            ->postJson(
+                "/api/v1/approvals/{$approvalRequest->id}/approve",
+                [
+                    'checker_note' => 'Reversal verified and approved',
+                ]
+            );
+
+        $approveResponse->assertSuccessful();
+
+        $approvalRequest->refresh();
+        $transaction->refresh();
+
+        /*
+         * Approval metadata must identify the checker and the transaction
+         * produced by execution of the approval request.
+         */
+        $this->assertSame('APPROVED', $approvalRequest->status);
+
+        $this->assertSame(
+            $checker->id,
+            (int) $approvalRequest->checker_id
+        );
+
+        $this->assertNotNull(
+            $approvalRequest->approved_at
+        );
+
+        $this->assertSame(
+            AgentTransaction::class,
+            $approvalRequest->executed_transaction_type
+        );
+
+        $this->assertSame(
+            $transaction->id,
+            (int) $approvalRequest->executed_transaction_id
+        );
+
+        /*
+         * The original agent transaction must now be marked as reversed
+         * and record the checker as the approving user.
+         */
+        $this->assertSame(
+            'REVERSED',
+            $transaction->status
+        );
+
+        $this->assertNotNull(
+            $transaction->reversed_at
+        );
+
+        $this->assertSame(
+            $checker->id,
+            (int) $transaction->approved_by
+        );
+
+        /*
+         * Verify the economic inverse occurred.
+         *
+         * CASH_IN:
+         *   customer balance  +
+         *   agent float       -
+         *   physical cash     +
+         *
+         * REVERSAL:
+         *   customer balance  -
+         *   agent float       +
+         *   physical cash     -
+         */
+        $customerBalanceAfterReversal = CustomerAccountBalance::where(
+            'customer_account_id',
+            $customerAccount->id
+        )->firstOrFail();
+
+        $agentBalanceAfterReversal = AgentBalance::where(
+            'agent_id',
+            $context['agent']->id
+        )->firstOrFail();
+
+        $this->assertEquals(
+            $customerBalanceBeforeReversal - $amount,
+            (float) $customerBalanceAfterReversal->available_balance
+        );
+
+        $this->assertEquals(
+            $ledgerFloatBeforeReversal + $amount,
+            (float) $agentBalanceAfterReversal->ledger_float
+        );
+
+        $this->assertEquals(
+            $availableFloatBeforeReversal + $amount,
+            (float) $agentBalanceAfterReversal->available_float
+        );
+
+        $this->assertEquals(
+            $physicalCashBeforeReversal - $amount,
+            (float) $agentBalanceAfterReversal->declared_physical_cash
+        );
+
+        /*
+         * The HTTP approval path must ultimately create the compensating
+         * accounting record rather than modifying the original ledger.
+         */
+        $reversalLedger = CashLedger::where(
+            'source_type',
+            AgentTransaction::class
+        )
+            ->where('source_id', $transaction->id)
+            ->where(
+                'transaction_type',
+                'AGENT_CASH_IN_REVERSAL'
+            )
+            ->latest('id')
+            ->firstOrFail();
+
+        $this->assertSame(
+            'APPROVED',
+            $reversalLedger->status
+        );
+
+        $this->assertSame(
+            $checker->id,
+            (int) $reversalLedger->approved_by
+        );
+
+        $this->assertSame(
+            'CUSTOMER_DEPOSIT_CONTROL',
+            $reversalLedger->debit_account_key
+        );
+
+        $this->assertSame(
+            'AGENCY_FLOAT',
+            $reversalLedger->credit_account_key
+        );
+    }
 }

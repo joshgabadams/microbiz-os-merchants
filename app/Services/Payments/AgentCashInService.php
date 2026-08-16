@@ -39,9 +39,10 @@ class AgentCashInService
         protected CustomerAccountService $customerAccountService,
         protected TransactionNumberService $transactionNumberService,
         protected GlPostingService $glPostingService,
-        protected AgentFeeCalculationService $feeCalculationService
-    ) {
-    }
+        protected AgentFeeCalculationService $feeCalculationService,
+        protected AgentTransactionIdempotencyService $idempotencyService,
+        protected AgentTransactionRiskService $riskService
+    ) {}
 
     /**
      * @throws Exception
@@ -62,17 +63,23 @@ class AgentCashInService
             throw new Exception('Cash-in amount must be greater than zero.');
         }
 
-        // Idempotency: return the original transaction rather than
-        // erroring or re-processing, per Blueprint §20's exact test --
-        // "Duplicate idempotency request returns original response."
-        $existing = AgentTransaction::where('idempotency_key', $idempotencyKey)->first();
+        $agent = $operator->agent;
+        $location = $operator->location;
+
+        $existing = $this->idempotencyService->findExisting(
+            $idempotencyKey,
+            'CASH_IN',
+            $agent->id,
+            $location->id,
+            $terminal->id,
+            $operator->id,
+            $customerAccount->id,
+            $amount
+        );
 
         if ($existing) {
             return $existing;
         }
-
-        $agent = $operator->agent;
-        $location = $operator->location;
 
         if ($terminal->agent_id !== $agent->id) {
             throw new Exception('This terminal does not belong to the specified agent.');
@@ -132,8 +139,19 @@ class AgentCashInService
             // collection is out of scope for this pass.
             $feeAmount = $this->feeCalculationService->calculateFee($agent, 'CASH_IN');
             $commissionAmount = $this->feeCalculationService->calculateCommission($agent, 'CASH_IN');
+            // Risk is observational at this stage: assess the transaction and
+            // persist the result for audit/monitoring, but do not block processing
+            // based on the resulting risk level until an explicit enforcement
+            // policy is introduced.
+            $riskAssessment = $this->riskService->assess(
+                $agent,
+                $terminal,
+                'CASH_IN',
+                $amount
+            );
 
             $agentTransaction = AgentTransaction::create([
+
                 'transaction_no' => $transactionNo,
                 'idempotency_key' => $idempotencyKey,
                 'agent_id' => $agent->id,
@@ -153,6 +171,7 @@ class AgentCashInService
                 'geo_fence_passed' => $geoFencePassed,
                 'transaction_date' => $transactionDate,
                 'performed_by' => $performedBy,
+                'risk_metadata' => $riskAssessment,
             ]);
 
             // Blueprint §13.2 exact direction.

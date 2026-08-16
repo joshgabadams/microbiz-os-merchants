@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Domain\MPay\Enums\AgentStatus;
 use App\Models\Agent;
+use App\Services\Branch\BranchBusinessDayService;
 use App\Models\AgentBalance;
 use App\Models\AgentLocation;
 use App\Models\AgentOperator;
@@ -46,6 +47,12 @@ class AgentFeeCalculationTest extends TestCase
         $branch = Branch::create(['name' => 'Test Branch', 'code' => 'TB-'.uniqid(), 'office_id' => 1]);
         $registrant = User::factory()->create();
 
+        app(BranchBusinessDayService::class)->open(
+    $branch->id,
+    now()->toDateString(),
+    $registrant->id
+);
+
         $agent = Agent::create(array_merge([
             'agent_code' => 'AGT-'.uniqid(),
             'agent_type' => 'INDIVIDUAL',
@@ -62,7 +69,7 @@ class AgentFeeCalculationTest extends TestCase
         $agent->agreements()->create([
             'agreement_number' => 'AGR-'.uniqid(),
             'version' => 1,
-            'status' => 'ACTIVE',
+            'status' => 'EXECUTED',
             'created_by' => $agreementCreator->id,
         ]);
 
@@ -97,6 +104,7 @@ class AgentFeeCalculationTest extends TestCase
             'terminal_id' => 'TERM-'.uniqid(),
             'serial_number' => 'SN-'.uniqid(),
             'status' => 'ACTIVE',
+            'last_heartbeat_at' => now(),
             'registered_latitude' => 6.5244000,
             'registered_longitude' => 3.3792000,
             'geo_fence_radius_metres' => 100,
