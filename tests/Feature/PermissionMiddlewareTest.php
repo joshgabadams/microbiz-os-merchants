@@ -9,7 +9,6 @@ use App\Models\TellerBalance;
 use App\Models\User;
 use Database\Seeders\RbacSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 /**
@@ -57,7 +56,7 @@ class PermissionMiddlewareTest extends TestCase
 
         // A plain user with no roles/permissions at all.
         $user = User::factory()->create();
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $response = $this->postJson('/api/v1/teller/close', [
             'teller_id' => $teller->id,
@@ -77,7 +76,7 @@ class PermissionMiddlewareTest extends TestCase
         $tellerOfficerRole = Role::where('name', 'teller-officer')->firstOrFail();
         $user->roles()->attach($tellerOfficerRole->id);
 
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $response = $this->postJson('/api/v1/teller/close', [
             'teller_id' => $teller->id,

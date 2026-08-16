@@ -6,7 +6,6 @@ use App\Models\AgentComplaint;
 use App\Models\Branch;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class AgentComplaintApiTest extends TestCase
@@ -42,7 +41,7 @@ class AgentComplaintApiTest extends TestCase
 
     protected function createComplaint(User $user): AgentComplaint
     {
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $response = $this->postJson(
             '/api/v1/agent-complaints',
@@ -69,7 +68,7 @@ class AgentComplaintApiTest extends TestCase
     {
         $user = User::factory()->create();
 
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $response = $this->postJson(
             '/api/v1/agent-complaints',
@@ -115,7 +114,7 @@ class AgentComplaintApiTest extends TestCase
     {
         $user = User::factory()->create();
 
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $response = $this->postJson(
             '/api/v1/agent-complaints',
@@ -137,7 +136,7 @@ class AgentComplaintApiTest extends TestCase
     {
         $user = User::factory()->create();
 
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $response = $this->postJson(
             '/api/v1/agent-complaints',

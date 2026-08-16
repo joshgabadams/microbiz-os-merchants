@@ -16,12 +16,21 @@ use Illuminate\Support\Facades\Auth;
  * Auth::onceBasic() (not Auth::basic()) is deliberate: the plain
  * ->basic() variant persists a session, which a stateless API has no
  * business creating.
+ *
+ * Always resolved against the explicit 'web' guard, never the bare
+ * Auth facade default. The bare form resolves against whatever guard
+ * Auth::shouldUse() last pointed at -- something as unrelated as a test
+ * calling ->actingAs($user, 'sanctum') earlier in the same request
+ * lifecycle silently redirects it to a guard (Sanctum's RequestGuard)
+ * that has no onceBasic() method at all, a fatal error. Pinning the
+ * guard makes this middleware's behavior independent of that global,
+ * mutable state.
  */
 class AuthenticateBasicOnce
 {
     public function handle(Request $request, Closure $next)
     {
-        if ($response = Auth::onceBasic()) {
+        if ($response = Auth::guard('web')->onceBasic()) {
             return $response;
         }
 

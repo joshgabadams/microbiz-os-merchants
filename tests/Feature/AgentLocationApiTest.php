@@ -9,7 +9,6 @@ use App\Models\Role;
 use App\Models\User;
 use Database\Seeders\PaymentsRbacSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class AgentLocationApiTest extends TestCase
@@ -88,7 +87,7 @@ class AgentLocationApiTest extends TestCase
 
         $this->attachRole($user, 'agent-kyc-officer');
 
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $agent = $this->makeAgentPendingLocation($registrant->id);
 
@@ -110,7 +109,7 @@ class AgentLocationApiTest extends TestCase
             'agent-location-officer'
         );
 
-        Sanctum::actingAs($locationOfficer);
+        $this->actingAsBasicAuth($locationOfficer);
 
         $agent = $this->makeAgentPendingLocation($registrant->id);
 
@@ -137,7 +136,7 @@ class AgentLocationApiTest extends TestCase
         $this->attachRole($officer, 'agent-location-officer');
         $this->attachRole($officer, 'agent-location-verifier');
 
-        Sanctum::actingAs($officer);
+        $this->actingAsBasicAuth($officer);
 
         $agent = $this->makeAgentPendingLocation($registrant->id);
 
@@ -179,7 +178,7 @@ class AgentLocationApiTest extends TestCase
             'agent-location-verifier'
         );
 
-        Sanctum::actingAs($locationOfficer);
+        $this->actingAsBasicAuth($locationOfficer);
 
         $agent = $this->makeAgentPendingLocation($registrant->id);
 
@@ -190,7 +189,7 @@ class AgentLocationApiTest extends TestCase
 
         $locationId = $createResponse->json('data.id');
 
-        Sanctum::actingAs($verifier);
+        $this->actingAsBasicAuth($verifier);
 
         $response = $this->postJson(
             "/api/v1/agents/{$agent->id}/locations/{$locationId}/verify",
@@ -231,7 +230,7 @@ class AgentLocationApiTest extends TestCase
 
         $agent = $this->makeAgentPendingLocation($registrant->id);
 
-        Sanctum::actingAs($locationOfficer);
+        $this->actingAsBasicAuth($locationOfficer);
 
         $createResponse = $this->postJson(
             "/api/v1/agents/{$agent->id}/locations",
@@ -240,13 +239,13 @@ class AgentLocationApiTest extends TestCase
 
         $locationId = $createResponse->json('data.id');
 
-        Sanctum::actingAs($verifier);
+        $this->actingAsBasicAuth($verifier);
 
         $this->postJson(
             "/api/v1/agents/{$agent->id}/locations/{$locationId}/verify"
         )->assertOk();
 
-        Sanctum::actingAs($complianceOfficer);
+        $this->actingAsBasicAuth($complianceOfficer);
 
         $response = $this->postJson(
             "/api/v1/agents/{$agent->id}/complete-compliance-review"

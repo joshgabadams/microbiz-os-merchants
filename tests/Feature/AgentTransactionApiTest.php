@@ -28,7 +28,6 @@ use Database\Seeders\GlAccountSeeder;
 use Database\Seeders\PaymentsRbacSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
-use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class AgentTransactionApiTest extends TestCase
@@ -335,7 +334,7 @@ class AgentTransactionApiTest extends TestCase
             'agent-kyc-officer'
         );
 
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $context = $this->makeReadyAgentContext(
             ['CASH_IN']
@@ -365,7 +364,7 @@ class AgentTransactionApiTest extends TestCase
             'agent-transaction-operator'
         );
 
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $context = $this->makeReadyAgentContext(
             ['CASH_IN']
@@ -403,7 +402,7 @@ class AgentTransactionApiTest extends TestCase
             'agent-transaction-operator'
         );
 
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $routeContext = $this->makeReadyAgentContext(
             ['CASH_IN']
@@ -442,7 +441,7 @@ class AgentTransactionApiTest extends TestCase
             'agent-transaction-operator'
         );
 
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $context = $this->makeReadyAgentContext(
             ['CASH_IN']
@@ -481,7 +480,7 @@ class AgentTransactionApiTest extends TestCase
             'agent-transaction-operator'
         );
 
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $context = $this->makeReadyAgentContext(
             ['CASH_IN', 'CASH_OUT']
@@ -519,7 +518,7 @@ class AgentTransactionApiTest extends TestCase
             'agent-transaction-operator'
         );
 
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $context = $this->makeReadyAgentContext(
             ['CASH_IN', 'CASH_OUT']
@@ -565,7 +564,7 @@ class AgentTransactionApiTest extends TestCase
             'agent-transaction-operator'
         );
 
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $context = $this->makeReadyAgentContext(
             ['TRANSFER']
@@ -605,7 +604,7 @@ class AgentTransactionApiTest extends TestCase
             'agent-transaction-operator'
         );
 
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $context = $this->makeReadyAgentContext(
             ['TRANSFER']
@@ -649,7 +648,7 @@ class AgentTransactionApiTest extends TestCase
             'agent-transaction-operator'
         );
 
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $context = $this->makeReadyAgentContext(
             ['CASH_IN']
@@ -689,7 +688,7 @@ class AgentTransactionApiTest extends TestCase
             'agent-transaction-operator'
         );
 
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $context = $this->makeReadyAgentContext(
             ['CASH_IN']
@@ -723,7 +722,7 @@ class AgentTransactionApiTest extends TestCase
             'agent-transaction-operator'
         );
 
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $context = $this->makeReadyAgentContext(
             ['CASH_IN']
@@ -759,7 +758,7 @@ class AgentTransactionApiTest extends TestCase
             'agent-transaction-operator'
         );
 
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $context = $this->makeReadyAgentContext(
             ['CASH_IN']
@@ -793,7 +792,7 @@ class AgentTransactionApiTest extends TestCase
             'agent-transaction-operator'
         );
 
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $context = $this->makeReadyAgentContext(
             ['CASH_IN']
@@ -827,7 +826,7 @@ class AgentTransactionApiTest extends TestCase
             'agent-transaction-operator'
         );
 
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $context = $this->makeReadyAgentContext(
             ['CASH_IN']
@@ -861,7 +860,7 @@ class AgentTransactionApiTest extends TestCase
             'agent-transaction-operator'
         );
 
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $context = $this->makeReadyAgentContext(
             ['CASH_IN']
@@ -895,7 +894,7 @@ class AgentTransactionApiTest extends TestCase
             'agent-transaction-operator'
         );
 
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $context = $this->makeReadyAgentContext(
             ['CASH_IN']
@@ -935,7 +934,7 @@ class AgentTransactionApiTest extends TestCase
             'agent-transaction-operator'
         );
 
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $context = $this->makeReadyAgentContext(
             ['CASH_IN'],
@@ -972,7 +971,7 @@ class AgentTransactionApiTest extends TestCase
             'agent-transaction-operator'
         );
 
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $context = $this->makeReadyAgentContext(
             []
@@ -1002,7 +1001,7 @@ class AgentTransactionApiTest extends TestCase
             'agent-transaction-operator'
         );
 
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $context = $this->makeReadyAgentContext(
             ['CASH_OUT']
@@ -1040,7 +1039,7 @@ class AgentTransactionApiTest extends TestCase
             'agent-transaction-operator'
         );
 
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $context = $this->makeReadyAgentContext(
             ['CASH_IN']
@@ -1077,7 +1076,7 @@ class AgentTransactionApiTest extends TestCase
             'agent-transaction-operator'
         );
 
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $context = $this->makeReadyAgentContext(
             []
@@ -1114,7 +1113,7 @@ class AgentTransactionApiTest extends TestCase
         'agent-transaction-operator'
     );
 
-    Sanctum::actingAs($user);
+    $this->actingAsBasicAuth($user);
 
     $context = $this->makeReadyAgentContext(
         ['CASH_IN'],
@@ -1164,7 +1163,7 @@ class AgentTransactionApiTest extends TestCase
         'agent-transaction-operator'
     );
 
-    Sanctum::actingAs($user);
+    $this->actingAsBasicAuth($user);
 
     $context = $this->makeReadyAgentContext(
         ['CASH_IN'],
@@ -1210,7 +1209,7 @@ class AgentTransactionApiTest extends TestCase
         'agent-transaction-operator'
     );
 
-    Sanctum::actingAs($user);
+    $this->actingAsBasicAuth($user);
 
     $context = $this->makeReadyAgentContext(
         ['TRANSFER']
@@ -1255,7 +1254,7 @@ class AgentTransactionApiTest extends TestCase
             'agent-transaction-operator'
         );
 
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $context = $this->makeReadyAgentContext(
             ['CASH_IN', 'CASH_OUT'],
@@ -1307,7 +1306,7 @@ class AgentTransactionApiTest extends TestCase
             'agent-transaction-operator'
         );
 
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $context = $this->makeReadyAgentContext(
             ['CASH_IN', 'CASH_OUT'],
@@ -1390,7 +1389,7 @@ class AgentTransactionApiTest extends TestCase
             'agent-kyc-officer'
         );
 
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $context = $this->makeReadyAgentContext(
             ['CASH_IN']
@@ -1427,7 +1426,7 @@ class AgentTransactionApiTest extends TestCase
     'agent-transaction-reversal-maker'
 );
 
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $context = $this->makeReadyAgentContext(
             ['CASH_IN']
@@ -1480,7 +1479,7 @@ class AgentTransactionApiTest extends TestCase
     'agent-transaction-reversal-maker'
 );
 
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $context = $this->makeReadyAgentContext(
             ['TRANSFER']
@@ -1518,7 +1517,7 @@ class AgentTransactionApiTest extends TestCase
     'agent-transaction-reversal-maker'
 );
 
-        Sanctum::actingAs($user);
+        $this->actingAsBasicAuth($user);
 
         $context = $this->makeReadyAgentContext(
             ['CASH_IN']
@@ -1657,7 +1656,7 @@ class AgentTransactionApiTest extends TestCase
          * may occur until a different authorized checker approves it.
          */
         $requestResponse = $this
-            ->actingAs($maker, 'sanctum')
+            ->actingAsBasicAuth($maker)
             ->postJson(
                 "/api/v1/agent-transactions/{$transaction->id}/reversal/request",
                 [
@@ -1696,7 +1695,7 @@ class AgentTransactionApiTest extends TestCase
          * side of the maker/checker flow through the real HTTP endpoint.
          */
         $approveResponse = $this
-            ->actingAs($checker, 'sanctum')
+            ->actingAsBasicAuth($checker)
             ->postJson(
                 "/api/v1/approvals/{$approvalRequest->id}/approve",
                 [
