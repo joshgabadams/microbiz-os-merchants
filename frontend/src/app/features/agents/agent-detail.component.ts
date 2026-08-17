@@ -2,12 +2,13 @@ import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { forkJoin } from 'rxjs';
+import { forkJoin, of } from 'rxjs';
 
 import { AgentApiService } from '../../core/agent-api.service';
 import {
   Agent,
   AgentAgreement,
+  ApiResponse,
   AgentAgreementApprovalType,
   AgentAgreementSignatory,
   AgentAgreementSignatoryParty,
@@ -2760,6 +2761,7 @@ import {
     .location-top {
       display: flex;
       justify-content: space-between;
+      align-items: flex-start;
       gap: var(--space-4);
     }
 
@@ -3275,81 +3277,48 @@ export class AgentDetailComponent implements OnInit {
   // LOAD ALL AGENT DATA
   // ============================================================
 
+  private templatesLoaded = false;
+  private trainingDocumentsLoaded = false;
+
   reload(): void {
     this.loading.set(true);
     this.error.set(null);
 
+    // The agent's own sub-resources (owners, documents, locations,
+    // agreements, operators, terminals, transactions) are all eager-loaded
+    // server-side in a single GET /agents/{id} response instead of 8
+    // separate round-trips. Agreement templates and training documents are
+    // global lists (not scoped to this agent) and are cached after the
+    // first load so they aren't re-fetched on every reload() call.
     forkJoin({
       agent:
         this.api.show(this.agentId),
 
-      owners:
-        this.api.listOwners(this.agentId),
+      templates: this.templatesLoaded
+        ? of<ApiResponse<AgentAgreementTemplate[]>>({ success: true, message: '', data: this.templates() })
+        : this.api.listAgreementTemplates(),
 
-      documents:
-        this.api.listDocuments(this.agentId),
-
-      locations:
-        this.api.listLocations(this.agentId),
-
-      agreements:
-        this.api.listAgreements(this.agentId),
-
-      templates:
-        this.api.listAgreementTemplates(),
-
-      trainingDocuments:
-        this.api.listTrainingDocuments(),
-
-      operators:
-        this.api.listOperators(this.agentId),
-
-      terminals:
-        this.api.listTerminals(this.agentId),
-
-      transactions:
-        this.api.listTransactions(this.agentId),
+      trainingDocuments: this.trainingDocumentsLoaded
+        ? of<ApiResponse<TrainingDocument[]>>({ success: true, message: '', data: this.trainingDocuments() })
+        : this.api.listTrainingDocuments(),
     }).subscribe({
       next: (result) => {
-        this.agent.set(
-          result.agent.data
-        );
+        const agent = result.agent.data;
 
-        this.owners.set(
-          result.owners.data
-        );
+        this.agent.set(agent);
+        this.owners.set(agent.owners ?? []);
+        this.documents.set(agent.documents ?? []);
+        this.locations.set(agent.locations ?? []);
+        this.agreements.set(agent.agreements ?? []);
+        this.operators.set(agent.operators ?? []);
+        this.terminals.set(agent.terminals ?? []);
+        this.transactions.set(agent.transactions ?? []);
 
-        this.documents.set(
-          result.documents.data
-        );
+        this.templates.set(result.templates.data);
+        this.templatesLoaded = true;
 
-        this.locations.set(
-          result.locations.data
-        );
-
-        this.agreements.set(
-          result.agreements.data
-        );
-
-        this.templates.set(
-          result.templates.data
-        );
-
-        this.trainingDocuments.set(
-          result.trainingDocuments.data
-        );
-
-        this.operators.set(
-          result.operators.data
-        );
-
-        this.terminals.set(
-          result.terminals.data
-        );
-
-        this.transactions.set(
-          result.transactions.data
-        );
+        this.trainingDocuments.set(result.trainingDocuments.data);
+        this.trainingDocumentsLoaded = true;
 
         this.loading.set(false);
       },
