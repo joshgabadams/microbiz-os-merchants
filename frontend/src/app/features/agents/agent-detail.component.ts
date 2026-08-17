@@ -122,7 +122,10 @@ import {
         <!-- ===================================================== -->
 
         <section class="card">
-          <h2>Overview</h2>
+          <h2>
+            <svg class="section-icon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg>
+            Overview
+          </h2>
 
           <div class="details-grid">
             <div>
@@ -222,7 +225,10 @@ import {
               <div class="action-number">2</div>
 
               <div>
-                <h2>KYC & Due Diligence</h2>
+                <h2>
+                  <svg class="section-icon" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
+                  KYC & Due Diligence
+                </h2>
 
                 <p>
                   Capture beneficial ownership and documentary
@@ -709,7 +715,10 @@ import {
         <section class="card">
           <div class="section-header">
             <div>
-              <h2>Locations</h2>
+              <h2>
+                <svg class="section-icon" viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.3"/></svg>
+                Locations
+              </h2>
 
               <p>
                 Registered physical premises, GPS coordinates and
@@ -1014,7 +1023,10 @@ import {
         <section class="card">
           <div class="section-header">
             <div>
-              <h2>Agreements</h2>
+              <h2>
+                <svg class="section-icon" viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7z"/><path d="M15 3v4h4M9 12h6M9 16h6M9 8h2"/></svg>
+                Agreements
+              </h2>
 
               <p>
                 Versioned agency agreements, commercial terms
@@ -1484,7 +1496,10 @@ import {
         <section class="card">
           <div class="section-header">
             <div>
-              <h2>Training</h2>
+              <h2>
+                <svg class="section-icon" viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="17" rx="1.5"/><path d="M9 3.5h6v2H9zM9 11l2 2 4-4"/></svg>
+                Training
+              </h2>
 
               <p>
                 Agency banking training guide delivery and
@@ -1644,7 +1659,10 @@ import {
         <section class="card">
           <div class="section-header">
             <div>
-              <h2>Operators</h2>
+              <h2>
+                <svg class="section-icon" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M16 11a3 3 0 1 0 0-6M21 20c0-2.8-1.9-5.1-4.5-5.8"/></svg>
+                Operators
+              </h2>
 
               <p>
                 Platform users authorised to operate this agent's
@@ -1787,7 +1805,10 @@ import {
         <section class="card">
           <div class="section-header">
             <div>
-              <h2>Terminals</h2>
+              <h2>
+                <svg class="section-icon" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="12" rx="1.5"/><path d="M9 20h6M12 15v5"/></svg>
+                Terminals
+              </h2>
 
               <p>
                 POS/device registry and geo-fence status per
@@ -1964,7 +1985,10 @@ import {
         <section class="card">
           <div class="section-header">
             <div>
-              <h2>Transactions</h2>
+              <h2>
+                <svg class="section-icon" viewBox="0 0 24 24"><path d="M4 8h13M13 4l4 4-4 4M20 16H7M11 12l-4 4 4 4"/></svg>
+                Transactions
+              </h2>
 
               <p>
                 Cash-in, cash-out and transfer, routed through the
@@ -2267,6 +2291,24 @@ import {
       font-size: var(--font-size-lg);
       font-weight: 600;
       color: var(--color-primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-icon {
+      width: 18px;
+      height: 18px;
+      flex: 0 0 18px;
+      fill: none;
+      stroke: var(--color-accent);
+      stroke-width: 1.7;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    tbody tr:not(.expanded-row):hover {
+      background: var(--color-background);
     }
 
     h3 {

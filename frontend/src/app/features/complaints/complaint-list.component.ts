@@ -1,4 +1,4 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AgentComplaintApiService } from '../../core/agent-complaint-api.service';
@@ -23,6 +23,25 @@ import { AgentComplaint } from '../../core/models/api.models';
         >
           {{ showCreateForm() ? 'Cancel' : '+ Log Complaint' }}
         </button>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat-card">
+          <span class="stat-value">{{ openCount() }}</span>
+          <span class="stat-label">Open</span>
+        </div>
+        <div class="stat-card" [class.stat-warning]="overdueCount() > 0">
+          <span class="stat-value">{{ overdueCount() }}</span>
+          <span class="stat-label">Overdue</span>
+        </div>
+        <div class="stat-card" [class.stat-danger]="escalatedCount() > 0">
+          <span class="stat-value">{{ escalatedCount() }}</span>
+          <span class="stat-label">Escalated</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">{{ complaints().length }}</span>
+          <span class="stat-label">Showing</span>
+        </div>
       </div>
 
       @if (error()) {
@@ -133,13 +152,19 @@ import { AgentComplaint } from '../../core/models/api.models';
             Overdue only
           </label>
 
-          <button class="btn-outline" (click)="reload()">Refresh</button>
+          <button class="btn-outline" (click)="reload()">
+            <svg viewBox="0 0 24 24" class="btn-icon"><path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3M4 4v5h5M20 20v-5h-5"/></svg>
+            Refresh
+          </button>
         </div>
 
         @if (loading()) {
           <div class="empty-state">Loading...</div>
         } @else if (complaints().length === 0) {
-          <div class="empty-state">No complaints match these filters.</div>
+          <div class="empty-state">
+            <svg viewBox="0 0 24 24" class="empty-icon"><path d="M5 3v18M5 4h11l-2 4 2 4H5"/></svg>
+            No complaints match these filters.
+          </div>
         } @else {
           <div class="table-wrapper">
             <table>
@@ -157,7 +182,7 @@ import { AgentComplaint } from '../../core/models/api.models';
               <tbody>
                 @for (c of complaints(); track c.id) {
                   <tr>
-                    <td>{{ c.complaint_no }}</td>
+                    <td class="mono">{{ c.complaint_no }}</td>
                     <td>{{ c.subject }}</td>
                     <td>{{ displayStatus(c.category) }}</td>
                     <td>
@@ -173,7 +198,7 @@ import { AgentComplaint } from '../../core/models/api.models';
                         {{ displayStatus(c.status) }}
                       </span>
                     </td>
-                    <td>{{ c.due_at ?? '—' }}</td>
+                    <td>{{ formatDate(c.due_at) }}</td>
                     <td>
                       <button
                         class="btn-outline"
@@ -224,7 +249,7 @@ import { AgentComplaint } from '../../core/models/api.models';
                             ) {
                               <button
                                 class="btn-outline"
-                                (click)="escalate(c)"
+                                (click)="toggleEscalateForm(c.id)"
                                 [disabled]="working()"
                               >
                                 Escalate
@@ -238,7 +263,7 @@ import { AgentComplaint } from '../../core/models/api.models';
                             ) {
                               <button
                                 class="btn-success"
-                                (click)="resolve(c)"
+                                (click)="toggleResolveForm(c.id)"
                                 [disabled]="working()"
                               >
                                 Resolve
@@ -255,6 +280,63 @@ import { AgentComplaint } from '../../core/models/api.models';
                               </button>
                             }
                           </div>
+
+                          @if (escalateFormId() === c.id) {
+                            <div class="inline-form">
+                              <label>
+                                Escalation reason
+                                <textarea
+                                  rows="2"
+                                  [(ngModel)]="escalateReason"
+                                  [ngModelOptions]="{ standalone: true }"
+                                  placeholder="Why does this need management review?"
+                                ></textarea>
+                              </label>
+                              <div class="inline-form-actions">
+                                <button
+                                  class="btn-outline"
+                                  (click)="escalateFormId.set(null)"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  (click)="escalate(c)"
+                                  [disabled]="working() || !escalateReason.trim()"
+                                >
+                                  Confirm Escalation
+                                </button>
+                              </div>
+                            </div>
+                          }
+
+                          @if (resolveFormId() === c.id) {
+                            <div class="inline-form">
+                              <label>
+                                Resolution summary
+                                <textarea
+                                  rows="2"
+                                  [(ngModel)]="resolveSummary"
+                                  [ngModelOptions]="{ standalone: true }"
+                                  placeholder="What was done to resolve this?"
+                                ></textarea>
+                              </label>
+                              <div class="inline-form-actions">
+                                <button
+                                  class="btn-outline"
+                                  (click)="resolveFormId.set(null)"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  class="btn-success"
+                                  (click)="resolve(c)"
+                                  [disabled]="working() || !resolveSummary.trim()"
+                                >
+                                  Confirm Resolution
+                                </button>
+                              </div>
+                            </div>
+                          }
                         </div>
                       </td>
                     </tr>
@@ -270,39 +352,63 @@ import { AgentComplaint } from '../../core/models/api.models';
   styles: [`
     :host { display: block; font-family: var(--font-sans); color: var(--color-foreground); }
     .page { max-width: 1240px; margin: 0 auto; }
-    .page-header { display: flex; justify-content: space-between; gap: var(--space-5); align-items: flex-start; margin-bottom: var(--space-5); }
+    .page-header { display: flex; justify-content: space-between; gap: var(--space-5); align-items: flex-start; margin-bottom: var(--space-4); }
     h1 { margin: 0 0 4px; font-size: var(--font-size-2xl); font-weight: 700; color: var(--color-primary); }
     p { margin: 0; color: var(--color-muted); font-size: var(--font-size-sm); }
+
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--space-3); margin-bottom: var(--space-4); }
+    .stat-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); padding: var(--space-4); display: flex; flex-direction: column; gap: 2px; }
+    .stat-value { font-size: var(--font-size-2xl); font-weight: 700; color: var(--color-primary); line-height: 1.1; }
+    .stat-label { font-size: var(--font-size-xs); color: var(--color-muted); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+    .stat-card.stat-warning .stat-value { color: var(--color-warning); }
+    .stat-card.stat-danger .stat-value { color: var(--color-danger); }
+
     .card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); padding: var(--space-5); margin-bottom: var(--space-4); }
     .filters { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-4); flex-wrap: wrap; }
     .filters select { padding: 8px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); font-size: var(--font-size-sm); }
     .checkbox-field { display: flex; align-items: center; gap: 6px; font-size: var(--font-size-sm); color: var(--color-foreground); }
     .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-3); }
     .form-grid label { display: flex; flex-direction: column; gap: 5px; font-size: var(--font-size-sm); font-weight: 500; color: var(--color-foreground); }
-    .form-grid input, .form-grid select, .form-grid textarea { box-sizing: border-box; width: 100%; padding: 8px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); font-size: var(--font-size-sm); }
+    .form-grid input, .form-grid select, .form-grid textarea { box-sizing: border-box; width: 100%; padding: 8px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); font-size: var(--font-size-sm); font-family: inherit; transition: border-color var(--transition-fast); }
+    .form-grid input:focus-visible, .form-grid select:focus-visible, .form-grid textarea:focus-visible { border-color: var(--color-primary); }
     .full-width { grid-column: 1 / -1; }
     .form-actions { grid-column: 1 / -1; }
-    button { padding: 8px 14px; border: 1px solid transparent; border-radius: var(--radius-sm); background: var(--color-primary); color: var(--color-on-primary); font-size: var(--font-size-sm); font-weight: 600; cursor: pointer; }
+
+    button { padding: 8px 14px; border: 1px solid transparent; border-radius: var(--radius-sm); background: var(--color-primary); color: var(--color-on-primary); font-size: var(--font-size-sm); font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: background var(--transition-fast), filter var(--transition-fast); }
     button:hover:not(:disabled) { background: var(--color-primary-hover); }
-    button:disabled { opacity: 0.55; cursor: not-allowed; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
     button.btn-outline { background: transparent; border-color: var(--color-border); color: var(--color-foreground); }
     button.btn-outline:hover:not(:disabled) { background: var(--color-muted-bg); }
     button.btn-success { background: var(--color-success); }
+    button.btn-success:hover:not(:disabled) { filter: brightness(0.93); }
+    .btn-icon { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
     .table-wrapper { width: 100%; overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; }
-    th, td { padding: var(--space-2); border-bottom: 1px solid var(--color-border); text-align: left; font-size: var(--font-size-sm); white-space: nowrap; }
+    th, td { padding: var(--space-3) var(--space-2); border-bottom: 1px solid var(--color-border); text-align: left; font-size: var(--font-size-sm); white-space: nowrap; }
+    tbody tr:not(.expanded-row):hover { background: var(--color-background); }
+    .mono { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: var(--font-size-xs); color: var(--color-muted); }
     th { color: var(--color-muted); background: var(--color-background); font-size: var(--font-size-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
+
     .status-badge { display: inline-block; font-size: var(--font-size-xs); font-weight: 600; padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
     .status-active { background: var(--color-success-bg); color: var(--color-success); }
     .status-pending { background: var(--color-warning-bg); color: var(--color-warning); }
     .status-info { background: var(--color-info-bg); color: var(--color-info); }
     .status-danger { background: var(--color-danger-bg); color: var(--color-danger); }
     .status-neutral { background: var(--color-muted-bg); color: var(--color-muted); }
+
     .expanded-row td { background: var(--color-background); padding: var(--space-4); white-space: normal; }
     .detail p { margin: 0 0 var(--space-2); }
     .muted { color: var(--color-muted); font-size: var(--font-size-sm); }
     .actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); }
-    .empty-state { padding: var(--space-4); border: 1px dashed var(--color-border); border-radius: var(--radius-md); color: var(--color-muted); background: var(--color-background); font-size: var(--font-size-sm); text-align: center; }
+
+    .inline-form { margin-top: var(--space-3); padding: var(--space-3); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+    .inline-form label { display: flex; flex-direction: column; gap: 5px; font-size: var(--font-size-sm); font-weight: 500; }
+    .inline-form textarea { box-sizing: border-box; width: 100%; padding: 8px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); font-size: var(--font-size-sm); font-family: inherit; resize: vertical; }
+    .inline-form-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-2); }
+
+    .empty-state { padding: var(--space-6) var(--space-4); border: 1px dashed var(--color-border); border-radius: var(--radius-md); color: var(--color-muted); background: var(--color-background); font-size: var(--font-size-sm); text-align: center; display: flex; flex-direction: column; align-items: center; gap: var(--space-2); }
+    .empty-icon { width: 28px; height: 28px; fill: none; stroke: currentColor; stroke-width: 1.5; opacity: 0.5; }
     .error-box { padding: var(--space-3); background: var(--color-danger-bg); color: var(--color-danger); border-radius: var(--radius-md); margin-bottom: var(--space-4); font-size: var(--font-size-sm); }
   `],
 })
@@ -313,9 +419,30 @@ export class ComplaintListComponent implements OnInit {
   error = signal<string | null>(null);
   showCreateForm = signal(false);
   expandedId = signal<number | null>(null);
+  escalateFormId = signal<number | null>(null);
+  resolveFormId = signal<number | null>(null);
+
+  escalateReason = '';
+  resolveSummary = '';
 
   filterStatus = '';
   filterOverdue = false;
+
+  openCount = computed(
+    () => this.complaints().filter((c) => c.status === 'OPEN').length
+  );
+  escalatedCount = computed(
+    () => this.complaints().filter((c) => c.status === 'ESCALATED').length
+  );
+  overdueCount = computed(
+    () =>
+      this.complaints().filter(
+        (c) =>
+          c.due_at &&
+          !['RESOLVED', 'CLOSED'].includes(c.status) &&
+          new Date(c.due_at).getTime() < Date.now()
+      ).length
+  );
 
   form: {
     agent_id: number | null;
@@ -365,6 +492,20 @@ export class ComplaintListComponent implements OnInit {
 
   toggleExpanded(id: number): void {
     this.expandedId.update((current) => (current === id ? null : id));
+    this.escalateFormId.set(null);
+    this.resolveFormId.set(null);
+  }
+
+  toggleEscalateForm(id: number): void {
+    this.escalateReason = '';
+    this.resolveFormId.set(null);
+    this.escalateFormId.update((current) => (current === id ? null : id));
+  }
+
+  toggleResolveForm(id: number): void {
+    this.resolveSummary = '';
+    this.escalateFormId.set(null);
+    this.resolveFormId.update((current) => (current === id ? null : id));
   }
 
   create(): void {
@@ -418,15 +559,15 @@ export class ComplaintListComponent implements OnInit {
   }
 
   escalate(c: AgentComplaint): void {
-    const reason = prompt('Escalation reason:');
-    if (!reason) return;
-    this.runAction(this.api.escalate(c.id, reason));
+    if (!this.escalateReason.trim()) return;
+    this.escalateFormId.set(null);
+    this.runAction(this.api.escalate(c.id, this.escalateReason.trim()));
   }
 
   resolve(c: AgentComplaint): void {
-    const summary = prompt('Resolution summary:');
-    if (!summary) return;
-    this.runAction(this.api.resolve(c.id, summary));
+    if (!this.resolveSummary.trim()) return;
+    this.resolveFormId.set(null);
+    this.runAction(this.api.resolve(c.id, this.resolveSummary.trim()));
   }
 
   close(c: AgentComplaint): void {
@@ -467,6 +608,14 @@ export class ComplaintListComponent implements OnInit {
       .replaceAll('_', ' ')
       .toLowerCase()
       .replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
+  formatDate(value: string | null): string {
+    if (!value) return '—';
+    return new Date(value).toLocaleString(undefined, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    });
   }
 
   private emptyForm() {
