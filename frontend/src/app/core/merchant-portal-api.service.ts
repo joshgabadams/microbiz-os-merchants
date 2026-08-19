@@ -64,8 +64,8 @@ export class MerchantPortalApiService {
   }
 
   previewAccount(account_number: string, draft: PortalLoginDraft): Observable<MerchantAccountPreview> {
-    if (!/^\d{10}$/.test(account_number)) {
-      return throwError(() => new Error('Enter a valid 10-digit MicroBiz account number.'));
+    if (!/^\d{1,50}$/.test(account_number)) {
+      return throwError(() => new Error('Enter a valid MicroBiz account number.'));
     }
 
     if (draft.role === 'agent') {

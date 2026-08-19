@@ -21,7 +21,7 @@ import { MerchantPortalSessionService } from '../../core/merchant-portal-session
         <form (ngSubmit)="continueToPortal()" #accountForm="ngForm">
           <label>
             MicroBiz account number
-            <input name="accountNumber" [(ngModel)]="accountNumber" required pattern="[0-9]{10}" maxlength="10" inputmode="numeric" autocomplete="off" placeholder="10-digit account number" />
+            <input name="accountNumber" [(ngModel)]="accountNumber" required pattern="[0-9]{1,50}" maxlength="50" inputmode="numeric" autocomplete="off" placeholder="Enter account number" />
           </label>
           <p class="hint">Your account number can be found on your MicroBiz statement.</p>
 
@@ -59,7 +59,7 @@ import { MerchantPortalSessionService } from '../../core/merchant-portal-session
   `],
 })
 export class AccountLookupComponent implements OnInit {
-  accountNumber = '2048910037';
+  accountNumber = '000000002';
   draftEmail = '';
   loading = signal(false);
   error = signal<string | null>(null);
