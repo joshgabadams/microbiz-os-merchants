@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\BalancingController;
 use App\Http\Controllers\Api\BranchEodController;
 use App\Http\Controllers\Api\MerchantController;
 use App\Http\Controllers\Api\MerchantRegistrationController;
+use App\Http\Controllers\Api\MerchantTransactionController;
 use App\Http\Controllers\Api\AgentController;
 use App\Http\Controllers\Api\AgentTransactionController;
 use App\Http\Controllers\Api\AgentAgreementTemplateController;
@@ -105,6 +106,9 @@ Route::middleware('auth.basic.once')->group(function () {
             ->middleware('permission:merchants.locations.manage');
 
         Route::get('/merchants/{merchant}/terminals', [MerchantController::class, 'listTerminals']);
+
+        Route::get('/merchants/{merchant}/transactions', [MerchantTransactionController::class, 'list'])
+            ->middleware('permission:merchants.transactions.view');
 
         Route::post('/merchant-terminals', [MerchantController::class, 'assignTerminal'])
             ->middleware('permission:merchant-terminals.assign');
