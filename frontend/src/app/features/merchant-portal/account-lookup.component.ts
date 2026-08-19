@@ -12,7 +12,7 @@ import { MerchantPortalSessionService } from '../../core/merchant-portal-session
     <main class="account-page">
       <a class="account-brand" routerLink="/login/merchants"><span>M</span> MicroBiz</a>
       <section class="account-card">
-        <div class="step">Step 2 of 2</div>
+        <div class="step">Step 2 of 4</div>
         <div class="account-icon">#</div>
         <p class="eyebrow">Connect your account</p>
         <h1>Enter your MicroBiz account number</h1>
@@ -30,7 +30,7 @@ import { MerchantPortalSessionService } from '../../core/merchant-portal-session
           }
 
           <button type="submit" [disabled]="accountForm.invalid || loading()">
-            {{ loading() ? 'Verifying account…' : 'Continue to dashboard' }}
+            {{ loading() ? 'Finding your account…' : 'Find my account' }}
           </button>
         </form>
         <a class="back-link" routerLink="/login/merchants">← Back to sign in</a>
@@ -88,17 +88,16 @@ export class AccountLookupComponent implements OnInit {
 
     this.loading.set(true);
     this.error.set(null);
-    this.api.verifyAccount(this.accountNumber, draft).subscribe({
-      next: (merchantSession) => {
-        this.session.startSession(merchantSession);
+    this.api.previewAccount(this.accountNumber, draft).subscribe({
+      next: (preview) => {
+        this.session.setAccountPreview(preview);
         this.loading.set(false);
-        void this.router.navigate(['/merchant/dashboard']);
+        void this.router.navigate(['/login/merchants/verify']);
       },
-      error: (error: Error) => {
-        this.error.set(error.message || 'We could not verify this account.');
+      error: (error) => {
+        this.error.set(error?.error?.message ?? error?.message ?? 'We could not find this account.');
         this.loading.set(false);
       },
     });
   }
 }
-

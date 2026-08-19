@@ -1,7 +1,12 @@
+import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { Observable, delay, of, throwError } from 'rxjs';
+import { Observable, delay, map, of, throwError } from 'rxjs';
+import { environment } from '../../environments/environment';
+import { ApiResponse } from './models/api.models';
 import {
+  MerchantAccountPreview,
   MerchantDashboardSummary,
+  MerchantOtpChallenge,
   MerchantPortalProfile,
   MerchantPortalSession,
   MerchantRegistrationRequest,
@@ -19,6 +24,10 @@ import {
  */
 @Injectable({ providedIn: 'root' })
 export class MerchantPortalApiService {
+  private readonly registrationBase = `${environment.apiUrl}/v1/reg/merchant`;
+
+  constructor(private readonly http: HttpClient) {}
+
   private profile: MerchantPortalProfile = {
     merchantId: 204891,
     merchantCode: 'MER-204891',
@@ -54,23 +63,68 @@ export class MerchantPortalApiService {
     return of({ role, email: email.trim() }).pipe(delay(650));
   }
 
-  verifyAccount(accountNumber: string, draft: PortalLoginDraft): Observable<MerchantPortalSession> {
-    if (!/^\d{10}$/.test(accountNumber)) {
-      return throwError(() => new Error('Enter a valid 10-digit MicroBiz account number.')).pipe(delay(450));
+  previewAccount(account_number: string, draft: PortalLoginDraft): Observable<MerchantAccountPreview> {
+    if (!/^\d{10}$/.test(account_number)) {
+      return throwError(() => new Error('Enter a valid 10-digit MicroBiz account number.'));
     }
 
     if (draft.role === 'agent') {
-      return throwError(() => new Error('The agent workspace is not available in this build yet.')).pipe(delay(500));
+      return throwError(() => new Error('The agent workspace is not available in this build yet.'));
+    }
+
+    if (environment.merchantPortalApiMode === 'live') {
+      return this.http
+        .post<ApiResponse<MerchantAccountPreview>>(`${this.registrationBase}/preview`, {
+          account_number,
+        })
+        .pipe(map((response) => response.data));
     }
 
     return of({
-      accessToken: `mock-merchant-${Date.now()}`,
-      accountNumber,
-      merchantId: this.profile.merchantId,
-      businessName: this.profile.businessName,
-      email: draft.email,
-      expiresAt: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(),
+      fincore_client_id: 204891,
+      account_no: account_number,
+      external_id: 'MBZ-CUST-204891',
+      display_name: this.profile.businessName,
+      mobile_no: this.profile.phone,
+      email: draft.email || this.profile.email,
+      office_name: 'Victoria Island Branch',
+      legal_form: 'ENTITY',
+      status: 'Active',
+      active: true,
     }).pipe(delay(700));
+  }
+
+  requestOtp(preview: MerchantAccountPreview): Observable<MerchantOtpChallenge> {
+    const digits = (preview.mobile_no ?? '').replace(/\D/g, '');
+    const masked_phone = digits.length >= 4
+      ? `******${digits.slice(-4)}`
+      : 'the phone linked to your account';
+
+    // TODO(API): replace with POST /reg/merchant/otp/send when exposed.
+    return of({
+      challenge_id: `mock-otp-${Date.now()}`,
+      masked_phone,
+      expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+    }).pipe(delay(550));
+  }
+
+  verifyOtp(challenge_id: string, otp: string): Observable<boolean> {
+    void challenge_id;
+    // TODO(API): replace with POST /reg/merchant/otp/verify when exposed.
+    return otp === '0000'
+      ? of(true).pipe(delay(600))
+      : throwError(() => new Error('The verification code is incorrect. Use 0000 for this preview.'));
+  }
+
+  createPreviewSession(preview: MerchantAccountPreview, email: string): MerchantPortalSession {
+    return {
+      accessToken: `mock-merchant-${Date.now()}`,
+      accountNumber: preview.account_no,
+      merchantId: preview.fincore_client_id,
+      businessName: preview.display_name ?? 'MicroBiz Merchant',
+      email: preview.email ?? email,
+      expiresAt: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(),
+    };
   }
 
   register(payload: MerchantRegistrationRequest): Observable<MerchantRegistrationResult> {

@@ -4,6 +4,20 @@ import { merchantPortalGuard } from './core/merchant-portal.guard';
 
 export const routes: Routes = [
   {
+    path: 'login/merchants/verify',
+    loadComponent: () =>
+      import('./features/merchant-portal/account-verification.component').then(
+        (m) => m.AccountVerificationComponent
+      ),
+  },
+  {
+    path: 'login/merchants/otp',
+    loadComponent: () =>
+      import('./features/merchant-portal/otp-verification.component').then(
+        (m) => m.OtpVerificationComponent
+      ),
+  },
+  {
     path: 'login/merchants/account',
     loadComponent: () =>
       import('./features/merchant-portal/account-lookup.component').then(

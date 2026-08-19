@@ -5,6 +5,40 @@ export interface PortalLoginDraft {
   email: string;
 }
 
+/** Exact response contract from POST /api/v1/reg/merchant/preview. */
+export interface MerchantAccountPreview {
+  fincore_client_id: number;
+  account_no: string;
+  external_id: string | null;
+  display_name: string | null;
+  mobile_no: string | null;
+  email: string | null;
+  office_name: string | null;
+  legal_form: string | null;
+  status: string | null;
+  active: boolean;
+}
+
+/** Temporary frontend contract until send/verify OTP endpoints are exposed. */
+export interface MerchantOtpChallenge {
+  challenge_id: string;
+  masked_phone: string;
+  expires_at: string;
+}
+
+/** Exact payload naming for POST /api/v1/reg/merchant. */
+export interface ConfirmMerchantRegistrationPayload {
+  fincore_client_id: number;
+  legal_name: string;
+  trading_name?: string;
+  business_type?: string;
+  registration_number: string;
+  contact_name: string;
+  phone: string;
+  email?: string;
+  branch_id: number;
+}
+
 export interface MerchantPortalSession {
   accessToken: string;
   accountNumber: string;
@@ -85,4 +119,3 @@ export interface MerchantPortalProfile {
   settlementAccountName: string;
   settlementAccountNumber: string;
 }
-
