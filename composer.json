@@ -7,6 +7,7 @@
     "license": "MIT",
     "require": {
         "php": "^8.3",
+        "dedoc/scramble": "^0.13.41",
         "doctrine/dbal": "^4.4",
         "geoip2/geoip2": "^3.4",
         "laravel/framework": "^13.8",
