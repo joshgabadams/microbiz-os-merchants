@@ -53,7 +53,14 @@ class MerchantController extends Controller
     public function show(Merchant $merchant)
     {
         return $this->success(
-            $merchant->load('balance'),
+            $merchant->load([
+                'balance',
+                'customerAccount',
+                'owners',
+                'documents',
+                'locations',
+                'terminals',
+            ]),
             'Merchant retrieved successfully.'
         );
     }

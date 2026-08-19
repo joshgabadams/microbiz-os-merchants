@@ -24,8 +24,20 @@ class AuthController extends Controller
 
     public function me(Request $request)
     {
+        $user = $request->user();
+
+        $permissions = $user->roles
+            ->loadMissing('permissions')
+            ->flatMap(fn ($role) => $role->permissions->pluck('name'))
+            ->unique()
+            ->values();
+
+        $payload = $user->toArray();
+        $payload['permissions'] = $permissions;
+        $payload['roles'] = $user->roles->pluck('name')->values();
+
         return $this->success(
-            $request->user(),
+            $payload,
             'Authenticated user retrieved successfully.'
         );
     }

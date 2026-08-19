@@ -430,6 +430,8 @@ export interface AuthUser {
   id: number;
   name: string;
   email: string;
+  permissions?: string[];
+  roles?: string[];
 }
 
 /**
