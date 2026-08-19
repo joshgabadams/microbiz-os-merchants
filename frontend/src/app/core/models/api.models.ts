@@ -160,6 +160,13 @@ export interface Agent {
   suspended_at: string | null;
   suspension_reason: string | null;
   training_records?: AgentTrainingRecord[];
+  owners?: AgentBeneficialOwner[];
+  documents?: AgentDocument[];
+  locations?: AgentLocation[];
+  agreements?: AgentAgreement[];
+  operators?: AgentOperator[];
+  terminals?: AgentTerminal[];
+  transactions?: AgentTransaction[];
 }
 export type AgentLocationVerificationStatus =
   | 'PENDING'

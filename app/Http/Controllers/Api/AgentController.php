@@ -64,7 +64,18 @@ class AgentController extends Controller
     public function show(Agent $agent)
     {
         return $this->success(
-            $agent->load(['branch', 'supervisor', 'trainingRecords.trainingDocument']),
+            $agent->load([
+                'branch',
+                'supervisor',
+                'trainingRecords.trainingDocument',
+                'owners',
+                'documents',
+                'locations' => fn ($query) => $query->orderByDesc('created_at'),
+                'agreements' => fn ($query) => $query->with(['approvals', 'signatories', 'template'])->orderByDesc('version'),
+                'operators',
+                'terminals',
+                'transactions' => fn ($query) => $query->with(['terminal', 'operator'])->orderByDesc('created_at'),
+            ]),
             'Agent retrieved successfully.'
         );
     }
