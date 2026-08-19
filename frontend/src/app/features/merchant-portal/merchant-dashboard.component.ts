@@ -1,7 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { forkJoin } from 'rxjs';
 import { MerchantPortalApiService } from '../../core/merchant-portal-api.service';
 import { MerchantPortalSessionService } from '../../core/merchant-portal-session.service';
 import { MerchantDashboardSummary, PortalTransaction } from '../../core/models/merchant-portal.models';
@@ -32,7 +31,7 @@ import { MerchantDashboardSummary, PortalTransaction } from '../../core/models/m
 
         <div class="summary-grid">
           <article class="summary-card"><div class="card-icon card-icon--green">↗</div><span>Sales today</span><strong>{{ data.transactionValueToday | currency:data.currency:'symbol-narrow':'1.0-0' }}</strong><small>{{ data.transactionCountToday }} successful transactions</small></article>
-          <article class="summary-card"><div class="card-icon card-icon--amber">◷</div><span>Pending settlement</span><strong>{{ data.pendingSettlement | currency:data.currency:'symbol-narrow':'1.0-0' }}</strong><small>Processing to your account</small></article>
+          <article class="summary-card"><div class="card-icon card-icon--amber">◷</div><span>Pending settlement</span><strong>{{ data.lockedBalance | currency:data.currency:'symbol-narrow':'1.0-0' }}</strong><small>{{ data.pendingTransactionCount }} transaction{{ data.pendingTransactionCount === 1 ? '' : 's' }} processing today</small></article>
           <article class="summary-card"><div class="card-icon card-icon--blue">#</div><span>Settlement account</span><strong class="account-value">{{ data.settlementAccount }}</strong><small>MicroBiz MFB</small></article>
         </div>
 
@@ -41,9 +40,9 @@ import { MerchantDashboardSummary, PortalTransaction } from '../../core/models/m
           @if (recent().length === 0) {
             <div class="empty-state"><strong>No transactions yet</strong><p>Your latest transactions will appear here.</p></div>
           } @else {
-            <div class="responsive-table"><table><thead><tr><th>Reference</th><th>Type</th><th>Customer</th><th>Date</th><th>Status</th><th class="right">Amount</th></tr></thead><tbody>
+            <div class="responsive-table"><table><thead><tr><th>Transaction number</th><th>Type</th><th>Reference</th><th>Date</th><th>Status</th><th class="right">Amount</th></tr></thead><tbody>
               @for (transaction of recent(); track transaction.id) {
-                <tr><td><strong>{{ transaction.reference }}</strong></td><td>{{ typeLabel(transaction.type) }}</td><td>{{ transaction.customer }}</td><td>{{ transaction.createdAt | date:'dd MMM, HH:mm' }}</td><td><span class="status" [class]="'status status--' + transaction.status.toLowerCase()">{{ transaction.status }}</span></td><td class="right amount">{{ transaction.amount | currency:transaction.currency:'symbol-narrow':'1.2-2' }}</td></tr>
+                <tr><td><strong>{{ transaction.transactionNo }}</strong></td><td>{{ typeLabel(transaction.type) }}</td><td>{{ transaction.reference || '—' }}</td><td>{{ transaction.transactionDate | date:'dd MMM, HH:mm' }}</td><td><span class="status" [class]="transaction.isReversed ? 'status status--reversed' : 'status status--' + transaction.status.toLowerCase()">{{ transaction.isReversed ? 'Reversed' : statusLabel(transaction.status) }}</span></td><td class="right amount">{{ transaction.amount | currency:transaction.currency:'symbol-narrow':'1.2-2' }}</td></tr>
               }
             </tbody></table></div>
           }
@@ -79,7 +78,7 @@ import { MerchantDashboardSummary, PortalTransaction } from '../../core/models/m
     .table-card__header { padding: 1.15rem 1.25rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eceef3; }
     .table-card__header h2 { font-size: 1rem; margin: 0 0 .25rem; }.table-card__header p { margin: 0; color: #8a90a2; font-size: .68rem; }.table-card__header a { color: #2f4798; font-size: .72rem; font-weight: 750; text-decoration: none; }
     .responsive-table { overflow-x: auto; } table { min-width: 720px; } th { font-size: .62rem; background: #fafbfc; } td { font-size: .74rem; color: #62697d; } td strong { color: #313a52; font-size: .7rem; }.right { text-align: right; }.amount { color: #27314d; font-weight: 750; }
-    .status { display: inline-block; padding: .24rem .48rem; border-radius: 1rem; font-size: .57rem; font-weight: 800; }.status--successful { color: #23754e; background: #e3f5eb; }.status--pending { color: #936400; background: #fff2ce; }.status--failed { color: #aa4232; background: #fde9e5; }
+    .status { display: inline-block; padding: .24rem .48rem; border-radius: 1rem; font-size: .57rem; font-weight: 800; }.status--successful { color: #23754e; background: #e3f5eb; }.status--pending, .status--initiated { color: #936400; background: #fff2ce; }.status--failed, .status--reversed { color: #aa4232; background: #fde9e5; }
     .skeleton { min-height: 130px; background: linear-gradient(90deg, #eef0f4 25%, #f7f8fa 50%, #eef0f4 75%); background-size: 200% 100%; animation: shimmer 1.2s infinite; }.summary-grid .skeleton:last-child { display: none; } @keyframes shimmer { to { background-position: -200% 0; } }
     .state-card, .empty-state { background: #fff; border: 1px solid #e1e5ed; border-radius: .75rem; padding: 2rem; text-align: center; }.state-card p, .empty-state p { color: #7c8397; font-size: .8rem; }.state-card button { border: 0; background: #1e2761; color: #fff; padding: .6rem 1rem; border-radius: .5rem; }
     @media (max-width: 900px) { .summary-grid { grid-template-columns: 1fr 1fr; }.summary-card:last-child { grid-column: 1 / -1; } }
@@ -107,14 +106,17 @@ export class MerchantDashboardComponent implements OnInit {
   load(): void {
     this.loading.set(true);
     this.error.set(null);
-    forkJoin({ summary: this.api.getDashboard(), recent: this.api.getRecentTransactions() }).subscribe({
-      next: ({ summary, recent }) => { this.summary.set(summary); this.recent.set(recent); this.loading.set(false); },
+    this.api.getDashboard().subscribe({
+      next: ({ summary, recentTransactions }) => { this.summary.set(summary); this.recent.set(recentTransactions); this.loading.set(false); },
       error: () => { this.error.set('We could not load your account summary.'); this.loading.set(false); },
     });
   }
 
   typeLabel(type: PortalTransaction['type']): string {
-    return ({ QR_PAYMENT: 'QR payment', POS_PAYMENT: 'POS payment', SETTLEMENT: 'Settlement' })[type];
+    return ({ QR_COLLECTION: 'QR collection', POS_COLLECTION: 'POS collection', SETTLEMENT: 'Settlement', REVERSAL: 'Reversal', ADJUSTMENT: 'Adjustment' })[type];
+  }
+
+  statusLabel(status: PortalTransaction['status']): string {
+    return status.charAt(0) + status.slice(1).toLowerCase();
   }
 }
-

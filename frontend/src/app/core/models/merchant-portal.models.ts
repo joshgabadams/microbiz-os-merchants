@@ -102,25 +102,28 @@ export interface MerchantDashboardSummary {
   currency: string;
   availableBalance: number;
   ledgerBalance: number;
-  pendingSettlement: number;
+  lockedBalance: number;
   transactionValueToday: number;
   transactionCountToday: number;
+  pendingTransactionCount: number;
   settlementAccount: string;
 }
 
-export type PortalTransactionStatus = 'SUCCESSFUL' | 'PENDING' | 'FAILED';
-export type PortalTransactionType = 'QR_PAYMENT' | 'POS_PAYMENT' | 'SETTLEMENT';
+export type PortalTransactionStatus = 'INITIATED' | 'PENDING' | 'SUCCESSFUL' | 'FAILED';
+export type PortalTransactionType = 'QR_COLLECTION' | 'POS_COLLECTION' | 'SETTLEMENT' | 'REVERSAL' | 'ADJUSTMENT';
 
 export interface PortalTransaction {
   id: number;
-  reference: string;
+  transactionNo: string;
+  reference: string | null;
   type: PortalTransactionType;
-  customer: string;
   amount: number;
-  fee: number;
   currency: string;
   status: PortalTransactionStatus;
-  createdAt: string;
+  narration: string | null;
+  transactionDate: string;
+  posted: boolean;
+  isReversed: boolean;
 }
 
 export interface MerchantTransactionQuery {
@@ -139,6 +142,50 @@ export interface MerchantTransactionPage {
   perPage: number;
   total: number;
   lastPage: number;
+}
+
+export interface MerchantDashboardData {
+  summary: MerchantDashboardSummary;
+  recentTransactions: PortalTransaction[];
+}
+
+/** Exact record shape expected from merchant transaction APIs. */
+export interface MerchantTransactionApiRecord {
+  id: number;
+  transaction_no: string;
+  transaction_type: PortalTransactionType;
+  status: PortalTransactionStatus;
+  amount: string | number;
+  currency: string;
+  reference: string | null;
+  narration: string | null;
+  transaction_date: string;
+  posted: boolean;
+  is_reversed: boolean;
+}
+
+export interface MerchantDashboardApiResponse {
+  balance: {
+    currency: string;
+    ledger_balance: string | number;
+    available_balance: string | number;
+    locked_balance: string | number;
+  };
+  today: {
+    successful_count: number;
+    successful_value: string | number;
+    pending_count: number;
+  };
+  settlement_account: string;
+  recent_transactions: MerchantTransactionApiRecord[];
+}
+
+export interface LaravelPaginator<T> {
+  current_page: number;
+  data: T[];
+  last_page: number;
+  per_page: number;
+  total: number;
 }
 
 export interface MerchantPortalProfile {

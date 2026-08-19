@@ -8,5 +8,7 @@ export const environment = {
     registration: false,
     merchantProfile: false,
     merchantSession: false,
+    merchantDashboard: false,
+    merchantTransactions: false,
   },
 };

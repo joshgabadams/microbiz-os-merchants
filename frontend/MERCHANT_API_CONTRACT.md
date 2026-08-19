@@ -238,5 +238,139 @@ PATCH /api/v1/merchants/{merchant}
 GET   /api/v1/merchants/{merchant}/transactions
 ```
 
-Phase 2 will define the merchant-scoped dashboard, transaction, and transaction
-history endpoints after Phase 1 contracts are confirmed.
+## Phase 2: dashboard and transaction history
+
+Phase 2 uses the local `merchant_balances` and `merchant_transactions` tables as
+the source of truth. The backend should not call Fineract for every dashboard or
+transaction-history request. Fineract is only needed when validating or posting
+the linked customer account; MicroBiz OS owns merchant collections, settlement
+state, GL posting state, and transaction history.
+
+All Phase 2 routes require the Phase 1 merchant Bearer token. The backend must
+derive the merchant from that token and must never accept a merchant ID from the
+browser.
+
+### Dashboard
+
+`GET /api/v1/merchant/dashboard`
+
+```json
+{
+  "success": true,
+  "message": "Merchant dashboard retrieved successfully.",
+  "data": {
+    "balance": {
+      "currency": "NGN",
+      "ledger_balance": "2011750.00",
+      "available_balance": "1842750.00",
+      "locked_balance": "169000.00"
+    },
+    "today": {
+      "successful_count": 2,
+      "successful_value": "192250.00",
+      "pending_count": 1
+    },
+    "settlement_account": "000000002",
+    "recent_transactions": []
+  }
+}
+```
+
+`today` must be calculated using the application/business timezone and only
+the authenticated merchant's transactions. `successful_value` should sum
+successful collection transactions, not settlements, reversals, or failed
+transactions. Return at most five recent transactions.
+
+### Transaction list and history
+
+`GET /api/v1/merchant/transactions`
+
+Supported query parameters:
+
+```text
+search, status, transaction_type, from, to, page, per_page
+```
+
+- `search` matches `transaction_no`, `reference`, or `narration`.
+- `status` matches the transaction lifecycle status.
+- `transaction_type` supports `QR_COLLECTION`, `POS_COLLECTION`,
+  `SETTLEMENT`, `REVERSAL`, and `ADJUSTMENT`.
+- `from` and `to` are inclusive `YYYY-MM-DD` dates.
+- `per_page` is limited to `10`, `25`, or `50`, with a server maximum of 100.
+- Results are ordered by `transaction_date` descending.
+
+Use the standard API envelope with the Laravel paginator inside `data`:
+
+```json
+{
+  "success": true,
+  "message": "Merchant transactions retrieved successfully.",
+  "data": {
+    "current_page": 1,
+    "data": [
+      {
+        "id": 41,
+        "transaction_no": "MCH-Q3F8K2",
+        "transaction_type": "QR_COLLECTION",
+        "status": "SUCCESSFUL",
+        "amount": "48500.00",
+        "currency": "NGN",
+        "reference": "ORDER-1048",
+        "narration": "QR collection for order 1048",
+        "transaction_date": "2026-08-19T10:42:00Z",
+        "posted": true,
+        "is_reversed": false
+      }
+    ],
+    "last_page": 1,
+    "per_page": 10,
+    "total": 1
+  }
+}
+```
+
+Do not expose `performed_by`, `approved_by`, idempotency keys, GL account keys,
+or internal user records to merchant users.
+
+### Transaction detail
+
+`GET /api/v1/merchant/transactions/{transaction}`
+
+Return the same transaction fields as the list. Route-model binding must be
+scoped through the authenticated merchant's `transactions()` relationship so a
+merchant cannot retrieve another merchant's transaction by changing the ID.
+Return `404`, not `403`, when it is outside the authenticated merchant scope.
+
+### Filtered CSV export
+
+`GET /api/v1/merchant/transactions/export`
+
+Accept the same filters as the transaction list, excluding pagination. Return
+`text/csv` with a downloadable filename. The export must include all matching
+transactions for the authenticated merchant, not only the visible page.
+
+CSV columns expected by the frontend:
+
+```text
+Transaction Number, Reference, Type, Narration, Amount, Currency, Status,
+Posted, Reversed, Transaction Date
+```
+
+Apply an export row limit or queue large exports. Escape spreadsheet formula
+prefixes (`=`, `+`, `-`, `@`) in user-controlled reference and narration fields.
+
+### Phase 2 performance and authorization requirements
+
+- Index `merchant_transactions` for merchant/date, merchant/status/date, and
+  merchant/type/date filter paths.
+- Calculate summary aggregates in SQL rather than loading all transactions.
+- Validate dates, enum filters, and pagination values and return `422` errors.
+- Rate-limit CSV exports separately from normal reads.
+- Every query must be scoped to the authenticated merchant before filters or
+  route binding are applied.
+- Preserve decimal amounts as strings in JSON; the frontend converts them only
+  for display.
+
+The existing staff route
+`GET /api/v1/merchants/{merchant}/transactions` remains available to operations
+staff but is not used by the merchant portal.

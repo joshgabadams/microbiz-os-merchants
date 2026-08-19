@@ -1,4 +1,4 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable, delay, map, of, throwError } from 'rxjs';
 import { environment } from '../../environments/environment';
@@ -8,16 +8,20 @@ import {
   MerchantAccountPreview,
   MerchantApiRecord,
   MerchantDashboardSummary,
+  MerchantDashboardApiResponse,
+  MerchantDashboardData,
   MerchantOtpChallenge,
   MerchantOtpVerification,
   MerchantPortalProfile,
   MerchantPortalSession,
   MerchantRegistrationConfirmation,
   MerchantSessionApiResponse,
+  MerchantTransactionApiRecord,
   MerchantTransactionPage,
   MerchantTransactionQuery,
   PortalLoginDraft,
   PortalTransaction,
+  LaravelPaginator,
 } from './models/merchant-portal.models';
 
 /**
@@ -48,15 +52,15 @@ export class MerchantPortalApiService {
   };
 
   private readonly transactions: PortalTransaction[] = [
-    { id: 1, reference: 'MBZ-Q3F8K2', type: 'QR_PAYMENT', customer: 'Chinedu Okafor', amount: 48500, fee: 120, currency: 'NGN', status: 'SUCCESSFUL', createdAt: '2026-08-19T10:42:00Z' },
-    { id: 2, reference: 'MBZ-P9D4L7', type: 'POS_PAYMENT', customer: 'Amina Bello', amount: 125000, fee: 250, currency: 'NGN', status: 'SUCCESSFUL', createdAt: '2026-08-19T09:18:00Z' },
-    { id: 3, reference: 'MBZ-Q1A6V5', type: 'QR_PAYMENT', customer: 'Tunde Balogun', amount: 18750, fee: 50, currency: 'NGN', status: 'PENDING', createdAt: '2026-08-19T08:07:00Z' },
-    { id: 4, reference: 'MBZ-S8N2C4', type: 'SETTLEMENT', customer: 'Northstar Retail', amount: 350000, fee: 0, currency: 'NGN', status: 'SUCCESSFUL', createdAt: '2026-08-18T16:31:00Z' },
-    { id: 5, reference: 'MBZ-P7X9M1', type: 'POS_PAYMENT', customer: 'Ngozi Eze', amount: 76000, fee: 180, currency: 'NGN', status: 'FAILED', createdAt: '2026-08-18T14:05:00Z' },
-    { id: 6, reference: 'MBZ-Q5T2B8', type: 'QR_PAYMENT', customer: 'Femi Lawal', amount: 32400, fee: 80, currency: 'NGN', status: 'SUCCESSFUL', createdAt: '2026-08-17T12:44:00Z' },
-    { id: 7, reference: 'MBZ-P4R6J3', type: 'POS_PAYMENT', customer: 'Ifeoma Nwosu', amount: 91000, fee: 220, currency: 'NGN', status: 'SUCCESSFUL', createdAt: '2026-08-16T11:20:00Z' },
-    { id: 8, reference: 'MBZ-Q8W1H6', type: 'QR_PAYMENT', customer: 'Sani Musa', amount: 15300, fee: 40, currency: 'NGN', status: 'SUCCESSFUL', createdAt: '2026-08-15T15:17:00Z' },
-    { id: 9, reference: 'MBZ-S2E7P9', type: 'SETTLEMENT', customer: 'Northstar Retail', amount: 500000, fee: 0, currency: 'NGN', status: 'SUCCESSFUL', createdAt: '2026-08-14T16:00:00Z' },
+    { id: 1, transactionNo: 'MCH-Q3F8K2', reference: 'ORDER-1048', type: 'QR_COLLECTION', amount: 48500, currency: 'NGN', status: 'SUCCESSFUL', narration: 'QR collection for order 1048', transactionDate: '2026-08-19T10:42:00Z', posted: true, isReversed: false },
+    { id: 2, transactionNo: 'MCH-P9D4L7', reference: 'ORDER-1047', type: 'POS_COLLECTION', amount: 125000, currency: 'NGN', status: 'SUCCESSFUL', narration: 'POS collection', transactionDate: '2026-08-19T09:18:00Z', posted: true, isReversed: false },
+    { id: 3, transactionNo: 'MCH-Q1A6V5', reference: 'ORDER-1046', type: 'QR_COLLECTION', amount: 18750, currency: 'NGN', status: 'PENDING', narration: 'QR collection awaiting posting', transactionDate: '2026-08-19T08:07:00Z', posted: false, isReversed: false },
+    { id: 4, transactionNo: 'MST-S8N2C4', reference: 'SETTLE-0818', type: 'SETTLEMENT', amount: 350000, currency: 'NGN', status: 'SUCCESSFUL', narration: 'Settlement to linked MicroBiz account', transactionDate: '2026-08-18T16:31:00Z', posted: true, isReversed: false },
+    { id: 5, transactionNo: 'MCH-P7X9M1', reference: 'ORDER-1045', type: 'POS_COLLECTION', amount: 76000, currency: 'NGN', status: 'FAILED', narration: 'POS collection failed', transactionDate: '2026-08-18T14:05:00Z', posted: false, isReversed: false },
+    { id: 6, transactionNo: 'MCH-Q5T2B8', reference: 'ORDER-1044', type: 'QR_COLLECTION', amount: 32400, currency: 'NGN', status: 'SUCCESSFUL', narration: 'QR collection', transactionDate: '2026-08-17T12:44:00Z', posted: true, isReversed: false },
+    { id: 7, transactionNo: 'MCH-P4R6J3', reference: 'ORDER-1043', type: 'POS_COLLECTION', amount: 91000, currency: 'NGN', status: 'SUCCESSFUL', narration: 'POS collection', transactionDate: '2026-08-16T11:20:00Z', posted: true, isReversed: false },
+    { id: 8, transactionNo: 'MCH-Q8W1H6', reference: 'ORDER-1042', type: 'QR_COLLECTION', amount: 15300, currency: 'NGN', status: 'SUCCESSFUL', narration: 'QR collection reversed', transactionDate: '2026-08-15T15:17:00Z', posted: true, isReversed: true },
+    { id: 9, transactionNo: 'MST-S2E7P9', reference: 'SETTLE-0814', type: 'SETTLEMENT', amount: 500000, currency: 'NGN', status: 'SUCCESSFUL', narration: 'Settlement to linked MicroBiz account', transactionDate: '2026-08-14T16:00:00Z', posted: true, isReversed: false },
   ];
 
   beginLogin(role: PortalLoginDraft['role'], email: string, password: string): Observable<PortalLoginDraft> {
@@ -182,31 +186,45 @@ export class MerchantPortalApiService {
     }).pipe(delay(250));
   }
 
-  getDashboard(): Observable<MerchantDashboardSummary> {
+  getDashboard(): Observable<MerchantDashboardData> {
+    if (
+      environment.merchantPortalApiMode === 'live' &&
+      environment.merchantPortalLiveFeatures.merchantDashboard
+    ) {
+      return this.http
+        .get<ApiResponse<MerchantDashboardApiResponse>>(`${this.merchantSelfBase}/dashboard`)
+        .pipe(map((response) => this.mapDashboard(response.data)));
+    }
+
     return of({
-      currency: 'NGN',
-      availableBalance: 1842750,
-      ledgerBalance: 2011750,
-      pendingSettlement: 169000,
-      transactionValueToday: 192250,
-      transactionCountToday: 3,
-      settlementAccount: this.profile.settlementAccountNumber,
+      summary: {
+        currency: 'NGN',
+        availableBalance: 1842750,
+        ledgerBalance: 2011750,
+        lockedBalance: 169000,
+        transactionValueToday: 192250,
+        transactionCountToday: 2,
+        pendingTransactionCount: 1,
+        settlementAccount: this.profile.settlementAccountNumber,
+      },
+      recentTransactions: this.transactions.slice(0, 5),
     }).pipe(delay(550));
   }
 
   getTransactions(query: MerchantTransactionQuery): Observable<MerchantTransactionPage> {
-    const normalizedSearch = query.search.trim().toLowerCase();
-    const filtered = this.transactions.filter((transaction) => {
-      const matchesSearch = !normalizedSearch ||
-        transaction.reference.toLowerCase().includes(normalizedSearch) ||
-        transaction.customer.toLowerCase().includes(normalizedSearch);
-      const matchesStatus = !query.status || transaction.status === query.status;
-      const matchesType = !query.type || transaction.type === query.type;
-      const timestamp = new Date(transaction.createdAt).getTime();
-      const matchesFrom = !query.dateFrom || timestamp >= new Date(`${query.dateFrom}T00:00:00`).getTime();
-      const matchesTo = !query.dateTo || timestamp <= new Date(`${query.dateTo}T23:59:59`).getTime();
-      return matchesSearch && matchesStatus && matchesType && matchesFrom && matchesTo;
-    });
+    if (
+      environment.merchantPortalApiMode === 'live' &&
+      environment.merchantPortalLiveFeatures.merchantTransactions
+    ) {
+      return this.http
+        .get<ApiResponse<LaravelPaginator<MerchantTransactionApiRecord>>>(
+          `${this.merchantSelfBase}/transactions`,
+          { params: this.transactionParams(query) },
+        )
+        .pipe(map((response) => this.mapTransactionPage(response.data)));
+    }
+
+    const filtered = this.filterTransactions(query);
     const start = (query.page - 1) * query.perPage;
 
     return of({
@@ -218,8 +236,53 @@ export class MerchantPortalApiService {
     }).pipe(delay(450));
   }
 
-  getRecentTransactions(): Observable<PortalTransaction[]> {
-    return of(this.transactions.slice(0, 5)).pipe(delay(450));
+  getTransaction(transactionId: number): Observable<PortalTransaction> {
+    if (
+      environment.merchantPortalApiMode === 'live' &&
+      environment.merchantPortalLiveFeatures.merchantTransactions
+    ) {
+      return this.http
+        .get<ApiResponse<MerchantTransactionApiRecord>>(
+          `${this.merchantSelfBase}/transactions/${transactionId}`,
+        )
+        .pipe(map((response) => this.mapTransaction(response.data)));
+    }
+
+    const transaction = this.transactions.find((item) => item.id === transactionId);
+    return transaction
+      ? of({ ...transaction }).pipe(delay(250))
+      : throwError(() => new Error('Transaction not found.'));
+  }
+
+  exportTransactions(query: MerchantTransactionQuery): Observable<Blob> {
+    if (
+      environment.merchantPortalApiMode === 'live' &&
+      environment.merchantPortalLiveFeatures.merchantTransactions
+    ) {
+      return this.http.get(`${this.merchantSelfBase}/transactions/export`, {
+        params: this.transactionParams(query),
+        responseType: 'blob',
+      });
+    }
+
+    const rows = this.filterTransactions(query);
+    const csv = [
+      ['Transaction Number', 'Reference', 'Type', 'Narration', 'Amount', 'Currency', 'Status', 'Posted', 'Reversed', 'Transaction Date'],
+      ...rows.map((item) => [
+        item.transactionNo,
+        item.reference ?? '',
+        item.type,
+        item.narration ?? '',
+        item.amount,
+        item.currency,
+        item.status,
+        item.posted ? 'Yes' : 'No',
+        item.isReversed ? 'Yes' : 'No',
+        item.transactionDate,
+      ]),
+    ].map((row) => row.map((value) => this.csvCell(String(value))).join(',')).join('\n');
+
+    return of(new Blob([csv], { type: 'text/csv;charset=utf-8' })).pipe(delay(300));
   }
 
   getProfile(): Observable<MerchantPortalProfile> {
@@ -261,6 +324,87 @@ export class MerchantPortalApiService {
     }
 
     return of(undefined).pipe(delay(250));
+  }
+
+  private transactionParams(query: MerchantTransactionQuery): HttpParams {
+    let params = new HttpParams()
+      .set('page', query.page)
+      .set('per_page', query.perPage);
+
+    if (query.search.trim()) params = params.set('search', query.search.trim());
+    if (query.status) params = params.set('status', query.status);
+    if (query.type) params = params.set('transaction_type', query.type);
+    if (query.dateFrom) params = params.set('from', query.dateFrom);
+    if (query.dateTo) params = params.set('to', query.dateTo);
+
+    return params;
+  }
+
+  private filterTransactions(query: MerchantTransactionQuery): PortalTransaction[] {
+    const normalizedSearch = query.search.trim().toLowerCase();
+    return this.transactions.filter((transaction) => {
+      const matchesSearch = !normalizedSearch || [
+        transaction.transactionNo,
+        transaction.reference ?? '',
+        transaction.narration ?? '',
+      ].some((value) => value.toLowerCase().includes(normalizedSearch));
+      const matchesStatus = !query.status || transaction.status === query.status;
+      const matchesType = !query.type || transaction.type === query.type;
+      const timestamp = new Date(transaction.transactionDate).getTime();
+      const matchesFrom = !query.dateFrom || timestamp >= new Date(`${query.dateFrom}T00:00:00`).getTime();
+      const matchesTo = !query.dateTo || timestamp <= new Date(`${query.dateTo}T23:59:59`).getTime();
+      return matchesSearch && matchesStatus && matchesType && matchesFrom && matchesTo;
+    });
+  }
+
+  private mapDashboard(response: MerchantDashboardApiResponse): MerchantDashboardData {
+    const summary: MerchantDashboardSummary = {
+      currency: response.balance.currency,
+      availableBalance: Number(response.balance.available_balance),
+      ledgerBalance: Number(response.balance.ledger_balance),
+      lockedBalance: Number(response.balance.locked_balance),
+      transactionValueToday: Number(response.today.successful_value),
+      transactionCountToday: response.today.successful_count,
+      pendingTransactionCount: response.today.pending_count,
+      settlementAccount: response.settlement_account,
+    };
+
+    return {
+      summary,
+      recentTransactions: response.recent_transactions.map((transaction) => this.mapTransaction(transaction)),
+    };
+  }
+
+  private mapTransactionPage(
+    paginator: LaravelPaginator<MerchantTransactionApiRecord>,
+  ): MerchantTransactionPage {
+    return {
+      items: paginator.data.map((transaction) => this.mapTransaction(transaction)),
+      page: paginator.current_page,
+      perPage: paginator.per_page,
+      total: paginator.total,
+      lastPage: paginator.last_page,
+    };
+  }
+
+  private mapTransaction(transaction: MerchantTransactionApiRecord): PortalTransaction {
+    return {
+      id: transaction.id,
+      transactionNo: transaction.transaction_no,
+      reference: transaction.reference,
+      type: transaction.transaction_type,
+      amount: Number(transaction.amount),
+      currency: transaction.currency,
+      status: transaction.status,
+      narration: transaction.narration,
+      transactionDate: transaction.transaction_date,
+      posted: transaction.posted,
+      isReversed: transaction.is_reversed,
+    };
+  }
+
+  private csvCell(value: string): string {
+    return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
   }
 
   private mapRegistration(
