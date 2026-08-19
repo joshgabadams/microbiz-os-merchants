@@ -2,6 +2,11 @@
   box-sizing: border-box;
 }
 
+html {
+  /* One step above the browser default for clearer portal typography. */
+  font-size: 17px;
+}
+
 html, body {
   height: 100%;
   margin: 0;
