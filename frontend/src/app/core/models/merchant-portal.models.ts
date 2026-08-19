@@ -26,6 +26,11 @@ export interface MerchantOtpChallenge {
   expires_at: string;
 }
 
+export interface MerchantOtpVerification {
+  verified: boolean;
+  verification_token?: string;
+}
+
 /** Exact payload naming for POST /api/v1/reg/merchant. */
 export interface ConfirmMerchantRegistrationPayload {
   fincore_client_id: number;
@@ -37,6 +42,37 @@ export interface ConfirmMerchantRegistrationPayload {
   phone: string;
   email?: string;
   branch_id: number;
+  verification_token?: string;
+}
+
+export interface MerchantRegistrationConfirmation {
+  merchant_id: number;
+  merchant_code: string;
+  business_name: string;
+  account_number: string;
+  status: string;
+}
+
+/** Fields consumed from merchant registration and the proposed self-profile response. */
+export interface MerchantApiRecord {
+  id: number;
+  merchant_code: string;
+  business_name: string;
+  legal_name: string | null;
+  contact_name: string | null;
+  email: string | null;
+  phone: string | null;
+  registration_number: string | null;
+  status: string;
+  customer_account?: {
+    account_no: string;
+  } | null;
+  balance?: {
+    currency: string;
+    ledger_balance: string;
+    available_balance: string;
+    locked_balance: string;
+  } | null;
 }
 
 export interface MerchantPortalSession {
@@ -48,18 +84,18 @@ export interface MerchantPortalSession {
   expiresAt: string;
 }
 
-export interface MerchantRegistrationRequest {
-  businessName: string;
-  contactName: string;
-  email: string;
-  phone: string;
-  registrationNumber: string;
-  password: string;
-}
-
-export interface MerchantRegistrationResult {
-  applicationReference: string;
-  status: 'RECEIVED';
+export interface MerchantSessionApiResponse {
+  access_token: string;
+  token_type: string;
+  expires_at: string;
+  merchant: {
+    id: number;
+    merchant_code: string;
+    business_name: string;
+    account_number: string;
+    email: string;
+    status: string;
+  };
 }
 
 export interface MerchantDashboardSummary {
@@ -114,7 +150,7 @@ export interface MerchantPortalProfile {
   phone: string;
   registrationNumber: string;
   accountNumber: string;
-  status: 'ACTIVE';
+  status: string;
   settlementBank: string;
   settlementAccountName: string;
   settlementAccountNumber: string;

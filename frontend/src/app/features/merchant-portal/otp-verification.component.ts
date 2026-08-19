@@ -12,7 +12,7 @@ import { MerchantPortalSessionService } from '../../core/merchant-portal-session
     <main class="otp-page">
       <a class="brand" routerLink="/login/merchants"><span>M</span> MicroBiz</a>
       <section class="otp-card">
-        <div class="step">Step 4 of 4</div>
+        <div class="step">Step 4 of 5</div>
         <div class="phone-icon">✦</div>
         <p class="eyebrow">Security verification</p>
         <h1>Enter the code we sent</h1>
@@ -54,7 +54,16 @@ export class OtpVerificationComponent implements OnInit, OnDestroy {
     if (!challenge || !preview || !draft) { void this.router.navigate(['/login/merchants']); return; }
     this.loading.set(true); this.error.set(null);
     this.api.verifyOtp(challenge.challenge_id, this.otp).subscribe({
-      next: () => { this.session.startSession(this.api.createPreviewSession(preview, draft.email)); this.loading.set(false); void this.router.navigate(['/merchant/dashboard']); },
+      next: (verification) => {
+        if (!verification.verified) {
+          this.error.set('The verification code could not be confirmed.');
+          this.loading.set(false);
+          return;
+        }
+        this.session.markOtpVerified(verification);
+        this.loading.set(false);
+        void this.router.navigate(['/reg/merchant']);
+      },
       error: (error: Error) => { this.error.set(error.message || 'The verification code is incorrect.'); this.loading.set(false); },
     });
   }

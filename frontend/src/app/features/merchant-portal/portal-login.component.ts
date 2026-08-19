@@ -68,7 +68,7 @@ import { PortalRole } from '../../core/models/merchant-portal.models';
             {{ loading() ? 'Checking your details…' : 'Continue' }}
           </button>
 
-          <p class="portal-auth__register">New to MicroBiz? <a routerLink="/reg/merchant">Register your business</a></p>
+          <p class="portal-auth__register">Merchant access is currently available to existing MicroBiz customers.</p>
           <p class="mock-note">Development access: use the pre-filled local API credentials.</p>
         </form>
       </section>
@@ -103,7 +103,6 @@ import { PortalRole } from '../../core/models/merchant-portal.models';
     .portal-alert { border-radius: .55rem; padding: .75rem .85rem; font-size: .82rem; margin-bottom: 1rem; }
     .portal-alert--error { background: #fff0ee; color: #a43b2b; border: 1px solid #ffd4ce; }
     .portal-auth__register { text-align: center; font-size: .85rem; margin: 1.2rem 0 .5rem; color: #71788d; }
-    .portal-auth__register a { color: #233c94; font-weight: 750; text-decoration: none; }
     .mock-note { text-align: center; color: #9a9fb0; font-size: .72rem; }
     .portal-auth__mobile-brand { display: none; }
     @media (max-width: 800px) {

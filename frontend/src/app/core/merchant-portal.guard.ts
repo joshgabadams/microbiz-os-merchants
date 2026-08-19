@@ -6,8 +6,10 @@ export const merchantPortalGuard: CanActivateFn = () => {
   const session = inject(MerchantPortalSessionService);
   const router = inject(Router);
 
-  return session.isAuthenticated()
-    ? true
-    : router.createUrlTree(['/login/merchants']);
-};
+  if (session.isAuthenticated()) {
+    return true;
+  }
 
+  session.clear();
+  return router.createUrlTree(['/login/merchants']);
+};

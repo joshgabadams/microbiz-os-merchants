@@ -4,13 +4,16 @@ import { Observable, delay, map, of, throwError } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { ApiResponse } from './models/api.models';
 import {
+  ConfirmMerchantRegistrationPayload,
   MerchantAccountPreview,
+  MerchantApiRecord,
   MerchantDashboardSummary,
   MerchantOtpChallenge,
+  MerchantOtpVerification,
   MerchantPortalProfile,
   MerchantPortalSession,
-  MerchantRegistrationRequest,
-  MerchantRegistrationResult,
+  MerchantRegistrationConfirmation,
+  MerchantSessionApiResponse,
   MerchantTransactionPage,
   MerchantTransactionQuery,
   PortalLoginDraft,
@@ -25,6 +28,7 @@ import {
 @Injectable({ providedIn: 'root' })
 export class MerchantPortalApiService {
   private readonly registrationBase = `${environment.apiUrl}/v1/reg/merchant`;
+  private readonly merchantSelfBase = `${environment.apiUrl}/v1/merchant`;
 
   constructor(private readonly http: HttpClient) {}
 
@@ -72,7 +76,7 @@ export class MerchantPortalApiService {
       return throwError(() => new Error('The agent workspace is not available in this build yet.'));
     }
 
-    if (environment.merchantPortalApiMode === 'live') {
+    if (environment.merchantPortalApiMode === 'live' && environment.merchantPortalLiveFeatures.accountPreview) {
       return this.http
         .post<ApiResponse<MerchantAccountPreview>>(`${this.registrationBase}/preview`, {
           account_number,
@@ -95,6 +99,15 @@ export class MerchantPortalApiService {
   }
 
   requestOtp(preview: MerchantAccountPreview): Observable<MerchantOtpChallenge> {
+    if (environment.merchantPortalApiMode === 'live' && environment.merchantPortalLiveFeatures.otp) {
+      return this.http
+        .post<ApiResponse<MerchantOtpChallenge>>(`${this.registrationBase}/otp/send`, {
+          fincore_client_id: preview.fincore_client_id,
+          account_number: preview.account_no,
+        })
+        .pipe(map((response) => response.data));
+    }
+
     const digits = (preview.mobile_no ?? '').replace(/\D/g, '');
     const masked_phone = digits.length >= 4
       ? `******${digits.slice(-4)}`
@@ -108,31 +121,65 @@ export class MerchantPortalApiService {
     }).pipe(delay(550));
   }
 
-  verifyOtp(challenge_id: string, otp: string): Observable<boolean> {
-    void challenge_id;
-    // TODO(API): replace with POST /reg/merchant/otp/verify when exposed.
+  verifyOtp(challenge_id: string, otp: string): Observable<MerchantOtpVerification> {
+    if (environment.merchantPortalApiMode === 'live' && environment.merchantPortalLiveFeatures.otp) {
+      return this.http
+        .post<ApiResponse<MerchantOtpVerification>>(`${this.registrationBase}/otp/verify`, {
+          challenge_id,
+          otp,
+        })
+        .pipe(map((response) => response.data));
+    }
+
     return otp === '0000'
-      ? of(true).pipe(delay(600))
+      ? of({ verified: true, verification_token: `mock-verification-${Date.now()}` }).pipe(delay(600))
       : throwError(() => new Error('The verification code is incorrect. Use 0000 for this preview.'));
   }
 
-  createPreviewSession(preview: MerchantAccountPreview, email: string): MerchantPortalSession {
-    return {
-      accessToken: `mock-merchant-${Date.now()}`,
-      accountNumber: preview.account_no,
-      merchantId: preview.fincore_client_id,
-      businessName: preview.display_name ?? 'MicroBiz Merchant',
-      email: preview.email ?? email,
-      expiresAt: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(),
-    };
+  confirmRegistration(
+    payload: ConfirmMerchantRegistrationPayload,
+    preview: MerchantAccountPreview,
+  ): Observable<MerchantRegistrationConfirmation> {
+    if (environment.merchantPortalApiMode === 'live' && environment.merchantPortalLiveFeatures.registration) {
+      return this.http
+        .post<ApiResponse<MerchantApiRecord>>(this.registrationBase, payload)
+        .pipe(map((response) => this.mapRegistration(response.data, preview.account_no)));
+    }
+
+    return of({
+      merchant_id: 15,
+      merchant_code: 'MER-000015',
+      business_name: payload.trading_name || payload.legal_name,
+      account_number: preview.account_no,
+      status: 'DRAFT',
+    }).pipe(delay(900));
   }
 
-  register(payload: MerchantRegistrationRequest): Observable<MerchantRegistrationResult> {
-    void payload;
+  createMerchantSession(
+    registration: MerchantRegistrationConfirmation,
+    email: string,
+    verification_token?: string,
+  ): Observable<MerchantPortalSession> {
+    if (
+      environment.merchantPortalApiMode === 'live' &&
+      environment.merchantPortalLiveFeatures.merchantSession &&
+      verification_token
+    ) {
+      return this.http
+        .post<ApiResponse<MerchantSessionApiResponse>>(`${this.merchantSelfBase}/session`, {
+          verification_token,
+        })
+        .pipe(map((response) => this.mapSession(response.data)));
+    }
+
     return of({
-      applicationReference: `MBR-${Date.now().toString().slice(-8)}`,
-      status: 'RECEIVED' as const,
-    }).pipe(delay(900));
+      accessToken: `mock-merchant-${Date.now()}`,
+      accountNumber: registration.account_number,
+      merchantId: registration.merchant_id,
+      businessName: registration.business_name,
+      email,
+      expiresAt: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(),
+    }).pipe(delay(250));
   }
 
   getDashboard(): Observable<MerchantDashboardSummary> {
@@ -176,15 +223,85 @@ export class MerchantPortalApiService {
   }
 
   getProfile(): Observable<MerchantPortalProfile> {
+    if (
+      environment.merchantPortalApiMode === 'live' &&
+      environment.merchantPortalLiveFeatures.merchantProfile
+    ) {
+      return this.http
+        .get<ApiResponse<MerchantApiRecord>>(`${this.merchantSelfBase}/profile`)
+        .pipe(map((response) => this.mapProfile(response.data)));
+    }
+
     return of({ ...this.profile }).pipe(delay(450));
   }
 
-  updateProfile(changes: Pick<MerchantPortalProfile, 'contactName' | 'email' | 'phone'>): Observable<MerchantPortalProfile> {
+  updateProfile(
+    changes: Pick<MerchantPortalProfile, 'contactName' | 'email' | 'phone'>,
+  ): Observable<MerchantPortalProfile> {
+    if (
+      environment.merchantPortalApiMode === 'live' &&
+      environment.merchantPortalLiveFeatures.merchantProfile
+    ) {
+      return this.http
+        .patch<ApiResponse<MerchantApiRecord>>(`${this.merchantSelfBase}/profile`, {
+          contact_name: changes.contactName,
+          email: changes.email,
+          phone: changes.phone,
+        })
+        .pipe(map((response) => this.mapProfile(response.data)));
+    }
+
     this.profile = { ...this.profile, ...changes };
     return of({ ...this.profile }).pipe(delay(650));
   }
 
   endSession(): Observable<void> {
+    if (environment.merchantPortalApiMode === 'live' && environment.merchantPortalLiveFeatures.merchantSession) {
+      return this.http.post<void>(`${this.merchantSelfBase}/session/logout`, {});
+    }
+
     return of(undefined).pipe(delay(250));
+  }
+
+  private mapRegistration(
+    merchant: MerchantApiRecord,
+    account_number: string,
+  ): MerchantRegistrationConfirmation {
+    return {
+      merchant_id: merchant.id,
+      merchant_code: merchant.merchant_code,
+      business_name: merchant.business_name,
+      account_number,
+      status: merchant.status,
+    };
+  }
+
+  private mapProfile(merchant: MerchantApiRecord): MerchantPortalProfile {
+    const account_number = merchant.customer_account?.account_no ?? this.profile.accountNumber;
+    return {
+      merchantId: merchant.id,
+      merchantCode: merchant.merchant_code,
+      businessName: merchant.business_name || merchant.legal_name || '',
+      contactName: merchant.contact_name ?? '',
+      email: merchant.email ?? '',
+      phone: merchant.phone ?? '',
+      registrationNumber: merchant.registration_number ?? '',
+      accountNumber: account_number,
+      status: merchant.status,
+      settlementBank: 'MicroBiz MFB',
+      settlementAccountName: merchant.business_name,
+      settlementAccountNumber: account_number,
+    };
+  }
+
+  private mapSession(response: MerchantSessionApiResponse): MerchantPortalSession {
+    return {
+      accessToken: response.access_token,
+      accountNumber: response.merchant.account_number,
+      merchantId: response.merchant.id,
+      businessName: response.merchant.business_name,
+      email: response.merchant.email,
+      expiresAt: response.expires_at,
+    };
   }
 }
