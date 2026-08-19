@@ -8,6 +8,8 @@ class CustomerAccount extends Model
 {
     protected $fillable = [
         'customer_id',
+        'fincore_client_id',
+        'fincore_account_no',
         'account_no',
         'account_type',
         'product_code',

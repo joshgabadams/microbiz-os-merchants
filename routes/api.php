@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\CustomerCashController;
 use App\Http\Controllers\Api\BalancingController;
 use App\Http\Controllers\Api\BranchEodController;
 use App\Http\Controllers\Api\MerchantController;
+use App\Http\Controllers\Api\MerchantRegistrationController;
 use App\Http\Controllers\Api\AgentController;
 use App\Http\Controllers\Api\AgentTransactionController;
 use App\Http\Controllers\Api\AgentAgreementTemplateController;
@@ -114,7 +115,15 @@ Route::middleware('auth.basic.once')->group(function () {
         Route::post('/merchant-terminals/{terminal}/suspend', [MerchantController::class, 'suspendTerminal'])
             ->middleware('permission:merchant-terminals.suspend');
 
-        Route::post('/merchants/onboard', [MerchantController::class, 'onboard'])
+        // /reg/ groups registration flows across resource types by
+        // registration-type rather than under each resource's own
+        // namespace, so /reg/corporate, /reg/individual etc. can sit
+        // alongside this later without duplicating the pattern per
+        // resource. Replaces the old /merchants/onboard.
+        Route::post('/reg/merchant/preview', [MerchantRegistrationController::class, 'preview'])
+            ->middleware('permission:merchants.onboard');
+
+        Route::post('/reg/merchant', [MerchantRegistrationController::class, 'register'])
             ->middleware('permission:merchants.onboard');
 
         Route::post('/merchants/{merchant}/submit', [MerchantController::class, 'submit'])
