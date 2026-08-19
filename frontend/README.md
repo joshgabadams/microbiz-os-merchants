@@ -52,6 +52,7 @@ Implemented areas:
 - Reusable payment links and QR payment assets
 - Reconciliation summaries and transaction disputes
 - Merchant team invitations and role-based access controls
+- Floating Tessa merchant assistant with contextual mock guidance
 - Merchant session guard and logout
 
 Only account preview currently uses the live backend. Other merchant features

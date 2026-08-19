@@ -18,5 +18,6 @@ export const environment = {
     merchantReports: false,
     merchantPaymentTools: false,
     merchantOperations: false,
+    tessaAssistant: false,
   },
 };

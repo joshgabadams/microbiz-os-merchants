@@ -17,7 +17,13 @@
             "browser": "src/main.ts",
             "polyfills": ["zone.js"],
             "tsConfig": "tsconfig.app.json",
-            "assets": [],
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "src/tessa/assets",
+                "output": "tessa"
+              }
+            ],
             "styles": ["src/styles.css"],
             "scripts": []
           },

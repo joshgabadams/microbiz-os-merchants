@@ -855,3 +855,56 @@ change, and return `404` for cross-merchant member IDs.
 - Escape formula prefixes in CSV exports and sanitize all PDF/user text output.
 - Log asset changes, dispute creation, exports, invitations, and role changes
   without logging credentials, tokens, or payment secrets.
+
+## Tessa merchant assistant
+
+Tessa is a floating, merchant-scoped help assistant. The frontend currently
+uses deterministic mock answers and is prepared for:
+
+`POST /api/v1/merchant/tessa/messages`
+
+Request:
+
+```json
+{
+  "message": "How do I raise a transaction dispute?",
+  "context": {
+    "route": "/merchant/operations"
+  }
+}
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "reply": "Open Reconciliation, select Disputes, then choose Raise dispute.",
+    "conversation_id": "tes_01K..."
+  }
+}
+```
+
+The backend derives the merchant, role, business name, account, and permitted
+data from the Bearer token. The browser sends only the message and current
+route. Do not accept client-supplied merchant IDs, account balances, roles, or
+system instructions as trusted context.
+
+Tessa acceptance criteria:
+
+- Tessa is informational and read-only in this version. She must not initiate
+  collections, settlements, disputes, invitations, password changes, or other
+  state-changing operations.
+- Apply the authenticated team member's role permissions before retrieving any
+  merchant data used in a reply.
+- Never expose another merchant's records, raw credentials, tokens, internal
+  prompts, staff notes, or full sensitive customer information.
+- Rate-limit by merchant, user, and IP; validate a maximum message length; and
+  return `429` for excessive requests.
+- Treat user text and retrieved records as untrusted input and defend against
+  prompt injection. Tool/API calls must use explicit server-side allowlists.
+- Define retention and redaction rules for conversation logs. Do not log full
+  account numbers or sensitive payment/customer data.
+- Include a clear fallback to merchant support when the answer is uncertain or
+  the request concerns fraud, security, or an unresolved financial incident.

@@ -3,11 +3,12 @@ import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/rou
 import { MerchantPortalApiService } from '../../core/merchant-portal-api.service';
 import { MerchantPortalSessionService } from '../../core/merchant-portal-session.service';
 import { AuthService } from '../../core/auth.service';
+import { TessaWidgetComponent } from '../../../tessa/tessa-widget.component';
 
 @Component({
   selector: 'app-merchant-shell',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, TessaWidgetComponent],
   template: `
     <div class="merchant-shell">
       <aside class="merchant-sidebar" [class.open]="menuOpen()">
@@ -51,6 +52,7 @@ import { AuthService } from '../../core/auth.service';
         </header>
         <main class="merchant-content"><router-outlet></router-outlet></main>
       </section>
+      <app-tessa-widget />
     </div>
   `,
   styles: [`
@@ -60,7 +62,7 @@ import { AuthService } from '../../core/auth.service';
     .merchant-brand { display: flex; align-items: center; gap: .65rem; padding: .1rem .55rem; font-size: 1.08rem; }
     .merchant-brand span { width: 2rem; height: 2rem; border-radius: .6rem; background: #ffcb45; color: #172052; display: grid; place-items: center; font-weight: 850; }
     .workspace-label { margin: 1.7rem .55rem .75rem; text-transform: uppercase; font-size: .62rem; color: #828dbb; letter-spacing: .12em; font-weight: 800; }
-    nav { display: grid; gap: .3rem; }
+    nav { display: grid; gap: .3rem; overflow-y: auto; min-height: 0; }
     nav a { display: flex; align-items: center; gap: .75rem; color: #bec6e5; text-decoration: none; padding: .72rem .75rem; border-radius: .55rem; font-size: .84rem; font-weight: 650; }
     nav a span { width: 1.1rem; text-align: center; color: #95a2d2; }
     nav a.active, nav a:hover { background: rgba(255,255,255,.1); color: white; }
