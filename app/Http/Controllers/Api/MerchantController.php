@@ -7,7 +7,6 @@ use App\Http\Requests\Merchant\AddMerchantDocumentRequest;
 use App\Http\Requests\Merchant\AddMerchantOwnerRequest;
 use App\Http\Requests\Merchant\CollectPosPaymentRequest;
 use App\Http\Requests\Merchant\CollectQrPaymentRequest;
-use App\Http\Requests\Merchant\OnboardMerchantRequest;
 use App\Http\Requests\Merchant\RejectMerchantRequest;
 use App\Http\Requests\Merchant\SettleMerchantRequest;
 use App\Http\Requests\Merchant\AddMerchantLocationRequest;
@@ -64,24 +63,6 @@ class MerchantController extends Controller
         $merchant->update($request->validated());
 
         return $this->success($merchant->fresh(), 'Merchant updated successfully.');
-    }
-
-    public function onboard(OnboardMerchantRequest $request)
-    {
-        try {
-            $merchant = $this->onboardingService->onboard(
-                $request->validated(),
-                $request->user()->id
-            );
-
-            return $this->success(
-                $merchant,
-                'Merchant onboarded successfully.',
-                201
-            );
-        } catch (Exception $e) {
-            return $this->error($e->getMessage());
-        }
     }
 
     public function submit(Merchant $merchant, Request $request)

@@ -38,6 +38,7 @@ class MerchantOnboardingService
                 'registered_address' => $data['registered_address'] ?? null,
                 'operating_address' => $data['operating_address'] ?? null,
                 'branch_id' => $data['branch_id'] ?? null,
+                'customer_account_id' => $data['customer_account_id'] ?? null,
                 'settlement_frequency' => $data['settlement_frequency'] ?? 'T_PLUS_1',
                 'expected_monthly_volume' => $data['expected_monthly_volume'] ?? null,
                 'expected_monthly_value' => $data['expected_monthly_value'] ?? null,
