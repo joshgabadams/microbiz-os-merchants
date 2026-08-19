@@ -1,7 +1,61 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './core/auth.guard';
+import { merchantPortalGuard } from './core/merchant-portal.guard';
 
 export const routes: Routes = [
+  {
+    path: 'login/merchants/account',
+    loadComponent: () =>
+      import('./features/merchant-portal/account-lookup.component').then(
+        (m) => m.AccountLookupComponent
+      ),
+  },
+  {
+    path: 'login/merchants',
+    loadComponent: () =>
+      import('./features/merchant-portal/portal-login.component').then(
+        (m) => m.PortalLoginComponent
+      ),
+  },
+  {
+    path: 'reg/merchant',
+    loadComponent: () =>
+      import('./features/merchant-portal/merchant-registration.component').then(
+        (m) => m.MerchantRegistrationComponent
+      ),
+  },
+  {
+    path: 'merchant',
+    loadComponent: () =>
+      import('./features/merchant-portal/merchant-shell.component').then(
+        (m) => m.MerchantShellComponent
+      ),
+    canActivate: [merchantPortalGuard],
+    children: [
+      { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
+      {
+        path: 'dashboard',
+        loadComponent: () =>
+          import('./features/merchant-portal/merchant-dashboard.component').then(
+            (m) => m.MerchantDashboardComponent
+          ),
+      },
+      {
+        path: 'transactions',
+        loadComponent: () =>
+          import('./features/merchant-portal/merchant-transactions.component').then(
+            (m) => m.MerchantTransactionsComponent
+          ),
+      },
+      {
+        path: 'profile',
+        loadComponent: () =>
+          import('./features/merchant-portal/merchant-profile.component').then(
+            (m) => m.MerchantProfileComponent
+          ),
+      },
+    ],
+  },
   {
     path: 'login',
     loadComponent: () =>
