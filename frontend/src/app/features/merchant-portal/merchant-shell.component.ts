@@ -2,6 +2,7 @@ import { Component, signal } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { MerchantPortalApiService } from '../../core/merchant-portal-api.service';
 import { MerchantPortalSessionService } from '../../core/merchant-portal-session.service';
+import { AuthService } from '../../core/auth.service';
 
 @Component({
   selector: 'app-merchant-shell',
@@ -92,6 +93,7 @@ export class MerchantShellComponent {
   constructor(
     public readonly session: MerchantPortalSessionService,
     private readonly api: MerchantPortalApiService,
+    private readonly auth: AuthService,
     private readonly router: Router,
   ) {}
 
@@ -108,7 +110,7 @@ export class MerchantShellComponent {
 
   private finishLogout(): void {
     this.session.clear();
+    this.auth.clearSessionLocally();
     void this.router.navigate(['/login/merchants']);
   }
 }
-

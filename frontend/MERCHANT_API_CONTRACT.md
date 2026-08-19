@@ -91,8 +91,11 @@ POST /api/v1/reg/merchant/otp/verify
 `src/environments/environment.ts` contains `merchantPortalApiMode`:
 
 - `mock`: local account, OTP, dashboard, profile, and transaction fixtures.
-- `live`: account preview calls `/api/v1/reg/merchant/preview`.
+- `live`: portal login establishes the current development Basic Auth session,
+  then account preview calls `/api/v1/reg/merchant/preview`.
 
-Keep `mock` as the default until merchant authentication and OTP endpoints are
-available. Do not add endpoint-specific conditionals to components; all live
-and preview behavior belongs in `MerchantPortalApiService`.
+Local development currently uses `live` so the real Fincore-backed account
+lookup can be tested. The login is still development-only (`test@example.com`)
+until merchant authentication and OTP endpoints are available. Do not add
+endpoint-specific conditionals to data pages; live and preview behavior belongs
+in `MerchantPortalApiService`.

@@ -1,6 +1,8 @@
 import { Component, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
+import { environment } from '../../../environments/environment';
+import { AuthService } from '../../core/auth.service';
 import { MerchantPortalApiService } from '../../core/merchant-portal-api.service';
 import { MerchantPortalSessionService } from '../../core/merchant-portal-session.service';
 import { PortalRole } from '../../core/models/merchant-portal.models';
@@ -67,7 +69,7 @@ import { PortalRole } from '../../core/models/merchant-portal.models';
           </button>
 
           <p class="portal-auth__register">New to MicroBiz? <a routerLink="/reg/merchant">Register your business</a></p>
-          <p class="mock-note">Preview mode: use the pre-filled details to test the merchant flow.</p>
+          <p class="mock-note">Development access: use the pre-filled local API credentials.</p>
         </form>
       </section>
     </main>
@@ -114,7 +116,7 @@ import { PortalRole } from '../../core/models/merchant-portal.models';
 })
 export class PortalLoginComponent {
   role: PortalRole = 'merchant';
-  email = 'merchant@microbiz.test';
+  email = environment.merchantPortalApiMode === 'live' ? 'test@example.com' : 'merchant@microbiz.test';
   password = 'password';
   remember = true;
   loading = signal(false);
@@ -122,6 +124,7 @@ export class PortalLoginComponent {
 
   constructor(
     private readonly api: MerchantPortalApiService,
+    private readonly auth: AuthService,
     private readonly session: MerchantPortalSessionService,
     private readonly router: Router,
   ) {}
@@ -129,17 +132,30 @@ export class PortalLoginComponent {
   submit(): void {
     this.loading.set(true);
     this.error.set(null);
+
+    if (environment.merchantPortalApiMode === 'live') {
+      this.auth.login(this.email, this.password).subscribe({
+        next: () => this.completeLogin(),
+        error: (error) => {
+          this.error.set(error?.error?.message ?? 'The development API credentials are invalid.');
+          this.loading.set(false);
+        },
+      });
+      return;
+    }
+
     this.api.beginLogin(this.role, this.email, this.password).subscribe({
-      next: (draft) => {
-        this.session.setLoginDraft(draft.role, draft.email);
-        this.loading.set(false);
-        void this.router.navigate(['/login/merchants/account']);
-      },
+      next: () => this.completeLogin(),
       error: (error: Error) => {
         this.error.set(error.message || 'We could not sign you in.');
         this.loading.set(false);
       },
     });
   }
-}
 
+  private completeLogin(): void {
+    this.session.setLoginDraft(this.role, this.email.trim());
+    this.loading.set(false);
+    void this.router.navigate(['/login/merchants/account']);
+  }
+}
