@@ -238,6 +238,164 @@ export interface MerchantSettlementSummaryApiResponse {
   settlement_frequency: string;
 }
 
+export interface MerchantLocationApiRecord {
+  id: number;
+  location_code: string;
+  name: string;
+  trading_name: string | null;
+  address: string;
+  state: string | null;
+  local_government: string | null;
+  contact_person: string | null;
+  operating_hours: string | null;
+  status: string;
+}
+
+export interface MerchantLocation {
+  id: number;
+  locationCode: string;
+  name: string;
+  tradingName: string;
+  address: string;
+  state: string;
+  localGovernment: string;
+  contactPerson: string;
+  operatingHours: string;
+  status: string;
+}
+
+export interface CreateMerchantLocationRequest {
+  name: string;
+  trading_name?: string;
+  address: string;
+  state?: string;
+  local_government?: string;
+  contact_person?: string;
+  operating_hours?: string;
+}
+
+export interface MerchantTerminalApiRecord {
+  id: number;
+  merchant_location_id: number | null;
+  terminal_id: string;
+  serial_number: string;
+  terminal_type: string;
+  provider: string | null;
+  model: string | null;
+  status: string;
+  application_version: string | null;
+  activated_at: string | null;
+  last_heartbeat_at: string | null;
+  last_transaction_at: string | null;
+}
+
+export interface MerchantTerminal {
+  id: number;
+  locationId: number | null;
+  terminalId: string;
+  serialNumber: string;
+  terminalType: string;
+  provider: string;
+  model: string;
+  status: string;
+  applicationVersion: string;
+  activatedAt: string | null;
+  lastHeartbeatAt: string | null;
+  lastTransactionAt: string | null;
+}
+
+export interface MerchantTerminalRequest {
+  terminal_type: string;
+  merchant_location_id?: number;
+  quantity: number;
+  notes?: string;
+}
+
+export interface MerchantSupportTicket {
+  id: number;
+  ticketNo: string;
+  category: string;
+  subject: string;
+  description: string;
+  priority: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MerchantSupportTicketApiRecord {
+  id: number;
+  ticket_no: string;
+  category: string;
+  subject: string;
+  description: string;
+  priority: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateMerchantSupportTicketRequest {
+  category: string;
+  subject: string;
+  description: string;
+  priority: string;
+}
+
+export interface MerchantNotification {
+  id: number;
+  title: string;
+  message: string;
+  type: 'PAYMENT' | 'SETTLEMENT' | 'SECURITY' | 'SYSTEM';
+  read: boolean;
+  createdAt: string;
+}
+
+export interface MerchantNotificationApiRecord {
+  id: number;
+  title: string;
+  message: string;
+  type: MerchantNotification['type'];
+  read: boolean;
+  created_at: string;
+}
+
+export interface MerchantNotificationPreferencesApiResponse {
+  email: boolean;
+  sms: boolean;
+  push: boolean;
+  whatsapp: boolean;
+}
+
+export interface MerchantSecuritySummaryApiResponse {
+  mfa_enabled: boolean;
+  last_password_change: string | null;
+  active_session_count: number;
+}
+
+export interface MerchantMfaSetup {
+  setupId: string;
+  maskedDestination: string;
+}
+
+export interface MerchantMfaSetupApiResponse {
+  setup_id: string;
+  masked_destination: string;
+}
+
+export interface MerchantNotificationPreferences {
+  email: boolean;
+  sms: boolean;
+  push: boolean;
+  whatsapp: boolean;
+}
+
+export interface MerchantSecuritySummary {
+  mfaEnabled: boolean;
+  lastPasswordChange: string | null;
+  activeSessionCount: number;
+}
+
 export interface MerchantPortalProfile {
   merchantId: number;
   merchantCode: string;

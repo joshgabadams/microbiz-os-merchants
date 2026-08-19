@@ -45,6 +45,9 @@ Implemented areas:
 - Transaction search, filters, details, pagination, and CSV export
 - QR/POS collection flows
 - Settlement requests and history
+- Business locations and terminal/device requests
+- Support tickets and status tracking
+- Notifications, preferences, password management, and MFA setup
 - Merchant session guard and logout
 
 Only account preview currently uses the live backend. Other merchant features

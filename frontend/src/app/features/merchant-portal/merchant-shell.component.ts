@@ -18,7 +18,10 @@ import { AuthService } from '../../core/auth.service';
           <a routerLink="/merchant/collections" routerLinkActive="active"><span>＋</span> Accept payment</a>
           <a routerLink="/merchant/transactions" routerLinkActive="active"><span>↔</span> Transactions</a>
           <a routerLink="/merchant/settlements" routerLinkActive="active"><span>↓</span> Settlements</a>
+          <a routerLink="/merchant/business" routerLinkActive="active"><span>⌖</span> Locations & devices</a>
+          <a routerLink="/merchant/support" routerLinkActive="active"><span>?</span> Support</a>
           <a routerLink="/merchant/profile" routerLinkActive="active"><span>○</span> Business profile</a>
+          <a routerLink="/merchant/settings" routerLinkActive="active"><span>⚙</span> Settings</a>
         </nav>
         <div class="sidebar-support">
           <span>Need assistance?</span>
@@ -39,7 +42,7 @@ import { AuthService } from '../../core/auth.service';
           <button class="menu-toggle" type="button" (click)="menuOpen.set(true)" aria-label="Open menu">☰</button>
           <div class="topbar-context"><span>Merchant portal</span><strong>{{ session.session()?.businessName }}</strong></div>
           <div class="topbar-actions">
-            <button type="button" class="notification" aria-label="Notifications">●</button>
+            <a routerLink="/merchant/settings" class="notification" aria-label="Notifications">●</a>
             <div class="topbar-avatar">{{ initial }}</div>
           </div>
         </header>
@@ -75,7 +78,7 @@ import { AuthService } from '../../core/auth.service';
     .topbar-context span { color: #9197a9; font-size: .65rem; }
     .topbar-context strong { color: #26304d; font-size: .83rem; }
     .topbar-actions { display: flex; align-items: center; gap: .85rem; }
-    .notification { border: 0; background: #f3f5f9; color: #e8a700; width: 2rem; height: 2rem; border-radius: 50%; font-size: .55rem; }
+    .notification { border: 0; background: #f3f5f9; color: #e8a700; width: 2rem; height: 2rem; border-radius: 50%; font-size: .55rem; display: grid; place-items: center; text-decoration: none; }
     .merchant-content { padding: clamp(1.25rem, 3vw, 2.5rem); max-width: 1440px; margin: 0 auto; }
     .menu-toggle { display: none; border: 0; background: transparent; color: #172052; font-size: 1.25rem; }
     .menu-backdrop { display: none; }

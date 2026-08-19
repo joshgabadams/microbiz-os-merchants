@@ -76,6 +76,27 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'business',
+        loadComponent: () =>
+          import('./features/merchant-portal/merchant-business.component').then(
+            (m) => m.MerchantBusinessComponent
+          ),
+      },
+      {
+        path: 'support',
+        loadComponent: () =>
+          import('./features/merchant-portal/merchant-support.component').then(
+            (m) => m.MerchantSupportComponent
+          ),
+      },
+      {
+        path: 'settings',
+        loadComponent: () =>
+          import('./features/merchant-portal/merchant-settings.component').then(
+            (m) => m.MerchantSettingsComponent
+          ),
+      },
+      {
         path: 'profile',
         loadComponent: () =>
           import('./features/merchant-portal/merchant-profile.component').then(

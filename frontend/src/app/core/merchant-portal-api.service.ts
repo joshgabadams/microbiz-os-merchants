@@ -5,6 +5,8 @@ import { environment } from '../../environments/environment';
 import { ApiResponse } from './models/api.models';
 import {
   ConfirmMerchantRegistrationPayload,
+  CreateMerchantLocationRequest,
+  CreateMerchantSupportTicketRequest,
   MerchantAccountPreview,
   MerchantApiRecord,
   MerchantBalanceApiRecord,
@@ -16,6 +18,14 @@ import {
   MerchantOtpVerification,
   MerchantMoneyOperationResult,
   MerchantMoneyRequest,
+  MerchantMfaSetup,
+  MerchantMfaSetupApiResponse,
+  MerchantLocation,
+  MerchantLocationApiRecord,
+  MerchantNotification,
+  MerchantNotificationApiRecord,
+  MerchantNotificationPreferences,
+  MerchantNotificationPreferencesApiResponse,
   MerchantPortalProfile,
   MerchantPortalSession,
   MerchantRegistrationConfirmation,
@@ -23,6 +33,13 @@ import {
   MerchantSettlementApiResponse,
   MerchantSettlementSummary,
   MerchantSettlementSummaryApiResponse,
+  MerchantSecuritySummary,
+  MerchantSecuritySummaryApiResponse,
+  MerchantSupportTicket,
+  MerchantSupportTicketApiRecord,
+  MerchantTerminal,
+  MerchantTerminalApiRecord,
+  MerchantTerminalRequest,
   MerchantTransactionApiRecord,
   MerchantTransactionPage,
   MerchantTransactionQuery,
@@ -73,6 +90,24 @@ export class MerchantPortalApiService {
   private mockAvailableBalance = 1842750;
   private mockLockedBalance = 169000;
   private readonly mockOperations = new Map<string, MerchantMoneyOperationResult>();
+  private readonly mockLocations: MerchantLocation[] = [
+    { id: 1, locationCode: 'LOC-VI001', name: 'Victoria Island Store', tradingName: 'Northstar VI', address: '14 Adeola Odeku Street', state: 'Lagos', localGovernment: 'Eti-Osa', contactPerson: 'Joshua Adeyemi', operatingHours: 'Mon-Sat, 8:00-20:00', status: 'ACTIVE' },
+    { id: 2, locationCode: 'LOC-IK002', name: 'Ikeja Outlet', tradingName: 'Northstar Ikeja', address: '22 Allen Avenue', state: 'Lagos', localGovernment: 'Ikeja', contactPerson: 'Amaka Obi', operatingHours: 'Mon-Sun, 9:00-19:00', status: 'ACTIVE' },
+  ];
+  private readonly mockTerminals: MerchantTerminal[] = [
+    { id: 1, locationId: 1, terminalId: 'TID-204891-01', serialNumber: 'SN-MBZ-800214', terminalType: 'ANDROID_POS', provider: 'MicroBiz', model: 'PAX A920', status: 'ACTIVE', applicationVersion: '2.4.1', activatedAt: '2026-08-02T10:00:00Z', lastHeartbeatAt: '2026-08-19T17:58:00Z', lastTransactionAt: '2026-08-19T17:42:00Z' },
+    { id: 2, locationId: 2, terminalId: 'TID-204891-02', serialNumber: 'SN-MBZ-800215', terminalType: 'ANDROID_POS', provider: 'MicroBiz', model: 'PAX A920', status: 'SUSPENDED', applicationVersion: '2.4.0', activatedAt: '2026-08-04T09:30:00Z', lastHeartbeatAt: '2026-08-18T12:11:00Z', lastTransactionAt: '2026-08-18T11:55:00Z' },
+  ];
+  private readonly mockTickets: MerchantSupportTicket[] = [
+    { id: 1, ticketNo: 'SUP-000041', category: 'TERMINAL', subject: 'Terminal not connecting', description: 'The Ikeja terminal is unable to connect.', priority: 'HIGH', status: 'IN_PROGRESS', createdAt: '2026-08-18T09:15:00Z', updatedAt: '2026-08-19T08:40:00Z' },
+  ];
+  private readonly mockNotifications: MerchantNotification[] = [
+    { id: 1, title: 'Settlement completed', message: 'Your settlement of ₦350,000 was completed successfully.', type: 'SETTLEMENT', read: false, createdAt: '2026-08-19T16:32:00Z' },
+    { id: 2, title: 'Terminal requires attention', message: 'Terminal TID-204891-02 has not sent a heartbeat recently.', type: 'SYSTEM', read: false, createdAt: '2026-08-19T12:20:00Z' },
+    { id: 3, title: 'Successful QR collection', message: 'A QR collection of ₦48,500 was posted.', type: 'PAYMENT', read: true, createdAt: '2026-08-19T10:43:00Z' },
+  ];
+  private mockNotificationPreferences: MerchantNotificationPreferences = { email: true, sms: true, push: true, whatsapp: false };
+  private mockSecuritySummary: MerchantSecuritySummary = { mfaEnabled: false, lastPasswordChange: '2026-07-20T08:00:00Z', activeSessionCount: 1 };
 
   beginLogin(role: PortalLoginDraft['role'], email: string, password: string): Observable<PortalLoginDraft> {
     if (!email.trim() || password.length < 6) {
@@ -458,6 +493,192 @@ export class MerchantPortalApiService {
       : throwError(() => new Error('Settlement not found.'));
   }
 
+  getLocations(): Observable<MerchantLocation[]> {
+    if (environment.merchantPortalApiMode === 'live' && environment.merchantPortalLiveFeatures.merchantBusiness) {
+      return this.http
+        .get<ApiResponse<MerchantLocationApiRecord[]>>(`${this.merchantSelfBase}/locations`)
+        .pipe(map((response) => response.data.map((location) => this.mapLocation(location))));
+    }
+    return of(this.mockLocations.map((location) => ({ ...location }))).pipe(delay(350));
+  }
+
+  createLocation(payload: CreateMerchantLocationRequest): Observable<MerchantLocation> {
+    if (environment.merchantPortalApiMode === 'live' && environment.merchantPortalLiveFeatures.merchantBusiness) {
+      return this.http
+        .post<ApiResponse<MerchantLocationApiRecord>>(`${this.merchantSelfBase}/locations`, payload)
+        .pipe(map((response) => this.mapLocation(response.data)));
+    }
+    const location: MerchantLocation = {
+      id: Math.max(0, ...this.mockLocations.map((item) => item.id)) + 1,
+      locationCode: `LOC-${Date.now().toString().slice(-6)}`,
+      name: payload.name,
+      tradingName: payload.trading_name ?? '',
+      address: payload.address,
+      state: payload.state ?? '',
+      localGovernment: payload.local_government ?? '',
+      contactPerson: payload.contact_person ?? '',
+      operatingHours: payload.operating_hours ?? '',
+      status: 'ACTIVE',
+    };
+    this.mockLocations.unshift(location);
+    return of({ ...location }).pipe(delay(650));
+  }
+
+  getTerminals(): Observable<MerchantTerminal[]> {
+    if (environment.merchantPortalApiMode === 'live' && environment.merchantPortalLiveFeatures.merchantBusiness) {
+      return this.http
+        .get<ApiResponse<MerchantTerminalApiRecord[]>>(`${this.merchantSelfBase}/terminals`)
+        .pipe(map((response) => response.data.map((terminal) => this.mapTerminal(terminal))));
+    }
+    return of(this.mockTerminals.map((terminal) => ({ ...terminal }))).pipe(delay(400));
+  }
+
+  requestTerminal(payload: MerchantTerminalRequest): Observable<MerchantTerminal> {
+    if (environment.merchantPortalApiMode === 'live' && environment.merchantPortalLiveFeatures.merchantBusiness) {
+      return this.http
+        .post<ApiResponse<MerchantTerminalApiRecord>>(`${this.merchantSelfBase}/terminal-requests`, payload)
+        .pipe(map((response) => this.mapTerminal(response.data)));
+    }
+    const terminal: MerchantTerminal = {
+      id: Math.max(0, ...this.mockTerminals.map((item) => item.id)) + 1,
+      locationId: payload.merchant_location_id ?? null,
+      terminalId: `REQUEST-${Date.now().toString().slice(-6)}`,
+      serialNumber: 'Pending assignment',
+      terminalType: payload.terminal_type,
+      provider: 'MicroBiz',
+      model: `${payload.quantity} device request`,
+      status: 'REQUESTED',
+      applicationVersion: '',
+      activatedAt: null,
+      lastHeartbeatAt: null,
+      lastTransactionAt: null,
+    };
+    this.mockTerminals.unshift(terminal);
+    return of({ ...terminal }).pipe(delay(700));
+  }
+
+  getSupportTickets(): Observable<MerchantSupportTicket[]> {
+    if (environment.merchantPortalApiMode === 'live' && environment.merchantPortalLiveFeatures.merchantSupport) {
+      return this.http
+        .get<ApiResponse<MerchantSupportTicketApiRecord[]>>(`${this.merchantSelfBase}/support/tickets`)
+        .pipe(map((response) => response.data.map((ticket) => this.mapSupportTicket(ticket))));
+    }
+    return of(this.mockTickets.map((ticket) => ({ ...ticket }))).pipe(delay(400));
+  }
+
+  createSupportTicket(payload: CreateMerchantSupportTicketRequest): Observable<MerchantSupportTicket> {
+    if (environment.merchantPortalApiMode === 'live' && environment.merchantPortalLiveFeatures.merchantSupport) {
+      return this.http
+        .post<ApiResponse<MerchantSupportTicketApiRecord>>(`${this.merchantSelfBase}/support/tickets`, payload)
+        .pipe(map((response) => this.mapSupportTicket(response.data)));
+    }
+    const now = new Date().toISOString();
+    const ticket: MerchantSupportTicket = {
+      id: Math.max(0, ...this.mockTickets.map((item) => item.id)) + 1,
+      ticketNo: `SUP-${Date.now().toString().slice(-6)}`,
+      category: payload.category,
+      subject: payload.subject,
+      description: payload.description,
+      priority: payload.priority,
+      status: 'OPEN',
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.mockTickets.unshift(ticket);
+    return of({ ...ticket }).pipe(delay(650));
+  }
+
+  getNotifications(): Observable<MerchantNotification[]> {
+    if (environment.merchantPortalApiMode === 'live' && environment.merchantPortalLiveFeatures.merchantSettings) {
+      return this.http
+        .get<ApiResponse<MerchantNotificationApiRecord[]>>(`${this.merchantSelfBase}/notifications`)
+        .pipe(map((response) => response.data.map((notification) => this.mapNotification(notification))));
+    }
+    return of(this.mockNotifications.map((notification) => ({ ...notification }))).pipe(delay(350));
+  }
+
+  markNotificationRead(notificationId: number): Observable<void> {
+    if (environment.merchantPortalApiMode === 'live' && environment.merchantPortalLiveFeatures.merchantSettings) {
+      return this.http
+        .patch<ApiResponse<null>>(`${this.merchantSelfBase}/notifications/${notificationId}/read`, {})
+        .pipe(map(() => undefined));
+    }
+    const notification = this.mockNotifications.find((item) => item.id === notificationId);
+    if (notification) notification.read = true;
+    return of(undefined).pipe(delay(150));
+  }
+
+  getNotificationPreferences(): Observable<MerchantNotificationPreferences> {
+    if (environment.merchantPortalApiMode === 'live' && environment.merchantPortalLiveFeatures.merchantSettings) {
+      return this.http
+        .get<ApiResponse<MerchantNotificationPreferencesApiResponse>>(`${this.merchantSelfBase}/settings/notifications`)
+        .pipe(map((response) => ({ ...response.data })));
+    }
+    return of({ ...this.mockNotificationPreferences }).pipe(delay(300));
+  }
+
+  updateNotificationPreferences(preferences: MerchantNotificationPreferences): Observable<MerchantNotificationPreferences> {
+    if (environment.merchantPortalApiMode === 'live' && environment.merchantPortalLiveFeatures.merchantSettings) {
+      return this.http
+        .patch<ApiResponse<MerchantNotificationPreferencesApiResponse>>(`${this.merchantSelfBase}/settings/notifications`, preferences)
+        .pipe(map((response) => ({ ...response.data })));
+    }
+    this.mockNotificationPreferences = { ...preferences };
+    return of({ ...this.mockNotificationPreferences }).pipe(delay(450));
+  }
+
+  getSecuritySummary(): Observable<MerchantSecuritySummary> {
+    if (environment.merchantPortalApiMode === 'live' && environment.merchantPortalLiveFeatures.merchantSettings) {
+      return this.http
+        .get<ApiResponse<MerchantSecuritySummaryApiResponse>>(`${this.merchantSelfBase}/settings/security`)
+        .pipe(map((response) => ({ mfaEnabled: response.data.mfa_enabled, lastPasswordChange: response.data.last_password_change, activeSessionCount: response.data.active_session_count })));
+    }
+    return of({ ...this.mockSecuritySummary }).pipe(delay(300));
+  }
+
+  changeMerchantPassword(current_password: string, password: string, password_confirmation: string): Observable<void> {
+    if (password !== password_confirmation) return throwError(() => new Error('The new passwords do not match.'));
+    if (environment.merchantPortalApiMode === 'live' && environment.merchantPortalLiveFeatures.merchantSettings) {
+      return this.http
+        .post<ApiResponse<null>>(`${this.merchantSelfBase}/settings/security/password`, { current_password, password, password_confirmation })
+        .pipe(map(() => undefined));
+    }
+    if (!current_password || password.length < 8) return throwError(() => new Error('Enter your current password and a new password of at least 8 characters.'));
+    this.mockSecuritySummary = { ...this.mockSecuritySummary, lastPasswordChange: new Date().toISOString() };
+    return of(undefined).pipe(delay(550));
+  }
+
+  beginMerchantMfaSetup(): Observable<MerchantMfaSetup> {
+    if (environment.merchantPortalApiMode === 'live' && environment.merchantPortalLiveFeatures.merchantSettings) {
+      return this.http
+        .post<ApiResponse<MerchantMfaSetupApiResponse>>(`${this.merchantSelfBase}/settings/security/mfa/setup`, {})
+        .pipe(map((response) => ({ setupId: response.data.setup_id, maskedDestination: response.data.masked_destination })));
+    }
+    return of({ setupId: `mock-mfa-${Date.now()}`, maskedDestination: '******0142' }).pipe(delay(350));
+  }
+
+  confirmMerchantMfa(setup_id: string, code: string): Observable<MerchantSecuritySummary> {
+    if (environment.merchantPortalApiMode === 'live' && environment.merchantPortalLiveFeatures.merchantSettings) {
+      return this.http
+        .post<ApiResponse<MerchantSecuritySummaryApiResponse>>(`${this.merchantSelfBase}/settings/security/mfa/confirm`, { setup_id, code })
+        .pipe(map((response) => ({ mfaEnabled: response.data.mfa_enabled, lastPasswordChange: response.data.last_password_change, activeSessionCount: response.data.active_session_count })));
+    }
+    if (code !== '0000') return throwError(() => new Error('The verification code is incorrect. Use 0000 for this preview.'));
+    this.mockSecuritySummary = { ...this.mockSecuritySummary, mfaEnabled: true };
+    return of({ ...this.mockSecuritySummary }).pipe(delay(450));
+  }
+
+  disableMerchantMfa(current_password: string): Observable<MerchantSecuritySummary> {
+    if (environment.merchantPortalApiMode === 'live' && environment.merchantPortalLiveFeatures.merchantSettings) {
+      return this.http
+        .post<ApiResponse<MerchantSecuritySummaryApiResponse>>(`${this.merchantSelfBase}/settings/security/mfa/disable`, { current_password })
+        .pipe(map((response) => ({ mfaEnabled: response.data.mfa_enabled, lastPasswordChange: response.data.last_password_change, activeSessionCount: response.data.active_session_count })));
+    }
+    if (!current_password) return throwError(() => new Error('Enter your current password to disable two-step verification.'));
+    this.mockSecuritySummary = { ...this.mockSecuritySummary, mfaEnabled: false };
+    return of({ ...this.mockSecuritySummary }).pipe(delay(450));
+  }
+
   getProfile(): Observable<MerchantPortalProfile> {
     if (
       environment.merchantPortalApiMode === 'live' &&
@@ -613,6 +834,63 @@ export class MerchantPortalApiService {
 
   private nextTransactionId(): number {
     return Math.max(0, ...this.transactions.map((transaction) => transaction.id)) + 1;
+  }
+
+  private mapLocation(location: MerchantLocationApiRecord): MerchantLocation {
+    return {
+      id: location.id,
+      locationCode: location.location_code,
+      name: location.name,
+      tradingName: location.trading_name ?? '',
+      address: location.address,
+      state: location.state ?? '',
+      localGovernment: location.local_government ?? '',
+      contactPerson: location.contact_person ?? '',
+      operatingHours: location.operating_hours ?? '',
+      status: location.status,
+    };
+  }
+
+  private mapTerminal(terminal: MerchantTerminalApiRecord): MerchantTerminal {
+    return {
+      id: terminal.id,
+      locationId: terminal.merchant_location_id,
+      terminalId: terminal.terminal_id,
+      serialNumber: terminal.serial_number,
+      terminalType: terminal.terminal_type,
+      provider: terminal.provider ?? '',
+      model: terminal.model ?? '',
+      status: terminal.status,
+      applicationVersion: terminal.application_version ?? '',
+      activatedAt: terminal.activated_at,
+      lastHeartbeatAt: terminal.last_heartbeat_at,
+      lastTransactionAt: terminal.last_transaction_at,
+    };
+  }
+
+  private mapSupportTicket(ticket: MerchantSupportTicketApiRecord): MerchantSupportTicket {
+    return {
+      id: ticket.id,
+      ticketNo: ticket.ticket_no,
+      category: ticket.category,
+      subject: ticket.subject,
+      description: ticket.description,
+      priority: ticket.priority,
+      status: ticket.status,
+      createdAt: ticket.created_at,
+      updatedAt: ticket.updated_at,
+    };
+  }
+
+  private mapNotification(notification: MerchantNotificationApiRecord): MerchantNotification {
+    return {
+      id: notification.id,
+      title: notification.title,
+      message: notification.message,
+      type: notification.type,
+      read: notification.read,
+      createdAt: notification.created_at,
+    };
   }
 
   private mapRegistration(

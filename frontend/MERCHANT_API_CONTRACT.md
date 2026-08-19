@@ -563,3 +563,150 @@ safe transaction representation. Out-of-scope IDs return `404`.
   external Fineract calls.
 - Responses never include internal GL keys, staff identities, or raw Fineract
   credentials.
+
+## Phase 4: business locations, devices, support, and settings
+
+All Phase 4 routes require the merchant Bearer token and use the singular
+`/api/v1/merchant/*` namespace. The backend must resolve ownership from the
+token; none of these requests accepts `merchant_id`.
+
+### Locations
+
+```text
+GET  /api/v1/merchant/locations
+POST /api/v1/merchant/locations
+```
+
+POST request:
+
+```json
+{
+  "name": "Lekki Outlet",
+  "trading_name": "Example Stores Lekki",
+  "address": "10 Admiralty Way, Lekki",
+  "state": "Lagos",
+  "local_government": "Eti-Osa",
+  "contact_person": "Ada Okafor",
+  "operating_hours": "Mon-Sat, 08:00-19:00"
+}
+```
+
+Both endpoints return location records containing `id`, `location_code`,
+`name`, `trading_name`, address fields, contact fields, `operating_hours`, and
+`status`. The backend supplies `branch_id`, location code, merchant ownership,
+and defaults. Validate strings and return the standard `422` error bag.
+
+### Terminals and device requests
+
+```text
+GET  /api/v1/merchant/terminals
+POST /api/v1/merchant/terminal-requests
+```
+
+GET returns terminals belonging to the authenticated merchant, including
+safe device information: `id`, location, terminal ID, serial number, type,
+provider, model, status, application version, activation time, heartbeat, and
+last transaction time.
+
+POST request:
+
+```json
+{
+  "merchant_location_id": 12,
+  "terminal_type": "POS",
+  "quantity": 1,
+  "contact_name": "Ada Okafor",
+  "contact_phone": "+2348035550142",
+  "delivery_address": "10 Admiralty Way, Lekki",
+  "notes": "Needed for the front counter"
+}
+```
+
+The selected location must belong to the authenticated merchant. Return a
+request reference and `PENDING` status. Terminal allocation, activation,
+suspension, replacement, and reassignment remain staff operations; merchant
+tokens must not access the existing staff activation endpoints.
+
+### Support tickets
+
+```text
+GET  /api/v1/merchant/support/tickets?status=&category=&page=&per_page=
+POST /api/v1/merchant/support/tickets
+GET  /api/v1/merchant/support/tickets/{ticket}
+```
+
+POST request:
+
+```json
+{
+  "subject": "Settlement has not arrived",
+  "category": "SETTLEMENT",
+  "priority": "HIGH",
+  "description": "The settlement requested today is still pending."
+}
+```
+
+Return `id`, a human-readable `ticket_number`, subject, category, priority,
+status, description, timestamps, and the latest safe support response. Ticket
+detail must be ownership-scoped and return `404` for another merchant's ID.
+The backend owns SLA timestamps, assignment, internal notes, and audit history;
+internal staff data must not be exposed.
+
+### Notifications and preferences
+
+```text
+GET   /api/v1/merchant/notifications?unread=&page=&per_page=
+PATCH /api/v1/merchant/notifications/{notification}/read
+GET   /api/v1/merchant/settings/notifications
+PATCH /api/v1/merchant/settings/notifications
+```
+
+Notification records contain `id`, `title`, `message`, `type`, `is_read`,
+`created_at`, and an optional safe in-app `action_url`. The read endpoint
+returns the updated notification. Only allow internal merchant-portal routes
+in `action_url`; do not return arbitrary external URLs.
+
+Preference PATCH fields are booleans:
+
+```json
+{
+  "email": true,
+  "sms": true,
+  "push": true,
+  "whatsapp": false
+}
+```
+
+### Security, password, and MFA
+
+```text
+GET  /api/v1/merchant/settings/security
+POST /api/v1/merchant/settings/security/password
+POST /api/v1/merchant/settings/security/mfa/setup
+POST /api/v1/merchant/settings/security/mfa/confirm
+POST /api/v1/merchant/settings/security/mfa/disable
+```
+
+Security summary returns `mfa_enabled`, `last_password_change`, and
+`active_session_count`. Password change accepts `current_password`, `password`, and
+`password_confirmation`; it must verify the current password, enforce the
+backend password policy, rotate/revoke other sessions, and never log secrets.
+
+MFA setup returns a short-lived `setup_id` and `masked_destination` without
+enabling MFA. Confirmation accepts `setup_id` and `code`; only a valid code
+enables MFA. Confirm and disable return the updated security-summary shape.
+Disable accepts `current_password` and requires recent authentication. Encrypt
+MFA secrets at rest, rate-limit attempts, and write auditable security events.
+Production responses must never use or accept the mocked development code
+`0000`.
+
+### Phase 4 authorization acceptance criteria
+
+- Every location, terminal, ticket, and notification query is ownership-scoped
+  before filtering or route-model binding.
+- Location creation and terminal requests require an `ACTIVE` merchant.
+- Device lifecycle actions remain permissioned staff workflows.
+- Password and MFA endpoints use stronger rate limits and invalidate affected
+  sessions after credential changes.
+- Validation uses Laravel `422` responses; unauthenticated sessions return
+  `401`; out-of-scope resources return `404`.

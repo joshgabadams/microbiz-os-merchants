@@ -69,6 +69,22 @@ history, filters, pagination, and details.
 
 Commit: `369c488 feat: add merchant collections and settlements`
 
+### Phase 4: business operations and account settings
+
+Routes:
+
+```text
+/merchant/business
+/merchant/support
+/merchant/settings
+```
+
+Implemented merchant location creation, terminal inventory and device-request
+flow, support ticket creation/tracking, notification inbox and preferences,
+password change, security summary, and MFA setup/confirm/disable. All features
+have responsive loading, empty, success, validation, and error states. Terminal
+activation and suspension remain staff-only operations.
+
 ## Architecture and important files
 
 | File | Responsibility |
@@ -110,6 +126,9 @@ merchantDashboard: false
 merchantTransactions: false
 merchantCollections: false
 merchantSettlements: false
+merchantBusiness: false
+merchantSupport: false
+merchantSettings: false
 ```
 
 Enable a switch only after its endpoint matches `MERCHANT_API_CONTRACT.md` and
@@ -126,7 +145,7 @@ verified in its own small commit.
 6. Confirm the returned Fineract customer (`CHiksaa`, client ID `2`).
 7. Use OTP `0000` while the OTP feature remains mocked.
 8. Complete registration and test dashboard, transactions, collections,
-   settlements, profile, and logout.
+   settlements, locations/devices, support, settings, profile, and logout.
 9. Run `npm run build` before committing.
 
 The production build is currently passing. Existing `NG8102` warnings come
@@ -140,6 +159,9 @@ from `tessa-dashboard.component.ts` and are unrelated to the merchant portal.
 - A production merchant Bearer-token session is not implemented.
 - Merchant self-profile, dashboard, transactions, export, collections, and
   settlements endpoints are not implemented.
+- Merchant-scoped locations, terminal requests, support, notifications,
+  notification preferences, password change, and MFA endpoints are not
+  implemented.
 - The current money services expect `performed_by -> users.id`; the backend must
   map an authenticated merchant principal to a valid audit actor.
 - The backend team must confirm whether returning merchants authenticate with
@@ -147,19 +169,19 @@ from `tessa-dashboard.component.ts` and are unrelated to the merchant portal.
 
 ## Recommended next phase
 
-Phase 4 should cover merchant business operations that already have partial
-backend models/services:
+Phase 5 can expand the operating tools after the Phase 4 APIs stabilize:
 
 ```text
-Locations and branches
-Terminals/devices and activation status
-Notifications and activity alerts
-Support/complaints
-Security settings and credential recovery
+Statements and downloadable reports
+Analytics by channel, location, and date range
+Payment links or reusable QR payment assets
+Reconciliation and dispute evidence workflows
+Team members and role-based merchant access
 ```
 
-Before implementing Phase 4, audit current Laravel routes, requests, models,
-permissions, and response fields. Continue the same pattern: define the
+Before implementing Phase 5, agree which capabilities are in scope and audit
+current Laravel routes, requests, models, permissions, and response fields.
+Continue the same pattern: define the
 merchant-scoped contract, add typed service methods and feature switches, build
 responsive UI states, run the production build, update this handoff, and commit
 only phase-specific files.
