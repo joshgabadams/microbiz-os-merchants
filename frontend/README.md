@@ -48,6 +48,10 @@ Implemented areas:
 - Business locations and terminal/device requests
 - Support tickets and status tracking
 - Notifications, preferences, password management, and MFA setup
+- Analytics, statements, and CSV/PDF export flows
+- Reusable payment links and QR payment assets
+- Reconciliation summaries and transaction disputes
+- Merchant team invitations and role-based access controls
 - Merchant session guard and logout
 
 Only account preview currently uses the live backend. Other merchant features

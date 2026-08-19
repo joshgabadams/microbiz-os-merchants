@@ -18,6 +18,9 @@ import { AuthService } from '../../core/auth.service';
           <a routerLink="/merchant/collections" routerLinkActive="active"><span>＋</span> Accept payment</a>
           <a routerLink="/merchant/transactions" routerLinkActive="active"><span>↔</span> Transactions</a>
           <a routerLink="/merchant/settlements" routerLinkActive="active"><span>↓</span> Settlements</a>
+          <a routerLink="/merchant/reports" routerLinkActive="active"><span>▥</span> Reports & analytics</a>
+          <a routerLink="/merchant/payment-tools" routerLinkActive="active"><span>⌁</span> Payment tools</a>
+          <a routerLink="/merchant/operations" routerLinkActive="active"><span>✓</span> Reconciliation</a>
           <a routerLink="/merchant/business" routerLinkActive="active"><span>⌖</span> Locations & devices</a>
           <a routerLink="/merchant/support" routerLinkActive="active"><span>?</span> Support</a>
           <a routerLink="/merchant/profile" routerLinkActive="active"><span>○</span> Business profile</a>

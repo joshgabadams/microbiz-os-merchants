@@ -710,3 +710,148 @@ Production responses must never use or accept the mocked development code
   sessions after credential changes.
 - Validation uses Laravel `422` responses; unauthenticated sessions return
   `401`; out-of-scope resources return `404`.
+
+## Phase 5: reports, payment tools, reconciliation, disputes, and team access
+
+All Phase 5 routes require the merchant Bearer token, use the singular
+`/api/v1/merchant/*` namespace, and resolve `merchant_id` server-side.
+
+### Analytics
+
+`GET /api/v1/merchant/analytics?from=2026-08-13&to=2026-08-19`
+
+```json
+{
+  "success": true,
+  "data": {
+    "currency": "NGN",
+    "total_value": "1932150.00",
+    "total_count": 128,
+    "average_value": "15094.92",
+    "success_rate": "96.80",
+    "change_percent": "12.40",
+    "daily": [{ "label": "Mon", "value": "188000.00", "count": 14 }],
+    "channels": [{ "name": "POS", "value": "1231200.00", "percent": "63.70" }],
+    "locations": [{ "name": "Victoria Island Store", "value": "1187200.00", "count": 79 }]
+  }
+}
+```
+
+Use successful, non-reversed collection transactions only. `change_percent`
+compares with the immediately preceding period of equal length. Date ranges
+are inclusive and interpreted in the configured business timezone.
+
+### Statements and export
+
+```text
+GET /api/v1/merchant/statements?from=&to=
+GET /api/v1/merchant/statements/export?from=&to=&format=csv|pdf
+```
+
+The statement response includes `statement_no`, `account_number`,
+`business_name`, `currency`, `from`, `to`, `opening_balance`, `total_credits`,
+`total_debits`, `closing_balance`, and `entries`. Each entry uses the safe
+Phase 2 transaction shape. The export returns a downloadable CSV or valid PDF,
+not a JSON envelope. Apply a maximum synchronous range and queue larger jobs.
+
+### Payment links and reusable QR assets
+
+```text
+GET   /api/v1/merchant/payment-assets
+POST  /api/v1/merchant/payment-assets
+PATCH /api/v1/merchant/payment-assets/{asset}
+```
+
+POST request:
+
+```json
+{
+  "type": "PAYMENT_LINK",
+  "name": "Online orders",
+  "amount": "5000.00",
+  "description": "Payment for web orders"
+}
+```
+
+`amount` is optional; absent means the customer enters it. Return `id`, `type`,
+`name`, a unique merchant-scoped `slug`, `payment_url`, amount, `currency`,
+`status`, `payment_count`, `total_value`, and `created_at`. PATCH currently
+accepts only `{ "status": "ACTIVE|INACTIVE" }`. The public payment page must
+use a signed/unguessable identifier, validate merchant and asset status, apply
+limits, and feed successful payments through the existing idempotent merchant
+collection service. Never place a merchant Bearer token in a QR or public URL.
+
+### Reconciliation summary
+
+`GET /api/v1/merchant/reconciliation?from=&to=`
+
+Return `currency`, display `period`, `expected_value`, `settled_value`,
+`variance`, `unmatched_count`, and `last_reconciled_at`. Calculate all values
+server-side from merchant collections, reversals, holds, and settlements.
+Merchant users can view this summary but cannot mark accounting records as
+reconciled or modify ledger balances.
+
+### Transaction disputes
+
+```text
+GET  /api/v1/merchant/disputes
+POST /api/v1/merchant/disputes
+GET  /api/v1/merchant/disputes/{dispute}
+```
+
+POST request:
+
+```json
+{
+  "transaction_no": "MCH-P7X9M1",
+  "reason": "CUSTOMER_DEBITED",
+  "description": "Customer was debited but the payment failed."
+}
+```
+
+Allowed reasons are `CUSTOMER_DEBITED`, `WRONG_AMOUNT`, `DUPLICATE`,
+`SETTLEMENT_MISSING`, and `OTHER`. The transaction must belong to the current
+merchant. Return `id`, `dispute_no`, `transaction_no`, reason, description,
+amount, currency, status, and timestamps. Prevent duplicate open disputes for
+the same transaction and reason with `409`. Status assignment, evidence review,
+resolution, and internal notes remain staff operations.
+
+### Merchant team and roles
+
+```text
+GET   /api/v1/merchant/team
+POST  /api/v1/merchant/team/invitations
+PATCH /api/v1/merchant/team/{member}
+```
+
+Invitation fields are `name`, `email`, and `role`. Roles are `ADMIN`,
+`FINANCE`, `OPERATOR`, and `VIEWER`; `OWNER` cannot be granted through an
+invitation. PATCH accepts `role` and `status` (`ACTIVE` or `SUSPENDED`). Return
+`id`, name, email, role, status, and `last_active_at`.
+
+Team permissions must be enforced by the backend, not merely hidden in the UI:
+
+- Owner: all access and ownership recovery.
+- Admin: team and operational configuration, excluding owner transfer.
+- Finance: balances, transactions, statements, settlements, reconciliation,
+  and disputes.
+- Operator: collections and assigned devices/locations.
+- Viewer: read-only dashboard and reports.
+
+Invitations must be expiring, single-use, and merchant-bound. Prevent removal
+or suspension of the owner, require recent authentication for privileged role
+changes, revoke a member's sessions when suspended, audit every permission
+change, and return `404` for cross-merchant member IDs.
+
+### Phase 5 performance and security acceptance criteria
+
+- Validate ranges, enums, decimals, email addresses, and pagination with `422`.
+- Scope every aggregate and resource query to the authenticated merchant before
+  applying filters or route-model binding.
+- Calculate money with decimal-safe backend arithmetic and return amounts as
+  strings.
+- Rate-limit public payment attempts, statement exports, dispute submissions,
+  invitations, and permission changes separately.
+- Escape formula prefixes in CSV exports and sanitize all PDF/user text output.
+- Log asset changes, dispute creation, exports, invitations, and role changes
+  without logging credentials, tokens, or payment secrets.

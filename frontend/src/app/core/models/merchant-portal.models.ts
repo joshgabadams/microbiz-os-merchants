@@ -396,6 +396,169 @@ export interface MerchantSecuritySummary {
   activeSessionCount: number;
 }
 
+export interface MerchantAnalytics {
+  currency: string;
+  totalValue: number;
+  totalCount: number;
+  averageValue: number;
+  successRate: number;
+  changePercent: number;
+  daily: { label: string; value: number; count: number }[];
+  channels: { name: string; value: number; percent: number }[];
+  locations: { name: string; value: number; count: number }[];
+}
+
+export interface MerchantAnalyticsApiResponse {
+  currency: string;
+  total_value: string | number;
+  total_count: number;
+  average_value: string | number;
+  success_rate: string | number;
+  change_percent: string | number;
+  daily: { label: string; value: string | number; count: number }[];
+  channels: { name: string; value: string | number; percent: string | number }[];
+  locations: { name: string; value: string | number; count: number }[];
+}
+
+export interface MerchantStatement {
+  statementNo: string;
+  accountNumber: string;
+  businessName: string;
+  currency: string;
+  from: string;
+  to: string;
+  openingBalance: number;
+  totalCredits: number;
+  totalDebits: number;
+  closingBalance: number;
+  entries: PortalTransaction[];
+}
+
+export interface MerchantStatementApiResponse {
+  statement_no: string;
+  account_number: string;
+  business_name: string;
+  currency: string;
+  from: string;
+  to: string;
+  opening_balance: string | number;
+  total_credits: string | number;
+  total_debits: string | number;
+  closing_balance: string | number;
+  entries: MerchantTransactionApiRecord[];
+}
+
+export interface MerchantPaymentAsset {
+  id: number;
+  type: 'PAYMENT_LINK' | 'QR_CODE';
+  name: string;
+  slug: string;
+  paymentUrl: string;
+  amount: number | null;
+  currency: string;
+  status: 'ACTIVE' | 'INACTIVE';
+  paymentCount: number;
+  totalValue: number;
+  createdAt: string;
+}
+
+export interface MerchantPaymentAssetApiRecord {
+  id: number;
+  type: MerchantPaymentAsset['type'];
+  name: string;
+  slug: string;
+  payment_url: string;
+  amount: string | number | null;
+  currency: string;
+  status: MerchantPaymentAsset['status'];
+  payment_count: number;
+  total_value: string | number;
+  created_at: string;
+}
+
+export interface CreateMerchantPaymentAssetRequest {
+  type: MerchantPaymentAsset['type'];
+  name: string;
+  amount?: string;
+  description?: string;
+}
+
+export interface MerchantReconciliationSummary {
+  currency: string;
+  period: string;
+  expectedValue: number;
+  settledValue: number;
+  variance: number;
+  unmatchedCount: number;
+  lastReconciledAt: string | null;
+}
+
+export interface MerchantReconciliationSummaryApiResponse {
+  currency: string;
+  period: string;
+  expected_value: string | number;
+  settled_value: string | number;
+  variance: string | number;
+  unmatched_count: number;
+  last_reconciled_at: string | null;
+}
+
+export interface MerchantDispute {
+  id: number;
+  disputeNo: string;
+  transactionNo: string;
+  reason: string;
+  description: string;
+  amount: number;
+  currency: string;
+  status: 'OPEN' | 'UNDER_REVIEW' | 'RESOLVED' | 'REJECTED';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MerchantDisputeApiRecord {
+  id: number;
+  dispute_no: string;
+  transaction_no: string;
+  reason: string;
+  description: string;
+  amount: string | number;
+  currency: string;
+  status: MerchantDispute['status'];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateMerchantDisputeRequest {
+  transaction_no: string;
+  reason: string;
+  description: string;
+}
+
+export interface MerchantTeamMember {
+  id: number;
+  name: string;
+  email: string;
+  role: 'OWNER' | 'ADMIN' | 'FINANCE' | 'OPERATOR' | 'VIEWER';
+  status: 'ACTIVE' | 'INVITED' | 'SUSPENDED';
+  lastActiveAt: string | null;
+}
+
+export interface MerchantTeamMemberApiRecord {
+  id: number;
+  name: string;
+  email: string;
+  role: MerchantTeamMember['role'];
+  status: MerchantTeamMember['status'];
+  last_active_at: string | null;
+}
+
+export interface InviteMerchantTeamMemberRequest {
+  name: string;
+  email: string;
+  role: MerchantTeamMember['role'];
+}
+
 export interface MerchantPortalProfile {
   merchantId: number;
   merchantCode: string;

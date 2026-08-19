@@ -5,9 +5,14 @@ import { environment } from '../../environments/environment';
 import { ApiResponse } from './models/api.models';
 import {
   ConfirmMerchantRegistrationPayload,
+  CreateMerchantDisputeRequest,
   CreateMerchantLocationRequest,
+  CreateMerchantPaymentAssetRequest,
   CreateMerchantSupportTicketRequest,
+  InviteMerchantTeamMemberRequest,
   MerchantAccountPreview,
+  MerchantAnalytics,
+  MerchantAnalyticsApiResponse,
   MerchantApiRecord,
   MerchantBalanceApiRecord,
   MerchantCollectionApiResponse,
@@ -26,9 +31,13 @@ import {
   MerchantNotificationApiRecord,
   MerchantNotificationPreferences,
   MerchantNotificationPreferencesApiResponse,
+  MerchantPaymentAsset,
+  MerchantPaymentAssetApiRecord,
   MerchantPortalProfile,
   MerchantPortalSession,
   MerchantRegistrationConfirmation,
+  MerchantReconciliationSummary,
+  MerchantReconciliationSummaryApiResponse,
   MerchantSessionApiResponse,
   MerchantSettlementApiResponse,
   MerchantSettlementSummary,
@@ -37,6 +46,12 @@ import {
   MerchantSecuritySummaryApiResponse,
   MerchantSupportTicket,
   MerchantSupportTicketApiRecord,
+  MerchantStatement,
+  MerchantStatementApiResponse,
+  MerchantDispute,
+  MerchantDisputeApiRecord,
+  MerchantTeamMember,
+  MerchantTeamMemberApiRecord,
   MerchantTerminal,
   MerchantTerminalApiRecord,
   MerchantTerminalRequest,
@@ -108,6 +123,17 @@ export class MerchantPortalApiService {
   ];
   private mockNotificationPreferences: MerchantNotificationPreferences = { email: true, sms: true, push: true, whatsapp: false };
   private mockSecuritySummary: MerchantSecuritySummary = { mfaEnabled: false, lastPasswordChange: '2026-07-20T08:00:00Z', activeSessionCount: 1 };
+  private readonly mockPaymentAssets: MerchantPaymentAsset[] = [
+    { id: 1, type: 'PAYMENT_LINK', name: 'Online orders', slug: 'northstar-orders', paymentUrl: 'https://pay.microbiz.test/northstar-orders', amount: null, currency: 'NGN', status: 'ACTIVE', paymentCount: 28, totalValue: 428500, createdAt: '2026-08-05T09:00:00Z' },
+    { id: 2, type: 'QR_CODE', name: 'Victoria Island counter', slug: 'northstar-vi-counter', paymentUrl: 'https://pay.microbiz.test/northstar-vi-counter', amount: null, currency: 'NGN', status: 'ACTIVE', paymentCount: 94, totalValue: 1187200, createdAt: '2026-08-02T10:00:00Z' },
+  ];
+  private readonly mockDisputes: MerchantDispute[] = [
+    { id: 1, disputeNo: 'DSP-000018', transactionNo: 'MCH-P7X9M1', reason: 'CUSTOMER_DEBITED', description: 'Customer was debited but the payment failed.', amount: 76000, currency: 'NGN', status: 'UNDER_REVIEW', createdAt: '2026-08-18T15:00:00Z', updatedAt: '2026-08-19T09:20:00Z' },
+  ];
+  private readonly mockTeamMembers: MerchantTeamMember[] = [
+    { id: 1, name: 'Joshua Adeyemi', email: 'merchant@microbiz.test', role: 'OWNER', status: 'ACTIVE', lastActiveAt: '2026-08-19T18:00:00Z' },
+    { id: 2, name: 'Amaka Obi', email: 'amaka@northstar.test', role: 'FINANCE', status: 'ACTIVE', lastActiveAt: '2026-08-19T15:44:00Z' },
+  ];
 
   beginLogin(role: PortalLoginDraft['role'], email: string, password: string): Observable<PortalLoginDraft> {
     if (!email.trim() || password.length < 6) {
@@ -679,6 +705,121 @@ export class MerchantPortalApiService {
     return of({ ...this.mockSecuritySummary }).pipe(delay(450));
   }
 
+  getMerchantAnalytics(from: string, to: string): Observable<MerchantAnalytics> {
+    if (environment.merchantPortalApiMode === 'live' && environment.merchantPortalLiveFeatures.merchantReports) {
+      const params = new HttpParams().set('from', from).set('to', to);
+      return this.http.get<ApiResponse<MerchantAnalyticsApiResponse>>(`${this.merchantSelfBase}/analytics`, { params }).pipe(
+        map(({ data }) => ({ currency: data.currency, totalValue: Number(data.total_value), totalCount: data.total_count, averageValue: Number(data.average_value), successRate: Number(data.success_rate), changePercent: Number(data.change_percent), daily: data.daily.map((item) => ({ ...item, value: Number(item.value) })), channels: data.channels.map((item) => ({ ...item, value: Number(item.value), percent: Number(item.percent) })), locations: data.locations.map((item) => ({ ...item, value: Number(item.value) })) })),
+      );
+    }
+    return of({
+      currency: 'NGN', totalValue: 1932150, totalCount: 128, averageValue: 15095, successRate: 96.8, changePercent: 12.4,
+      daily: [{ label: 'Mon', value: 188000, count: 14 }, { label: 'Tue', value: 242500, count: 18 }, { label: 'Wed', value: 216300, count: 17 }, { label: 'Thu', value: 324800, count: 22 }, { label: 'Fri', value: 376050, count: 25 }, { label: 'Sat', value: 418500, count: 27 }, { label: 'Sun', value: 166000, count: 5 }],
+      channels: [{ name: 'POS', value: 1231200, percent: 63.7 }, { name: 'QR', value: 700950, percent: 36.3 }],
+      locations: [{ name: 'Victoria Island Store', value: 1187200, count: 79 }, { name: 'Ikeja Outlet', value: 744950, count: 49 }],
+    }).pipe(delay(400));
+  }
+
+  getMerchantStatement(from: string, to: string): Observable<MerchantStatement> {
+    if (environment.merchantPortalApiMode === 'live' && environment.merchantPortalLiveFeatures.merchantReports) {
+      const params = new HttpParams().set('from', from).set('to', to);
+      return this.http.get<ApiResponse<MerchantStatementApiResponse>>(`${this.merchantSelfBase}/statements`, { params }).pipe(map(({ data }) => ({ statementNo: data.statement_no, accountNumber: data.account_number, businessName: data.business_name, currency: data.currency, from: data.from, to: data.to, openingBalance: Number(data.opening_balance), totalCredits: Number(data.total_credits), totalDebits: Number(data.total_debits), closingBalance: Number(data.closing_balance), entries: data.entries.map((entry) => this.mapTransaction(entry)) })));
+    }
+    const entries = this.transactions.filter((item) => item.transactionDate.slice(0, 10) >= from && item.transactionDate.slice(0, 10) <= to);
+    const credits = entries.filter((item) => item.type !== 'SETTLEMENT' && item.status === 'SUCCESSFUL' && !item.isReversed).reduce((sum, item) => sum + item.amount, 0);
+    const debits = entries.filter((item) => item.type === 'SETTLEMENT' && item.status === 'SUCCESSFUL').reduce((sum, item) => sum + item.amount, 0);
+    return of({ statementNo: `STM-${from.replaceAll('-', '')}-${to.replaceAll('-', '')}`, accountNumber: this.profile.accountNumber, businessName: this.profile.businessName, currency: 'NGN', from, to, openingBalance: this.mockLedgerBalance - credits + debits, totalCredits: credits, totalDebits: debits, closingBalance: this.mockLedgerBalance, entries }).pipe(delay(350));
+  }
+
+  downloadMerchantStatement(from: string, to: string, format: 'csv' | 'pdf'): Observable<Blob> {
+    if (environment.merchantPortalApiMode === 'live' && environment.merchantPortalLiveFeatures.merchantReports) {
+      const params = new HttpParams().set('from', from).set('to', to).set('format', format);
+      return this.http.get(`${this.merchantSelfBase}/statements/export`, { params, responseType: 'blob' });
+    }
+    const content = `MicroBiz merchant statement\nAccount,${this.profile.accountNumber}\nPeriod,${from} to ${to}\nFormat preview,${format.toUpperCase()}`;
+    return of(new Blob([content], { type: format === 'csv' ? 'text/csv' : 'application/pdf' })).pipe(delay(250));
+  }
+
+  getPaymentAssets(): Observable<MerchantPaymentAsset[]> {
+    if (environment.merchantPortalApiMode === 'live' && environment.merchantPortalLiveFeatures.merchantPaymentTools) {
+      return this.http.get<ApiResponse<MerchantPaymentAssetApiRecord[]>>(`${this.merchantSelfBase}/payment-assets`).pipe(map(({ data }) => data.map((item) => this.mapPaymentAsset(item))));
+    }
+    return of(this.mockPaymentAssets.map((item) => ({ ...item }))).pipe(delay(350));
+  }
+
+  createPaymentAsset(payload: CreateMerchantPaymentAssetRequest): Observable<MerchantPaymentAsset> {
+    if (environment.merchantPortalApiMode === 'live' && environment.merchantPortalLiveFeatures.merchantPaymentTools) {
+      return this.http.post<ApiResponse<MerchantPaymentAssetApiRecord>>(`${this.merchantSelfBase}/payment-assets`, payload).pipe(map(({ data }) => this.mapPaymentAsset(data)));
+    }
+    const slug = payload.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const item: MerchantPaymentAsset = { id: Date.now(), type: payload.type, name: payload.name, slug, paymentUrl: `https://pay.microbiz.test/${slug}`, amount: payload.amount ? Number(payload.amount) : null, currency: 'NGN', status: 'ACTIVE', paymentCount: 0, totalValue: 0, createdAt: new Date().toISOString() };
+    this.mockPaymentAssets.unshift(item);
+    return of({ ...item }).pipe(delay(450));
+  }
+
+  updatePaymentAssetStatus(id: number, status: MerchantPaymentAsset['status']): Observable<MerchantPaymentAsset> {
+    if (environment.merchantPortalApiMode === 'live' && environment.merchantPortalLiveFeatures.merchantPaymentTools) {
+      return this.http.patch<ApiResponse<MerchantPaymentAssetApiRecord>>(`${this.merchantSelfBase}/payment-assets/${id}`, { status }).pipe(map(({ data }) => this.mapPaymentAsset(data)));
+    }
+    const item = this.mockPaymentAssets.find((asset) => asset.id === id);
+    if (!item) return throwError(() => new Error('Payment asset not found.'));
+    item.status = status;
+    return of({ ...item }).pipe(delay(250));
+  }
+
+  getReconciliationSummary(from: string, to: string): Observable<MerchantReconciliationSummary> {
+    if (environment.merchantPortalApiMode === 'live' && environment.merchantPortalLiveFeatures.merchantOperations) {
+      const params = new HttpParams().set('from', from).set('to', to);
+      return this.http.get<ApiResponse<MerchantReconciliationSummaryApiResponse>>(`${this.merchantSelfBase}/reconciliation`, { params }).pipe(map(({ data }) => ({ currency: data.currency, period: data.period, expectedValue: Number(data.expected_value), settledValue: Number(data.settled_value), variance: Number(data.variance), unmatchedCount: data.unmatched_count, lastReconciledAt: data.last_reconciled_at })));
+    }
+    return of({ currency: 'NGN', period: `${from} to ${to}`, expectedValue: 1932150, settledValue: 1856150, variance: 76000, unmatchedCount: 1, lastReconciledAt: '2026-08-19T17:00:00Z' }).pipe(delay(350));
+  }
+
+  getMerchantDisputes(): Observable<MerchantDispute[]> {
+    if (environment.merchantPortalApiMode === 'live' && environment.merchantPortalLiveFeatures.merchantOperations) {
+      return this.http.get<ApiResponse<MerchantDisputeApiRecord[]>>(`${this.merchantSelfBase}/disputes`).pipe(map(({ data }) => data.map((item) => this.mapDispute(item))));
+    }
+    return of(this.mockDisputes.map((item) => ({ ...item }))).pipe(delay(300));
+  }
+
+  createMerchantDispute(payload: CreateMerchantDisputeRequest): Observable<MerchantDispute> {
+    if (environment.merchantPortalApiMode === 'live' && environment.merchantPortalLiveFeatures.merchantOperations) {
+      return this.http.post<ApiResponse<MerchantDisputeApiRecord>>(`${this.merchantSelfBase}/disputes`, payload).pipe(map(({ data }) => this.mapDispute(data)));
+    }
+    const transaction = this.transactions.find((item) => item.transactionNo === payload.transaction_no);
+    if (!transaction) return throwError(() => new Error('Enter a transaction number from your merchant history.'));
+    const dispute: MerchantDispute = { id: Date.now(), disputeNo: `DSP-${String(this.mockDisputes.length + 19).padStart(6, '0')}`, transactionNo: transaction.transactionNo, reason: payload.reason, description: payload.description, amount: transaction.amount, currency: transaction.currency, status: 'OPEN', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    this.mockDisputes.unshift(dispute);
+    return of({ ...dispute }).pipe(delay(450));
+  }
+
+  getMerchantTeam(): Observable<MerchantTeamMember[]> {
+    if (environment.merchantPortalApiMode === 'live' && environment.merchantPortalLiveFeatures.merchantOperations) {
+      return this.http.get<ApiResponse<MerchantTeamMemberApiRecord[]>>(`${this.merchantSelfBase}/team`).pipe(map(({ data }) => data.map((item) => this.mapTeamMember(item))));
+    }
+    return of(this.mockTeamMembers.map((item) => ({ ...item }))).pipe(delay(300));
+  }
+
+  inviteMerchantTeamMember(payload: InviteMerchantTeamMemberRequest): Observable<MerchantTeamMember> {
+    if (environment.merchantPortalApiMode === 'live' && environment.merchantPortalLiveFeatures.merchantOperations) {
+      return this.http.post<ApiResponse<MerchantTeamMemberApiRecord>>(`${this.merchantSelfBase}/team/invitations`, payload).pipe(map(({ data }) => this.mapTeamMember(data)));
+    }
+    if (this.mockTeamMembers.some((item) => item.email.toLowerCase() === payload.email.toLowerCase())) return throwError(() => new Error('This email already belongs to the merchant team.'));
+    const member: MerchantTeamMember = { id: Date.now(), ...payload, status: 'INVITED', lastActiveAt: null };
+    this.mockTeamMembers.push(member);
+    return of({ ...member }).pipe(delay(450));
+  }
+
+  updateMerchantTeamMember(id: number, role: MerchantTeamMember['role'], status: MerchantTeamMember['status']): Observable<MerchantTeamMember> {
+    if (environment.merchantPortalApiMode === 'live' && environment.merchantPortalLiveFeatures.merchantOperations) {
+      return this.http.patch<ApiResponse<MerchantTeamMemberApiRecord>>(`${this.merchantSelfBase}/team/${id}`, { role, status }).pipe(map(({ data }) => this.mapTeamMember(data)));
+    }
+    const member = this.mockTeamMembers.find((item) => item.id === id);
+    if (!member || member.role === 'OWNER') return throwError(() => new Error('The business owner cannot be changed here.'));
+    member.role = role; member.status = status;
+    return of({ ...member }).pipe(delay(250));
+  }
+
   getProfile(): Observable<MerchantPortalProfile> {
     if (
       environment.merchantPortalApiMode === 'live' &&
@@ -891,6 +1032,18 @@ export class MerchantPortalApiService {
       read: notification.read,
       createdAt: notification.created_at,
     };
+  }
+
+  private mapPaymentAsset(asset: MerchantPaymentAssetApiRecord): MerchantPaymentAsset {
+    return { id: asset.id, type: asset.type, name: asset.name, slug: asset.slug, paymentUrl: asset.payment_url, amount: asset.amount === null ? null : Number(asset.amount), currency: asset.currency, status: asset.status, paymentCount: asset.payment_count, totalValue: Number(asset.total_value), createdAt: asset.created_at };
+  }
+
+  private mapDispute(dispute: MerchantDisputeApiRecord): MerchantDispute {
+    return { id: dispute.id, disputeNo: dispute.dispute_no, transactionNo: dispute.transaction_no, reason: dispute.reason, description: dispute.description, amount: Number(dispute.amount), currency: dispute.currency, status: dispute.status, createdAt: dispute.created_at, updatedAt: dispute.updated_at };
+  }
+
+  private mapTeamMember(member: MerchantTeamMemberApiRecord): MerchantTeamMember {
+    return { id: member.id, name: member.name, email: member.email, role: member.role, status: member.status, lastActiveAt: member.last_active_at };
   }
 
   private mapRegistration(
