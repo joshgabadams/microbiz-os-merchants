@@ -7,15 +7,22 @@ import {
   ConfirmMerchantRegistrationPayload,
   MerchantAccountPreview,
   MerchantApiRecord,
+  MerchantBalanceApiRecord,
+  MerchantCollectionApiResponse,
   MerchantDashboardSummary,
   MerchantDashboardApiResponse,
   MerchantDashboardData,
   MerchantOtpChallenge,
   MerchantOtpVerification,
+  MerchantMoneyOperationResult,
+  MerchantMoneyRequest,
   MerchantPortalProfile,
   MerchantPortalSession,
   MerchantRegistrationConfirmation,
   MerchantSessionApiResponse,
+  MerchantSettlementApiResponse,
+  MerchantSettlementSummary,
+  MerchantSettlementSummaryApiResponse,
   MerchantTransactionApiRecord,
   MerchantTransactionPage,
   MerchantTransactionQuery,
@@ -62,6 +69,10 @@ export class MerchantPortalApiService {
     { id: 8, transactionNo: 'MCH-Q8W1H6', reference: 'ORDER-1042', type: 'QR_COLLECTION', amount: 15300, currency: 'NGN', status: 'SUCCESSFUL', narration: 'QR collection reversed', transactionDate: '2026-08-15T15:17:00Z', posted: true, isReversed: true },
     { id: 9, transactionNo: 'MST-S2E7P9', reference: 'SETTLE-0814', type: 'SETTLEMENT', amount: 500000, currency: 'NGN', status: 'SUCCESSFUL', narration: 'Settlement to linked MicroBiz account', transactionDate: '2026-08-14T16:00:00Z', posted: true, isReversed: false },
   ];
+  private mockLedgerBalance = 2011750;
+  private mockAvailableBalance = 1842750;
+  private mockLockedBalance = 169000;
+  private readonly mockOperations = new Map<string, MerchantMoneyOperationResult>();
 
   beginLogin(role: PortalLoginDraft['role'], email: string, password: string): Observable<PortalLoginDraft> {
     if (!email.trim() || password.length < 6) {
@@ -199,9 +210,9 @@ export class MerchantPortalApiService {
     return of({
       summary: {
         currency: 'NGN',
-        availableBalance: 1842750,
-        ledgerBalance: 2011750,
-        lockedBalance: 169000,
+        availableBalance: this.mockAvailableBalance,
+        ledgerBalance: this.mockLedgerBalance,
+        lockedBalance: this.mockLockedBalance,
         transactionValueToday: 192250,
         transactionCountToday: 2,
         pendingTransactionCount: 1,
@@ -283,6 +294,168 @@ export class MerchantPortalApiService {
     ].map((row) => row.map((value) => this.csvCell(String(value))).join(',')).join('\n');
 
     return of(new Blob([csv], { type: 'text/csv;charset=utf-8' })).pipe(delay(300));
+  }
+
+  collectPayment(
+    method: 'qr' | 'pos',
+    payload: MerchantMoneyRequest,
+  ): Observable<MerchantMoneyOperationResult> {
+    if (
+      environment.merchantPortalApiMode === 'live' &&
+      environment.merchantPortalLiveFeatures.merchantCollections
+    ) {
+      return this.http
+        .post<ApiResponse<MerchantCollectionApiResponse>>(
+          `${this.merchantSelfBase}/collections/${method}`,
+          payload,
+        )
+        .pipe(map((response) => ({
+          transaction: this.mapTransaction(response.data.transaction),
+          balance: this.mapBalance(response.data.balance),
+        })));
+    }
+
+    const previous = this.mockOperations.get(payload.idempotency_key);
+    if (previous) return of(previous).pipe(delay(300));
+
+    const amount = Number(payload.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return throwError(() => new Error('Enter a valid collection amount.'));
+    }
+
+    this.mockLedgerBalance += amount;
+    this.mockLockedBalance += amount;
+    const transaction: PortalTransaction = {
+      id: this.nextTransactionId(),
+      transactionNo: `MCH-${Date.now().toString().slice(-8)}`,
+      reference: payload.reference ?? null,
+      type: method === 'qr' ? 'QR_COLLECTION' : 'POS_COLLECTION',
+      amount,
+      currency: 'NGN',
+      status: 'SUCCESSFUL',
+      narration: payload.narration ?? `${method.toUpperCase()} merchant collection`,
+      transactionDate: new Date().toISOString(),
+      posted: true,
+      isReversed: false,
+    };
+    this.transactions.unshift(transaction);
+    const result = { transaction, balance: this.mockBalance() };
+    this.mockOperations.set(payload.idempotency_key, result);
+    return of(result).pipe(delay(750));
+  }
+
+  getSettlementSummary(): Observable<MerchantSettlementSummary> {
+    if (
+      environment.merchantPortalApiMode === 'live' &&
+      environment.merchantPortalLiveFeatures.merchantSettlements
+    ) {
+      return this.http
+        .get<ApiResponse<MerchantSettlementSummaryApiResponse>>(
+          `${this.merchantSelfBase}/settlements/summary`,
+        )
+        .pipe(map((response) => this.mapSettlementSummary(response.data)));
+    }
+
+    return of({
+      currency: 'NGN',
+      ledgerBalance: this.mockLedgerBalance,
+      lockedBalance: this.mockLockedBalance,
+      availableToSettle: this.mockLockedBalance,
+      settlementAccount: this.profile.settlementAccountNumber,
+      settlementFrequency: 'T_PLUS_1',
+    }).pipe(delay(450));
+  }
+
+  requestSettlement(payload: MerchantMoneyRequest): Observable<MerchantMoneyOperationResult> {
+    if (
+      environment.merchantPortalApiMode === 'live' &&
+      environment.merchantPortalLiveFeatures.merchantSettlements
+    ) {
+      return this.http
+        .post<ApiResponse<MerchantSettlementApiResponse>>(
+          `${this.merchantSelfBase}/settlements`,
+          payload,
+        )
+        .pipe(map((response) => ({
+          transaction: this.mapTransaction(response.data.merchant_transaction),
+          balance: this.mapBalance(response.data.merchant_balance),
+        })));
+    }
+
+    const previous = this.mockOperations.get(payload.idempotency_key);
+    if (previous) return of(previous).pipe(delay(300));
+
+    const amount = Number(payload.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return throwError(() => new Error('Enter a valid settlement amount.'));
+    }
+    if (amount > this.mockLockedBalance) {
+      return throwError(() => new Error('The settlement amount exceeds the available settlement balance.'));
+    }
+
+    this.mockLedgerBalance -= amount;
+    this.mockLockedBalance -= amount;
+    const transaction: PortalTransaction = {
+      id: this.nextTransactionId(),
+      transactionNo: `MST-${Date.now().toString().slice(-8)}`,
+      reference: payload.reference ?? null,
+      type: 'SETTLEMENT',
+      amount,
+      currency: 'NGN',
+      status: 'SUCCESSFUL',
+      narration: payload.narration ?? 'Settlement to linked MicroBiz account',
+      transactionDate: new Date().toISOString(),
+      posted: true,
+      isReversed: false,
+    };
+    this.transactions.unshift(transaction);
+    const result = { transaction, balance: this.mockBalance() };
+    this.mockOperations.set(payload.idempotency_key, result);
+    return of(result).pipe(delay(850));
+  }
+
+  getSettlements(query: MerchantTransactionQuery): Observable<MerchantTransactionPage> {
+    if (
+      environment.merchantPortalApiMode === 'live' &&
+      environment.merchantPortalLiveFeatures.merchantSettlements
+    ) {
+      return this.http
+        .get<ApiResponse<LaravelPaginator<MerchantTransactionApiRecord>>>(
+          `${this.merchantSelfBase}/settlements`,
+          { params: this.transactionParams(query) },
+        )
+        .pipe(map((response) => this.mapTransactionPage(response.data)));
+    }
+
+    const filtered = this.filterTransactions({ ...query, type: 'SETTLEMENT' });
+    const start = (query.page - 1) * query.perPage;
+    return of({
+      items: filtered.slice(start, start + query.perPage),
+      page: query.page,
+      perPage: query.perPage,
+      total: filtered.length,
+      lastPage: Math.max(1, Math.ceil(filtered.length / query.perPage)),
+    }).pipe(delay(400));
+  }
+
+  getSettlement(settlementId: number): Observable<PortalTransaction> {
+    if (
+      environment.merchantPortalApiMode === 'live' &&
+      environment.merchantPortalLiveFeatures.merchantSettlements
+    ) {
+      return this.http
+        .get<ApiResponse<MerchantTransactionApiRecord>>(
+          `${this.merchantSelfBase}/settlements/${settlementId}`,
+        )
+        .pipe(map((response) => this.mapTransaction(response.data)));
+    }
+
+    const settlement = this.transactions.find(
+      (transaction) => transaction.id === settlementId && transaction.type === 'SETTLEMENT',
+    );
+    return settlement
+      ? of({ ...settlement }).pipe(delay(250))
+      : throwError(() => new Error('Settlement not found.'));
   }
 
   getProfile(): Observable<MerchantPortalProfile> {
@@ -405,6 +578,41 @@ export class MerchantPortalApiService {
 
   private csvCell(value: string): string {
     return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+  }
+
+  private mapBalance(balance: MerchantBalanceApiRecord): MerchantMoneyOperationResult['balance'] {
+    return {
+      currency: balance.currency,
+      ledgerBalance: Number(balance.ledger_balance),
+      availableBalance: Number(balance.available_balance),
+      lockedBalance: Number(balance.locked_balance),
+    };
+  }
+
+  private mockBalance(): MerchantMoneyOperationResult['balance'] {
+    return {
+      currency: 'NGN',
+      ledgerBalance: this.mockLedgerBalance,
+      availableBalance: this.mockAvailableBalance,
+      lockedBalance: this.mockLockedBalance,
+    };
+  }
+
+  private mapSettlementSummary(
+    summary: MerchantSettlementSummaryApiResponse,
+  ): MerchantSettlementSummary {
+    return {
+      currency: summary.balance.currency,
+      ledgerBalance: Number(summary.balance.ledger_balance),
+      lockedBalance: Number(summary.balance.locked_balance),
+      availableToSettle: Number(summary.available_to_settle),
+      settlementAccount: summary.settlement_account,
+      settlementFrequency: summary.settlement_frequency,
+    };
+  }
+
+  private nextTransactionId(): number {
+    return Math.max(0, ...this.transactions.map((transaction) => transaction.id)) + 1;
   }
 
   private mapRegistration(

@@ -10,5 +10,7 @@ export const environment = {
     merchantSession: false,
     merchantDashboard: false,
     merchantTransactions: false,
+    merchantCollections: false,
+    merchantSettlements: false,
   },
 };

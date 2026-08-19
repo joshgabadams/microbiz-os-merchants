@@ -188,6 +188,56 @@ export interface LaravelPaginator<T> {
   total: number;
 }
 
+export interface MerchantMoneyRequest {
+  amount: string;
+  idempotency_key: string;
+  reference?: string;
+  narration?: string;
+}
+
+export interface MerchantBalanceApiRecord {
+  currency: string;
+  ledger_balance: string | number;
+  available_balance: string | number;
+  locked_balance: string | number;
+}
+
+export interface MerchantCollectionApiResponse {
+  transaction: MerchantTransactionApiRecord;
+  balance: MerchantBalanceApiRecord;
+}
+
+export interface MerchantSettlementApiResponse {
+  merchant_transaction: MerchantTransactionApiRecord;
+  merchant_balance: MerchantBalanceApiRecord;
+}
+
+export interface MerchantMoneyOperationResult {
+  transaction: PortalTransaction;
+  balance: {
+    currency: string;
+    ledgerBalance: number;
+    availableBalance: number;
+    lockedBalance: number;
+  };
+}
+
+export interface MerchantSettlementSummary {
+  currency: string;
+  ledgerBalance: number;
+  lockedBalance: number;
+  availableToSettle: number;
+  settlementAccount: string;
+  settlementFrequency: string;
+}
+
+export interface MerchantSettlementSummaryApiResponse {
+  balance: MerchantBalanceApiRecord;
+  available_to_settle: string | number;
+  settlement_account: string;
+  settlement_frequency: string;
+}
+
 export interface MerchantPortalProfile {
   merchantId: number;
   merchantCode: string;

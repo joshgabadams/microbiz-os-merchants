@@ -62,6 +62,20 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'collections',
+        loadComponent: () =>
+          import('./features/merchant-portal/merchant-collections.component').then(
+            (m) => m.MerchantCollectionsComponent
+          ),
+      },
+      {
+        path: 'settlements',
+        loadComponent: () =>
+          import('./features/merchant-portal/merchant-settlements.component').then(
+            (m) => m.MerchantSettlementsComponent
+          ),
+      },
+      {
         path: 'profile',
         loadComponent: () =>
           import('./features/merchant-portal/merchant-profile.component').then(

@@ -374,3 +374,192 @@ prefixes (`=`, `+`, `-`, `@`) in user-controlled reference and narration fields.
 The existing staff route
 `GET /api/v1/merchants/{merchant}/transactions` remains available to operations
 staff but is not used by the merchant portal.
+
+## Phase 3: collections and settlements
+
+Phase 3 adds money-moving merchant self-service operations. These endpoints
+must require the Phase 1 merchant Bearer token, derive the merchant and actor
+server-side, enforce active merchant status, and never accept `merchant_id` or
+`performed_by` from the browser.
+
+The existing staff endpoints remain separate:
+
+```text
+POST /api/v1/merchants/collect/qr
+POST /api/v1/merchants/collect/pos
+POST /api/v1/merchants/settle
+```
+
+### QR and POS collection
+
+```text
+POST /api/v1/merchant/collections/qr
+POST /api/v1/merchant/collections/pos
+```
+
+Request:
+
+```json
+{
+  "amount": "5000.00",
+  "idempotency_key": "3df628cd-05d3-4c7d-ad86-053182467296",
+  "reference": "ORDER-1050",
+  "narration": "Payment for order 1050"
+}
+```
+
+Successful response:
+
+```json
+{
+  "success": true,
+  "message": "QR payment collected successfully.",
+  "data": {
+    "transaction": {
+      "id": 51,
+      "transaction_no": "MCH-ABC12345",
+      "transaction_type": "QR_COLLECTION",
+      "status": "SUCCESSFUL",
+      "amount": "5000.00",
+      "currency": "NGN",
+      "reference": "ORDER-1050",
+      "narration": "Payment for order 1050",
+      "transaction_date": "2026-08-19T18:30:00Z",
+      "posted": true,
+      "is_reversed": false
+    },
+    "balance": {
+      "currency": "NGN",
+      "ledger_balance": "2016750.00",
+      "available_balance": "1842750.00",
+      "locked_balance": "174000.00"
+    }
+  }
+}
+```
+
+Collection requirements:
+
+- Keep the existing database transaction, row lock, GL posting, and domain
+  event behavior in `MerchantPaymentService`.
+- Scope idempotency to the authenticated merchant. Retrying the same key and
+  payload must return the original successful response without posting twice.
+- Reusing a key with a different amount or operation must return `409`.
+- Validate decimal precision and the configured merchant transaction limits.
+- Return `422` for validation/business-rule failures and `409` for duplicate
+  idempotency conflicts.
+- Do not expose cash-ledger internals in the merchant response.
+
+### Settlement summary
+
+`GET /api/v1/merchant/settlements/summary`
+
+```json
+{
+  "success": true,
+  "data": {
+    "balance": {
+      "currency": "NGN",
+      "ledger_balance": "2016750.00",
+      "available_balance": "1842750.00",
+      "locked_balance": "174000.00"
+    },
+    "available_to_settle": "174000.00",
+    "settlement_account": "000000002",
+    "settlement_frequency": "T_PLUS_1"
+  }
+}
+```
+
+`available_to_settle` must be calculated server-side. In the current service it
+is the merchant `locked_balance`; the frontend must not be allowed to override
+it. The linked settlement account must come from `customer_account_id`.
+
+### Request settlement
+
+`POST /api/v1/merchant/settlements`
+
+Request:
+
+```json
+{
+  "amount": "100000.00",
+  "idempotency_key": "6c9f20ad-75b8-4dad-a201-e2bc8d914d5a",
+  "reference": "SETTLE-0820",
+  "narration": "Manual merchant settlement"
+}
+```
+
+Successful response:
+
+```json
+{
+  "success": true,
+  "message": "Merchant settled successfully.",
+  "data": {
+    "merchant_transaction": {
+      "id": 52,
+      "transaction_no": "MST-ABC12345",
+      "transaction_type": "SETTLEMENT",
+      "status": "SUCCESSFUL",
+      "amount": "100000.00",
+      "currency": "NGN",
+      "reference": "SETTLE-0820",
+      "narration": "Manual merchant settlement",
+      "transaction_date": "2026-08-19T18:35:00Z",
+      "posted": true,
+      "is_reversed": false
+    },
+    "merchant_balance": {
+      "currency": "NGN",
+      "ledger_balance": "1916750.00",
+      "available_balance": "1842750.00",
+      "locked_balance": "74000.00"
+    }
+  }
+}
+```
+
+Settlement requirements:
+
+- Lock and re-check the merchant balance inside the database transaction.
+- Reject amounts above `available_to_settle` with `422`.
+- Credit only the customer account linked to the authenticated merchant.
+- Preserve the existing merchant transaction, customer-account transaction,
+  GL posting, and event behavior in `MerchantSettlementService`.
+- Apply the same idempotency replay/conflict rules as collections.
+- If Fineract is the authoritative account ledger, post or synchronize the
+  customer-account credit through the Fineract adapter with the same
+  idempotency reference. Do not report success until the chosen posting policy
+  has safely completed or persisted a recoverable pending state.
+- Return `503` for a retryable Fineract outage and do not double-debit the
+  merchant when the request is retried.
+
+### Settlement history and detail
+
+```text
+GET /api/v1/merchant/settlements
+GET /api/v1/merchant/settlements/{settlement}
+```
+
+History supports `status`, `from`, `to`, `page`, and `per_page`, uses the same
+Laravel paginator envelope as Phase 2, and returns only `SETTLEMENT`
+transactions belonging to the authenticated merchant. Detail returns the same
+safe transaction representation. Out-of-scope IDs return `404`.
+
+### Phase 3 authorization and accounting acceptance criteria
+
+- Merchant tokens can only transact for their own merchant record.
+- The authenticated merchant principal maps to a valid audit actor compatible
+  with the current `performed_by -> users.id` foreign key, or the audit schema
+  is deliberately extended for merchant actors.
+- Only `ACTIVE` merchants with a linked account and branch can collect or
+  settle.
+- Amounts use decimal-safe backend arithmetic; never binary floating point for
+  posting logic.
+- Idempotency is enforced by the database, not only application memory.
+- Balance changes, transaction creation, customer-account credit, and GL
+  posting remain atomic or use a documented recoverable pending workflow for
+  external Fineract calls.
+- Responses never include internal GL keys, staff identities, or raw Fineract
+  credentials.

@@ -15,7 +15,9 @@ import { AuthService } from '../../core/auth.service';
         <div class="workspace-label">Merchant workspace</div>
         <nav (click)="menuOpen.set(false)">
           <a routerLink="/merchant/dashboard" routerLinkActive="active"><span>⌂</span> Overview</a>
+          <a routerLink="/merchant/collections" routerLinkActive="active"><span>＋</span> Accept payment</a>
           <a routerLink="/merchant/transactions" routerLinkActive="active"><span>↔</span> Transactions</a>
+          <a routerLink="/merchant/settlements" routerLinkActive="active"><span>↓</span> Settlements</a>
           <a routerLink="/merchant/profile" routerLinkActive="active"><span>○</span> Business profile</a>
         </nav>
         <div class="sidebar-support">
