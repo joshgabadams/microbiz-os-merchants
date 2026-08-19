@@ -19,6 +19,7 @@ import {
   MerchantDashboardSummary,
   MerchantDashboardApiResponse,
   MerchantDashboardData,
+  MerchantEligibleAccount,
   MerchantOtpChallenge,
   MerchantOtpVerification,
   MerchantMoneyOperationResult,
@@ -91,7 +92,7 @@ export class MerchantPortalApiService {
   };
 
   private readonly transactions: PortalTransaction[] = [
-    { id: 1, transactionNo: 'MCH-Q3F8K2', reference: 'ORDER-1048', type: 'QR_COLLECTION', amount: 48500, currency: 'NGN', status: 'SUCCESSFUL', narration: 'QR collection for order 1048', transactionDate: '2026-08-19T10:42:00Z', posted: true, isReversed: false },
+    { id: 1, transactionNo: 'MCH-Q3F8K2', reference: 'ORDER-1048', type: 'QR_COLLECTION', amount: 48500, currency: 'NGN', status: 'SUCCESSFUL', narration: 'QR collection for order 1048', transactionDate: '2026-08-19T10:42:00Z', posted: true, isReversed: false, direction: 'CREDIT', channel: 'QR', providerReference: 'FNC-88219041', counterpartyName: 'Customer payment', counterpartyAccount: '******1048', bankName: 'MicroBiz MFB', locationName: 'Victoria Island Store', completedAt: '2026-08-19T10:42:08Z' },
     { id: 2, transactionNo: 'MCH-P9D4L7', reference: 'ORDER-1047', type: 'POS_COLLECTION', amount: 125000, currency: 'NGN', status: 'SUCCESSFUL', narration: 'POS collection', transactionDate: '2026-08-19T09:18:00Z', posted: true, isReversed: false },
     { id: 3, transactionNo: 'MCH-Q1A6V5', reference: 'ORDER-1046', type: 'QR_COLLECTION', amount: 18750, currency: 'NGN', status: 'PENDING', narration: 'QR collection awaiting posting', transactionDate: '2026-08-19T08:07:00Z', posted: false, isReversed: false },
     { id: 4, transactionNo: 'MST-S8N2C4', reference: 'SETTLE-0818', type: 'SETTLEMENT', amount: 350000, currency: 'NGN', status: 'SUCCESSFUL', narration: 'Settlement to linked MicroBiz account', transactionDate: '2026-08-18T16:31:00Z', posted: true, isReversed: false },
@@ -212,21 +213,37 @@ export class MerchantPortalApiService {
       : throwError(() => new Error('The verification code is incorrect. Use 0000 for this preview.'));
   }
 
+  getEligibleMerchantAccounts(verification_token: string, preview: MerchantAccountPreview): Observable<MerchantEligibleAccount[]> {
+    if (environment.merchantPortalApiMode === 'live' && environment.merchantPortalLiveFeatures.accountEligibility) {
+      return this.http.post<ApiResponse<MerchantEligibleAccount[]>>(`${this.registrationBase}/accounts`, { verification_token }).pipe(map((response) => response.data));
+    }
+    return of([{
+      fincore_account_id: preview.fincore_client_id * 1000 + 1,
+      account_no: preview.account_no,
+      product_id: 201,
+      product_name: 'Merchant Transaction Account',
+      currency: 'NGN',
+      status: preview.active ? 'ACTIVE' : (preview.status ?? 'INACTIVE'),
+      balance: null,
+    }]).pipe(delay(400));
+  }
+
   confirmRegistration(
     payload: ConfirmMerchantRegistrationPayload,
     preview: MerchantAccountPreview,
+    selectedAccount?: MerchantEligibleAccount,
   ): Observable<MerchantRegistrationConfirmation> {
     if (environment.merchantPortalApiMode === 'live' && environment.merchantPortalLiveFeatures.registration) {
       return this.http
         .post<ApiResponse<MerchantApiRecord>>(this.registrationBase, payload)
-        .pipe(map((response) => this.mapRegistration(response.data, preview.account_no)));
+        .pipe(map((response) => this.mapRegistration(response.data, selectedAccount?.account_no ?? preview.account_no)));
     }
 
     return of({
       merchant_id: 15,
       merchant_code: 'MER-000015',
       business_name: payload.trading_name || payload.legal_name,
-      account_number: preview.account_no,
+      account_number: selectedAccount?.account_no ?? preview.account_no,
       status: 'DRAFT',
     }).pipe(delay(900));
   }
@@ -935,6 +952,16 @@ export class MerchantPortalApiService {
       transactionDate: transaction.transaction_date,
       posted: transaction.posted,
       isReversed: transaction.is_reversed,
+      direction: transaction.direction,
+      channel: transaction.channel,
+      providerReference: transaction.provider_reference,
+      counterpartyName: transaction.counterparty_name,
+      counterpartyAccount: transaction.counterparty_account,
+      bankName: transaction.bank_name,
+      terminalId: transaction.terminal_id,
+      locationName: transaction.location_name,
+      completedAt: transaction.completed_at,
+      reversalReference: transaction.reversal_reference,
     };
   }
 

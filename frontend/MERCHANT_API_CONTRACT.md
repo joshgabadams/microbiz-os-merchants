@@ -14,6 +14,7 @@ Frontend route flow:
   -> /login/merchants/account
   -> /login/merchants/verify
   -> /login/merchants/otp
+  -> /login/merchants/accounts
   -> /reg/merchant
   -> /merchant/dashboard
 ```
@@ -30,6 +31,7 @@ bridge and must be replaced by the merchant token/session contract below.
 | Existing account lookup | Available | Live |
 | Account review | No additional API | Complete |
 | Send/verify OTP | Required | Mocked with `0000` |
+| Eligible product accounts | Required | Mocked |
 | Confirm registration | Staff-scoped endpoint exists | Wired but feature-disabled |
 | Merchant session | Required | Local preview session |
 | Merchant self-profile | Required | Mocked |
@@ -75,8 +77,8 @@ controller already does.
 Current required request fields:
 
 ```text
-fincore_client_id, legal_name, registration_number, contact_name, phone,
-branch_id
+fincore_client_id, fincore_account_id, legal_name, registration_number,
+contact_name, phone, branch_id
 ```
 
 Optional fields currently used by the frontend:
@@ -160,6 +162,40 @@ found, `422` account has no phone, and `429` rate limited.
 `verification_token` should be single-use, short-lived, bound to the Fincore
 client, and required by registration. Use `422` for an incorrect code, `410`
 for an expired challenge, and `429` after too many attempts.
+
+### Fetch eligible merchant accounts
+
+`POST /api/v1/reg/merchant/accounts`
+
+```json
+{
+  "verification_token": "short_lived_signed_token"
+}
+```
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "fincore_account_id": 4201,
+      "account_no": "000000002",
+      "product_id": 201,
+      "product_name": "Merchant Transaction Account",
+      "currency": "NGN",
+      "status": "ACTIVE",
+      "balance": "250000.00"
+    }
+  ]
+}
+```
+
+Use the verification token to derive the Fineract client. Never accept a
+client ID from the browser for this lookup. Return only accounts belonging to
+that client and products eligible for merchant settlement/collections. The
+selected `fincore_account_id` is submitted during registration and must be
+revalidated for ownership, product eligibility, currency, and active status.
+Do not trust the displayed account number or balance from the browser.
 
 ### Create or restore a merchant session
 
@@ -331,6 +367,21 @@ Use the standard API envelope with the Laravel paginator inside `data`:
 
 Do not expose `performed_by`, `approved_by`, idempotency keys, GL account keys,
 or internal user records to merchant users.
+
+Transaction detail may additionally return these safe receipt fields:
+
+```text
+direction, channel, provider_reference, counterparty_name,
+counterparty_account, bank_name, terminal_id, location_name, completed_at,
+reversal_reference
+```
+
+Mask counterparty accounts and omit fields the authenticated merchant is not
+permitted to view. Supported lifecycle statuses are `INITIATED`, `PROCESSING`,
+`PENDING`, `SUCCESSFUL`, and `FAILED`; reversal is represented by
+`is_reversed` plus `reversal_reference`. Dashboard sales and balances must only
+use completed, successful, non-reversed records. Provider/core references and
+completion timestamps are assigned server-side.
 
 ### Transaction detail
 

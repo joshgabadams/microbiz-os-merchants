@@ -18,6 +18,13 @@ export const routes: Routes = [
       ),
   },
   {
+    path: 'login/merchants/accounts',
+    loadComponent: () =>
+      import('./features/merchant-portal/merchant-account-selection.component').then(
+        (m) => m.MerchantAccountSelectionComponent
+      ),
+  },
+  {
     path: 'login/merchants/account',
     loadComponent: () =>
       import('./features/merchant-portal/account-lookup.component').then(

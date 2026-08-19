@@ -1,6 +1,7 @@
 import { Injectable, computed, signal } from '@angular/core';
 import {
   MerchantAccountPreview,
+  MerchantEligibleAccount,
   MerchantOtpChallenge,
   MerchantOtpVerification,
   MerchantPortalSession,
@@ -13,6 +14,7 @@ const LOGIN_DRAFT_KEY = 'microbiz_portal_login_draft';
 const ACCOUNT_PREVIEW_KEY = 'microbiz_merchant_account_preview';
 const OTP_CHALLENGE_KEY = 'microbiz_merchant_otp_challenge';
 const OTP_VERIFICATION_KEY = 'microbiz_merchant_otp_verification';
+const SELECTED_ACCOUNT_KEY = 'microbiz_merchant_selected_account';
 const ONBOARDING_STEP_KEY = 'microbiz_merchant_onboarding_step';
 
 export type MerchantOnboardingStep =
@@ -20,6 +22,7 @@ export type MerchantOnboardingStep =
   | 'account'
   | 'verification'
   | 'otp'
+  | 'account-selection'
   | 'registration'
   | 'complete';
 
@@ -36,6 +39,9 @@ export class MerchantPortalSessionService {
   private readonly otpVerificationState = signal<MerchantOtpVerification | null>(
     this.parseStorage<MerchantOtpVerification>(sessionStorage.getItem(OTP_VERIFICATION_KEY))
   );
+  private readonly selectedAccountState = signal<MerchantEligibleAccount | null>(
+    this.parseStorage<MerchantEligibleAccount>(sessionStorage.getItem(SELECTED_ACCOUNT_KEY))
+  );
   private readonly onboardingStepState = signal<MerchantOnboardingStep>(
     (sessionStorage.getItem(ONBOARDING_STEP_KEY) as MerchantOnboardingStep | null) ?? 'login'
   );
@@ -45,6 +51,7 @@ export class MerchantPortalSessionService {
   readonly accountPreview = this.accountPreviewState.asReadonly();
   readonly otpChallenge = this.otpChallengeState.asReadonly();
   readonly otpVerification = this.otpVerificationState.asReadonly();
+  readonly selectedAccount = this.selectedAccountState.asReadonly();
   readonly onboardingStep = this.onboardingStepState.asReadonly();
   readonly isAuthenticated = computed(() => {
     const session = this.sessionState();
@@ -73,6 +80,12 @@ export class MerchantPortalSessionService {
   markOtpVerified(verification: MerchantOtpVerification): void {
     sessionStorage.setItem(OTP_VERIFICATION_KEY, JSON.stringify(verification));
     this.otpVerificationState.set(verification);
+    this.setOnboardingStep('account-selection');
+  }
+
+  selectEligibleAccount(account: MerchantEligibleAccount): void {
+    sessionStorage.setItem(SELECTED_ACCOUNT_KEY, JSON.stringify(account));
+    this.selectedAccountState.set(account);
     this.setOnboardingStep('registration');
   }
 
@@ -82,11 +95,13 @@ export class MerchantPortalSessionService {
     sessionStorage.removeItem(ACCOUNT_PREVIEW_KEY);
     sessionStorage.removeItem(OTP_CHALLENGE_KEY);
     sessionStorage.removeItem(OTP_VERIFICATION_KEY);
+    sessionStorage.removeItem(SELECTED_ACCOUNT_KEY);
     sessionStorage.removeItem(ONBOARDING_STEP_KEY);
     this.loginDraftState.set(null);
     this.accountPreviewState.set(null);
     this.otpChallengeState.set(null);
     this.otpVerificationState.set(null);
+    this.selectedAccountState.set(null);
     this.onboardingStepState.set('complete');
     this.sessionState.set(session);
   }
@@ -97,12 +112,14 @@ export class MerchantPortalSessionService {
     sessionStorage.removeItem(ACCOUNT_PREVIEW_KEY);
     sessionStorage.removeItem(OTP_CHALLENGE_KEY);
     sessionStorage.removeItem(OTP_VERIFICATION_KEY);
+    sessionStorage.removeItem(SELECTED_ACCOUNT_KEY);
     sessionStorage.removeItem(ONBOARDING_STEP_KEY);
     this.sessionState.set(null);
     this.loginDraftState.set(null);
     this.accountPreviewState.set(null);
     this.otpChallengeState.set(null);
     this.otpVerificationState.set(null);
+    this.selectedAccountState.set(null);
     this.onboardingStepState.set('login');
   }
 

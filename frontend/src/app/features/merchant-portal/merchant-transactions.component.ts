@@ -16,14 +16,12 @@ import {
     <section class="transactions-page">
       <header>
         <div><p>Payments and settlements</p><h1>Transactions</h1><span>Search, filter, and review your business activity.</span></div>
-        <button class="export-button" type="button" (click)="exportCsv()" [disabled]="exporting()">
-          {{ exporting() ? 'Preparing export…' : '↓ Export CSV' }}
-        </button>
+        <div class="header-actions"><span>Last refreshed {{ lastUpdated() | date:'HH:mm:ss' }}</span><button class="refresh-button" type="button" (click)="load()" [disabled]="loading()">↻ Refresh</button><button class="export-button" type="button" (click)="exportCsv()" [disabled]="exporting()">{{ exporting() ? 'Preparing export…' : '↓ Export CSV' }}</button></div>
       </header>
 
       <section class="filters">
         <label class="search"><span>Search</span><input name="search" [(ngModel)]="query.search" (keyup.enter)="applyFilters()" placeholder="Transaction number, reference, or narration" /></label>
-        <label><span>Status</span><select name="status" [(ngModel)]="query.status" (change)="applyFilters()"><option value="">All statuses</option><option value="INITIATED">Initiated</option><option value="PENDING">Pending</option><option value="SUCCESSFUL">Successful</option><option value="FAILED">Failed</option></select></label>
+        <label><span>Status</span><select name="status" [(ngModel)]="query.status" (change)="applyFilters()"><option value="">All statuses</option><option value="INITIATED">Initiated</option><option value="PROCESSING">Processing</option><option value="PENDING">Pending</option><option value="SUCCESSFUL">Successful</option><option value="FAILED">Failed</option></select></label>
         <label><span>Type</span><select name="type" [(ngModel)]="query.type" (change)="applyFilters()"><option value="">All types</option><option value="QR_COLLECTION">QR collection</option><option value="POS_COLLECTION">POS collection</option><option value="SETTLEMENT">Settlement</option><option value="REVERSAL">Reversal</option><option value="ADJUSTMENT">Adjustment</option></select></label>
         <label><span>From</span><input type="date" name="dateFrom" [(ngModel)]="query.dateFrom" (change)="applyFilters()" /></label>
         <label><span>To</span><input type="date" name="dateTo" [(ngModel)]="query.dateTo" (change)="applyFilters()" /></label>
@@ -65,11 +63,21 @@ import {
                         <div class="details">
                           <div><span>Transaction number</span><strong>{{ detail.transactionNo }}</strong></div>
                           <div><span>External reference</span><strong>{{ detail.reference || 'Not supplied' }}</strong></div>
-                          <div class="narration"><span>Narration</span><strong>{{ detail.narration || 'No narration supplied' }}</strong></div>
+                          <div><span>Provider reference</span><strong>{{ detail.providerReference || 'Not available' }}</strong></div>
+                          <div><span>Direction</span><strong>{{ detail.direction || (detail.type === 'SETTLEMENT' ? 'DEBIT' : 'CREDIT') }}</strong></div>
+                          <div><span>Channel</span><strong>{{ detail.channel || typeLabel(detail.type) }}</strong></div>
+                          <div><span>Counterparty</span><strong>{{ detail.counterpartyName || 'Not supplied' }}</strong></div>
+                          <div><span>Counterparty account</span><strong>{{ detail.counterpartyAccount || 'Not supplied' }}</strong></div>
+                          <div><span>Bank</span><strong>{{ detail.bankName || 'Not supplied' }}</strong></div>
+                          <div><span>Terminal</span><strong>{{ detail.terminalId || 'Not applicable' }}</strong></div>
+                          <div><span>Location</span><strong>{{ detail.locationName || 'Not supplied' }}</strong></div>
                           <div><span>GL posting</span><strong>{{ detail.posted ? 'Posted' : 'Not posted' }}</strong></div>
-                          <div><span>Reversal</span><strong>{{ detail.isReversed ? 'Reversed' : 'Not reversed' }}</strong></div>
-                          <div><span>Transaction date</span><strong>{{ detail.transactionDate | date:'medium' }}</strong></div>
+                          <div><span>Reversal</span><strong>{{ detail.isReversed ? (detail.reversalReference || 'Reversed') : 'Not reversed' }}</strong></div>
+                          <div><span>Initiated</span><strong>{{ detail.transactionDate | date:'medium' }}</strong></div>
+                          <div><span>Completed</span><strong>{{ detail.completedAt ? (detail.completedAt | date:'medium') : 'Still processing or unavailable' }}</strong></div>
+                          <div class="narration"><span>Narration</span><strong>{{ detail.narration || 'No narration supplied' }}</strong></div>
                         </div>
+                        <div class="lifecycle" [class.final]="detail.status === 'SUCCESSFUL' || detail.status === 'FAILED'"><strong>{{ statusLabel(detail.status) }}</strong><span>{{ statusExplanation(detail) }}</span><button type="button" (click)="printReceipt()">Print details</button></div>
                       }
                     </td></tr>
                   }
@@ -89,14 +97,14 @@ import {
   styles: [`
     .transactions-page { display: grid; gap: 1.35rem; }
     header { display: flex; justify-content: space-between; align-items: end; gap: 1rem; } header p { text-transform: uppercase; color: #a06e00; letter-spacing: .11em; font-size: .65rem; font-weight: 800; margin: 0; } header h1 { color: #182250; font-size: 2rem; letter-spacing: -.04em; margin: .25rem 0; } header span { color: #7e8497; font-size: .8rem; }
-    .export-button { background: #fff; border: 1px solid #dce0e9; color: #303a56; border-radius: .55rem; padding: .67rem .9rem; font-size: .75rem; font-weight: 750; }.export-button:disabled { opacity: .55; }
+    .header-actions { display: flex; align-items: center; gap: .55rem; }.header-actions > span { color: #9298aa; font-size: .6rem; }.export-button, .refresh-button { background: #fff; border: 1px solid #dce0e9; color: #303a56; border-radius: .55rem; padding: .67rem .9rem; font-size: .75rem; font-weight: 750; }.export-button:disabled, .refresh-button:disabled { opacity: .55; }.refresh-button { background: #f7f8fb; }
     .filters { background: #fff; border: 1px solid #e0e4ed; border-radius: .75rem; padding: 1rem; display: grid; grid-template-columns: 1.5fr repeat(4, minmax(120px, .8fr)) auto; gap: .75rem; align-items: end; }.filters label { display: grid; gap: .35rem; color: #747b8e; font-size: .64rem; font-weight: 750; }.filters input, .filters select, footer select { width: 100%; min-width: 0; border: 1px solid #d9dde7; border-radius: .5rem; padding: .62rem .65rem; background: #fff; color: #3b4359; font-size: .72rem; outline: 0; }.filters input:focus, .filters select:focus { border-color: #4057ad; }.search-button { border: 0; border-radius: .5rem; background: #1e2761; color: white; padding: .67rem .85rem; font-size: .72rem; font-weight: 750; }
     .transaction-card { background: #fff; border: 1px solid #e0e4ed; border-radius: .75rem; overflow: hidden; min-height: 260px; }.responsive-table { overflow-x: auto; } table { min-width: 1000px; } th { background: #fafbfc; font-size: .59rem; } td { font-size: .7rem; color: #656c7e; } td strong { color: #303950; } td small { display: block; max-width: 190px; margin-top: .2rem; color: #969cad; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.right { text-align: right; }.amount { color: #27314d; font-weight: 750; }.type-icon { display: inline-grid; width: 1.6rem; height: 1.6rem; place-items: center; border-radius: .45rem; margin-right: .45rem; background: #edf0fb; color: #314998; }
-    .status, .posting { display: inline-block; padding: .24rem .48rem; border-radius: 1rem; font-size: .56rem; font-weight: 800; }.status--successful, .posting--posted { color: #23754e; background: #e3f5eb; }.status--pending, .status--initiated { color: #936400; background: #fff2ce; }.status--failed, .status--reversed { color: #aa4232; background: #fde9e5; }.posting { color: #6e7588; background: #eef0f4; }.details-button { border: 0; background: transparent; color: #536078; font-size: 1.2rem; }.selected { background: #fafbff; }.detail-row td { background: #f7f8fc; padding: 1rem 1.5rem; }.details { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }.details div { display: grid; gap: .25rem; }.details span { color: #9197a8; font-size: .61rem; }.details strong { font-size: .72rem; }.details .narration { grid-column: span 2; }.detail-loading, .detail-error { padding: .5rem; color: #747b8e; }.detail-error { color: #a43b2b; }
+    .status, .posting { display: inline-block; padding: .24rem .48rem; border-radius: 1rem; font-size: .56rem; font-weight: 800; }.status--successful, .posting--posted { color: #23754e; background: #e3f5eb; }.status--pending, .status--initiated, .status--processing { color: #936400; background: #fff2ce; }.status--failed, .status--reversed { color: #aa4232; background: #fde9e5; }.posting { color: #6e7588; background: #eef0f4; }.details-button { border: 0; background: transparent; color: #536078; font-size: 1.2rem; }.selected { background: #fafbff; }.detail-row td { background: #f7f8fc; padding: 1rem 1.5rem; }.details { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }.details div { display: grid; gap: .25rem; }.details span { color: #9197a8; font-size: .61rem; }.details strong { font-size: .72rem; }.details .narration { grid-column: span 2; }.detail-loading, .detail-error { padding: .5rem; color: #747b8e; }.detail-error { color: #a43b2b; }.lifecycle { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: .7rem; margin-top: 1rem; padding: .7rem; border-radius: .55rem; background: #fff7df; color: #74530a; }.lifecycle.final { background: #e8f5ed; color: #276b4c; }.lifecycle strong { font-size: .67rem; }.lifecycle span { font-size: .62rem; }.lifecycle button { border: 1px solid currentColor; border-radius: .4rem; background: transparent; color: inherit; padding: .45rem .55rem; font-size: .6rem; font-weight: 750; }
     footer { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 1rem; padding: .9rem 1.1rem; border-top: 1px solid #ebedf2; color: #858b9d; font-size: .66rem; } footer > label { display: flex; align-items: center; gap: .45rem; } footer select { width: auto; padding: .4rem; } footer div { display: flex; justify-content: flex-end; align-items: center; gap: .65rem; } footer button, .empty-state button { border: 1px solid #dce0e9; background: #fff; color: #3c455c; border-radius: .45rem; padding: .45rem .65rem; font-size: .65rem; } footer button:disabled { opacity: .45; cursor: not-allowed; }
     .loading-state, .empty-state { min-height: 260px; display: grid; place-content: center; justify-items: center; text-align: center; color: #7f8698; }.loading-state span { width: 2rem; height: 2rem; border: 3px solid #e4e7ef; border-top-color: #1e2761; border-radius: 50%; animation: spin .75s linear infinite; }.loading-state p, .empty-state p { font-size: .75rem; }.empty-state > div { font-size: 1.6rem; color: #8490b7; margin-bottom: .5rem; }.page-alert { padding: .7rem .8rem; border-radius: .5rem; background: #fff0ee; color: #a43b2b; font-size: .72rem; } @keyframes spin { to { transform: rotate(360deg); } }
     @media (max-width: 1100px) { .filters { grid-template-columns: repeat(3, 1fr); }.search { grid-column: span 2; } }
-    @media (max-width: 620px) { header { align-items: start; }.filters { grid-template-columns: 1fr 1fr; }.search { grid-column: 1 / -1; }.search-button { grid-column: 1 / -1; }.details { grid-template-columns: 1fr 1fr; }.details .narration { grid-column: span 2; } footer { grid-template-columns: 1fr; align-items: flex-start; } footer div { justify-content: flex-start; } }
+    @media (max-width: 620px) { header { align-items: start; flex-direction: column; }.header-actions { flex-wrap: wrap; }.header-actions > span { width: 100%; }.filters { grid-template-columns: 1fr 1fr; }.search { grid-column: 1 / -1; }.search-button { grid-column: 1 / -1; }.details { grid-template-columns: 1fr 1fr; }.details .narration { grid-column: span 2; }.lifecycle { grid-template-columns: 1fr; }.lifecycle button { width: fit-content; } footer { grid-template-columns: 1fr; align-items: flex-start; } footer div { justify-content: flex-start; } }
   `],
 })
 export class MerchantTransactionsComponent implements OnInit {
@@ -109,6 +117,7 @@ export class MerchantTransactionsComponent implements OnInit {
   error = signal<string | null>(null);
   detailError = signal<string | null>(null);
   exportError = signal<string | null>(null);
+  lastUpdated = signal(new Date());
 
   constructor(private readonly api: MerchantPortalApiService) {}
 
@@ -119,7 +128,7 @@ export class MerchantTransactionsComponent implements OnInit {
   load(): void {
     this.loading.set(true); this.error.set(null); this.selected.set(null);
     this.api.getTransactions(this.query).subscribe({
-      next: (page) => { this.page.set(page); this.loading.set(false); },
+      next: (page) => { this.page.set(page); this.lastUpdated.set(new Date()); this.loading.set(false); },
       error: (error) => { this.error.set(error?.error?.message ?? 'We could not retrieve your transaction history.'); this.loading.set(false); },
     });
   }
@@ -149,6 +158,8 @@ export class MerchantTransactionsComponent implements OnInit {
   typeLabel(type: PortalTransaction['type']): string { return ({ QR_COLLECTION: 'QR collection', POS_COLLECTION: 'POS collection', SETTLEMENT: 'Settlement', REVERSAL: 'Reversal', ADJUSTMENT: 'Adjustment' })[type]; }
   typeIcon(type: PortalTransaction['type']): string { return type === 'SETTLEMENT' ? '↓' : type === 'REVERSAL' ? '↩' : type === 'ADJUSTMENT' ? '±' : '↗'; }
   statusLabel(status: PortalTransaction['status']): string { return status.charAt(0) + status.slice(1).toLowerCase(); }
+  statusExplanation(transaction: PortalTransaction): string { if (transaction.isReversed) return 'This transaction was reversed and no longer contributes to the available balance.'; if (transaction.status === 'SUCCESSFUL') return transaction.posted ? 'The transaction completed and was posted to the merchant ledger.' : 'The transaction completed but ledger posting is still being confirmed.'; if (transaction.status === 'FAILED') return 'The transaction failed and must not be included in merchant sales or balances.'; return 'The transaction is still being processed. Refresh before relying on it as completed.'; }
+  printReceipt(): void { window.print(); }
 
   exportCsv(): void {
     this.exporting.set(true); this.exportError.set(null);

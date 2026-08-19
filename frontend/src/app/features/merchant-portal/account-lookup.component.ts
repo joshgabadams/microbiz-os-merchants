@@ -12,7 +12,7 @@ import { MerchantPortalSessionService } from '../../core/merchant-portal-session
     <main class="account-page">
       <a class="account-brand" routerLink="/login/merchants"><span>M</span> MicroBiz</a>
       <section class="account-card">
-        <div class="step">Step 2 of 5</div>
+        <div class="step">Step 2 of 6</div>
         <div class="account-icon">#</div>
         <p class="eyebrow">Connect your account</p>
         <h1>Enter your MicroBiz account number</h1>

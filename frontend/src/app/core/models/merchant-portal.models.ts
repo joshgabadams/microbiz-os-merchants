@@ -31,9 +31,20 @@ export interface MerchantOtpVerification {
   verification_token?: string;
 }
 
+export interface MerchantEligibleAccount {
+  fincore_account_id: number;
+  account_no: string;
+  product_id: number;
+  product_name: string;
+  currency: string;
+  status: string;
+  balance: string | number | null;
+}
+
 /** Exact payload naming for POST /api/v1/reg/merchant. */
 export interface ConfirmMerchantRegistrationPayload {
   fincore_client_id: number;
+  fincore_account_id: number;
   legal_name: string;
   trading_name?: string;
   business_type?: string;
@@ -109,7 +120,7 @@ export interface MerchantDashboardSummary {
   settlementAccount: string;
 }
 
-export type PortalTransactionStatus = 'INITIATED' | 'PENDING' | 'SUCCESSFUL' | 'FAILED';
+export type PortalTransactionStatus = 'INITIATED' | 'PROCESSING' | 'PENDING' | 'SUCCESSFUL' | 'FAILED';
 export type PortalTransactionType = 'QR_COLLECTION' | 'POS_COLLECTION' | 'SETTLEMENT' | 'REVERSAL' | 'ADJUSTMENT';
 
 export interface PortalTransaction {
@@ -124,6 +135,16 @@ export interface PortalTransaction {
   transactionDate: string;
   posted: boolean;
   isReversed: boolean;
+  direction?: 'CREDIT' | 'DEBIT';
+  channel?: string | null;
+  providerReference?: string | null;
+  counterpartyName?: string | null;
+  counterpartyAccount?: string | null;
+  bankName?: string | null;
+  terminalId?: string | null;
+  locationName?: string | null;
+  completedAt?: string | null;
+  reversalReference?: string | null;
 }
 
 export interface MerchantTransactionQuery {
@@ -162,6 +183,16 @@ export interface MerchantTransactionApiRecord {
   transaction_date: string;
   posted: boolean;
   is_reversed: boolean;
+  direction?: 'CREDIT' | 'DEBIT';
+  channel?: string | null;
+  provider_reference?: string | null;
+  counterparty_name?: string | null;
+  counterparty_account?: string | null;
+  bank_name?: string | null;
+  terminal_id?: string | null;
+  location_name?: string | null;
+  completed_at?: string | null;
+  reversal_reference?: string | null;
 }
 
 export interface MerchantDashboardApiResponse {

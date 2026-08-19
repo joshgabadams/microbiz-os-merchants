@@ -29,12 +29,14 @@ Routes:
 /login/merchants/account
 /login/merchants/verify
 /login/merchants/otp
+/login/merchants/accounts
 /reg/merchant
 /merchant/profile
 ```
 
 Implemented login role switch, real Fineract-backed account preview, account
-review, mocked OTP (`0000`), backend-aligned registration fields, onboarding
+review, mocked OTP (`0000`), eligible account/product confirmation,
+backend-aligned registration fields, onboarding
 state machine, merchant session guard, profile, and logout.
 
 Commit: `26d2864 feat: complete merchant portal phase one flow`
@@ -135,6 +137,7 @@ preview is enabled:
 ```text
 accountPreview: true
 otp: false
+accountEligibility: false
 registration: false
 merchantProfile: false
 merchantSession: false
@@ -164,10 +167,11 @@ verified in its own small commit.
 5. Use MicroBiz account `000000002`.
 6. Confirm the returned Fineract customer (`CHiksaa`, client ID `2`).
 7. Use OTP `0000` while the OTP feature remains mocked.
-8. Complete registration and test dashboard, transactions, collections,
+8. Confirm the eligible merchant account/product.
+9. Complete registration and test dashboard, transactions, collections,
    settlements, reports, payment tools, reconciliation, disputes, team access,
    locations/devices, support, settings, profile, and logout.
-9. Run `npm run build` before committing.
+10. Run `npm run build` before committing.
 
 The production build is currently passing. Existing `NG8102` warnings come
 from `tessa-dashboard.component.ts` and are unrelated to the merchant portal.
@@ -184,6 +188,7 @@ are stored in `sessionStorage` under a merchant-scoped key. Enable
 ## Known backend blockers
 
 - OTP send/verify and a single-use verification token are not implemented.
+- Verified-client eligible account/product lookup is not implemented.
 - Registration is staff-scoped and requires a local `branch_id`; local branch
   mapping from the Fineract office is unresolved.
 - A production merchant Bearer-token session is not implemented.

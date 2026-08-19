@@ -12,7 +12,7 @@ import { MerchantPortalSessionService } from '../../core/merchant-portal-session
       <a class="brand" routerLink="/login/merchants"><span>M</span> MicroBiz</a>
       @if (session.accountPreview(); as account) {
         <section class="verification-card">
-          <div class="step">Step 3 of 5</div>
+          <div class="step">Step 3 of 6</div>
           <div class="success-mark">✓</div>
           <p class="eyebrow">Account found</p>
           <h1>Confirm your information</h1>

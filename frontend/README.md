@@ -38,11 +38,12 @@ http://127.0.0.1:4200/login/merchants
 
 Implemented areas:
 
-- Existing MicroBiz account lookup and verification
+- Existing MicroBiz account lookup, OTP verification, and eligible account selection
 - OTP/onboarding flow with per-capability live/mock switches
 - Merchant registration and profile
 - Dashboard and balance summaries
 - Transaction search, filters, details, pagination, and CSV export
+- Receipt-ready transaction metadata and processing/final status guidance
 - QR/POS collection flows
 - Settlement requests and history
 - Business locations and terminal/device requests

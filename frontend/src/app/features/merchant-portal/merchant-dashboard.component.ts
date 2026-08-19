@@ -13,7 +13,7 @@ import { MerchantDashboardSummary, PortalTransaction } from '../../core/models/m
     <section class="merchant-page">
       <header class="page-heading">
         <div><p class="page-kicker">{{ greeting }}</p><h1>{{ session.session()?.businessName }}</h1><p>Here’s how your business is performing today.</p></div>
-        <div class="account-chip"><span>Account</span><strong>{{ session.session()?.accountNumber }}</strong></div>
+        <div class="heading-actions"><div class="account-chip"><span>Account</span><strong>{{ session.session()?.accountNumber }}</strong></div><button type="button" (click)="load()" [disabled]="loading()">↻ Refresh</button><small>Updated {{ lastUpdated() | date:'HH:mm:ss' }}</small></div>
       </header>
 
       @if (loading()) {
@@ -59,6 +59,7 @@ import { MerchantDashboardSummary, PortalTransaction } from '../../core/models/m
     .account-chip { background: #fff; border: 1px solid #e0e4ed; border-radius: .65rem; padding: .65rem .85rem; display: grid; gap: .15rem; min-width: 150px; }
     .account-chip span { color: #9298a9; font-size: .63rem; }
     .account-chip strong { color: #30394f; font-size: .78rem; letter-spacing: .06em; }
+    .heading-actions { display: grid; grid-template-columns: 1fr auto; gap: .25rem .45rem; align-items: center; }.heading-actions button { border: 1px solid #dce0e9; border-radius: .5rem; background: #fff; color: #35415f; padding: .55rem; font-weight: 750; }.heading-actions small { grid-column: 1 / -1; text-align: right; color: #989eaf; font-size: .56rem; }
     .balance-banner { min-height: 180px; background: linear-gradient(120deg, #19235a, #273a83); color: #fff; border-radius: .9rem; padding: clamp(1.4rem, 4vw, 2.2rem); position: relative; overflow: hidden; display: flex; justify-content: space-between; align-items: flex-end; }
     .balance-banner > div:first-child { display: grid; position: relative; z-index: 1; }
     .balance-banner span { color: #bcc6e8; font-size: .75rem; margin-bottom: .6rem; }
@@ -82,7 +83,7 @@ import { MerchantDashboardSummary, PortalTransaction } from '../../core/models/m
     .skeleton { min-height: 130px; background: linear-gradient(90deg, #eef0f4 25%, #f7f8fa 50%, #eef0f4 75%); background-size: 200% 100%; animation: shimmer 1.2s infinite; }.summary-grid .skeleton:last-child { display: none; } @keyframes shimmer { to { background-position: -200% 0; } }
     .state-card, .empty-state { background: #fff; border: 1px solid #e1e5ed; border-radius: .75rem; padding: 2rem; text-align: center; }.state-card p, .empty-state p { color: #7c8397; font-size: .8rem; }.state-card button { border: 0; background: #1e2761; color: #fff; padding: .6rem 1rem; border-radius: .5rem; }
     @media (max-width: 900px) { .summary-grid { grid-template-columns: 1fr 1fr; }.summary-card:last-child { grid-column: 1 / -1; } }
-    @media (max-width: 600px) { .page-heading { align-items: start; }.account-chip { display: none; }.summary-grid { grid-template-columns: 1fr; }.summary-card:last-child { grid-column: auto; }.balance-banner { align-items: start; flex-direction: column; }.balance-banner a { margin-top: 1rem; } }
+    @media (max-width: 600px) { .page-heading { align-items: start; }.heading-actions { display: none; }.summary-grid { grid-template-columns: 1fr; }.summary-card:last-child { grid-column: auto; }.balance-banner { align-items: start; flex-direction: column; }.balance-banner a { margin-top: 1rem; } }
   `],
 })
 export class MerchantDashboardComponent implements OnInit {
@@ -90,6 +91,7 @@ export class MerchantDashboardComponent implements OnInit {
   recent = signal<PortalTransaction[]>([]);
   loading = signal(true);
   error = signal<string | null>(null);
+  lastUpdated = signal(new Date());
 
   constructor(
     private readonly api: MerchantPortalApiService,
@@ -107,7 +109,7 @@ export class MerchantDashboardComponent implements OnInit {
     this.loading.set(true);
     this.error.set(null);
     this.api.getDashboard().subscribe({
-      next: ({ summary, recentTransactions }) => { this.summary.set(summary); this.recent.set(recentTransactions); this.loading.set(false); },
+      next: ({ summary, recentTransactions }) => { this.summary.set(summary); this.recent.set(recentTransactions); this.lastUpdated.set(new Date()); this.loading.set(false); },
       error: () => { this.error.set('We could not load your account summary.'); this.loading.set(false); },
     });
   }

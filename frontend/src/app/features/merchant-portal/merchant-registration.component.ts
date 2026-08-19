@@ -7,6 +7,7 @@ import { MerchantPortalSessionService } from '../../core/merchant-portal-session
 import {
   ConfirmMerchantRegistrationPayload,
   MerchantAccountPreview,
+  MerchantEligibleAccount,
   MerchantRegistrationConfirmation,
 } from '../../core/models/merchant-portal.models';
 
@@ -22,7 +23,7 @@ type RegistrationForm = Omit<ConfirmMerchantRegistrationPayload, 'branch_id'> & 
     <main class="registration-page">
       <header>
         <a routerLink="/login/merchants" class="brand"><span>M</span> MicroBiz</a>
-        <span class="step">Step 5 of 5</span>
+        <span class="step">Step 6 of 6</span>
       </header>
 
       <section class="registration-wrap">
@@ -49,7 +50,7 @@ type RegistrationForm = Omit<ConfirmMerchantRegistrationPayload, 'branch_id'> & 
           } @else if (preview(); as account) {
             <div class="account-summary">
               <span>{{ account.display_name?.charAt(0) || 'M' }}</span>
-              <div><small>Verified MicroBiz account</small><strong>{{ account.display_name }}</strong><em>{{ account.account_no }}</em></div>
+              <div><small>Verified merchant account</small><strong>{{ account.display_name }}</strong><em>{{ selected()?.product_name }} · {{ selected()?.account_no }}</em></div>
               <b>{{ account.status }}</b>
             </div>
 
@@ -119,9 +120,11 @@ type RegistrationForm = Omit<ConfirmMerchantRegistrationPayload, 'branch_id'> & 
 })
 export class MerchantRegistrationComponent implements OnInit {
   preview = signal<MerchantAccountPreview | null>(null);
+  selected = signal<MerchantEligibleAccount | null>(null);
   result = signal<MerchantRegistrationConfirmation | null>(null);
   form: RegistrationForm = {
     fincore_client_id: 0,
+    fincore_account_id: 0,
     legal_name: '',
     trading_name: '',
     business_type: '',
@@ -143,14 +146,17 @@ export class MerchantRegistrationComponent implements OnInit {
 
   ngOnInit(): void {
     const preview = this.session.accountPreview();
-    if (!preview || this.session.onboardingStep() !== 'registration') {
+    const selected = this.session.selectedAccount();
+    if (!preview || !selected || this.session.onboardingStep() !== 'registration') {
       void this.router.navigate(['/login/merchants']);
       return;
     }
 
     this.preview.set(preview);
+    this.selected.set(selected);
     this.form = {
       fincore_client_id: preview.fincore_client_id,
+      fincore_account_id: selected.fincore_account_id,
       legal_name: preview.display_name ?? '',
       trading_name: preview.display_name ?? '',
       business_type: '',
@@ -178,7 +184,7 @@ export class MerchantRegistrationComponent implements OnInit {
     this.loading.set(true);
     this.error.set(null);
     const loginEmail = this.session.loginDraft()?.email ?? this.form.email ?? '';
-    this.api.confirmRegistration(payload, preview).pipe(
+    this.api.confirmRegistration(payload, preview, this.selected() ?? undefined).pipe(
       switchMap((registration) => this.api.createMerchantSession(
         registration,
         loginEmail,

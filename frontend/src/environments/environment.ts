@@ -5,6 +5,7 @@ export const environment = {
   merchantPortalLiveFeatures: {
     accountPreview: true,
     otp: false,
+    accountEligibility: false,
     registration: false,
     merchantProfile: false,
     merchantSession: false,
