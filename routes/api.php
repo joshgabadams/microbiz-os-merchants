@@ -12,6 +12,8 @@ use App\Http\Controllers\Api\BranchEodController;
 use App\Http\Controllers\Api\MerchantController;
 use App\Http\Controllers\Api\MerchantRegistrationController;
 use App\Http\Controllers\Api\MerchantTransactionController;
+use App\Http\Controllers\Api\MerchantIdentityController;
+use App\Http\Controllers\Api\MerchantOtpController;
 use App\Http\Controllers\Api\AgentController;
 use App\Http\Controllers\Api\AgentTransactionController;
 use App\Http\Controllers\Api\AgentAgreementTemplateController;
@@ -26,6 +28,27 @@ use App\Http\Controllers\Api\AgentInspectionController;
 use App\Http\Controllers\Api\TessaAlertController;
 use App\Http\Controllers\Api\TransactionReversalController;
 use App\Http\Controllers\Api\AuthController;
+
+// ---------- Public (unauthenticated) ----------
+// The only routes in this entire API reachable without staff Basic Auth
+// credentials. A self-registering merchant applicant has no credentials
+// yet by definition, so this can't sit behind auth.basic.once like
+// everything else. Rate-limited since it's the one door open to the
+// internet with no auth check at all.
+Route::prefix('v1')->group(function () {
+    Route::post('/merchant/register', [MerchantIdentityController::class, 'register'])
+        ->middleware('throttle:5,1');
+
+    // Per MERCHANT_API_CONTRACT.md, these sit under /reg/merchant/otp/*,
+    // not /merchant/otp/* -- different from the staff-only /reg/merchant
+    // and /reg/merchant/preview routes below despite the shared prefix;
+    // each route's own middleware is independent of path prefix.
+    Route::post('/reg/merchant/otp/send', [MerchantOtpController::class, 'send'])
+        ->middleware('throttle:10,1');
+
+    Route::post('/reg/merchant/otp/verify', [MerchantOtpController::class, 'verify'])
+        ->middleware('throttle:10,1');
+});
 
 Route::middleware('auth.basic.once')->group(function () {
     Route::get('/sync/offices', [OfficeSyncController::class, 'sync'])
