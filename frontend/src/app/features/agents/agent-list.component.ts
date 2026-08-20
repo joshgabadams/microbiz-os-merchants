@@ -1,4 +1,4 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 
@@ -23,7 +23,10 @@ import {
     </div>
 
     <section class="card">
-      <h2>Register Agent</h2>
+      <h2>
+        <svg class="section-icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+        Register Agent
+      </h2>
 
       <div class="onboard-form">
         <select
@@ -80,12 +83,34 @@ import {
       </div>
     }
 
+    <div class="stat-grid">
+      <div class="stat-card">
+        <span class="stat-value">{{ agents().length }}</span>
+        <span class="stat-label">Total</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-value">{{ activeCount() }}</span>
+        <span class="stat-label">Active</span>
+      </div>
+      <div class="stat-card" [class.stat-warning]="pendingCount() > 0">
+        <span class="stat-value">{{ pendingCount() }}</span>
+        <span class="stat-label">Pending Onboarding</span>
+      </div>
+      <div class="stat-card" [class.stat-danger]="issueCount() > 0">
+        <span class="stat-value">{{ issueCount() }}</span>
+        <span class="stat-label">Suspended / Restricted</span>
+      </div>
+    </div>
+
     <section class="card">
       <div class="section-header">
         <div>
-          <h2>Agent Registry</h2>
+          <h2>
+            <svg class="section-icon" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M16 11a3 3 0 1 0 0-6M21 20c0-2.8-1.9-5.1-4.5-5.8"/></svg>
+            Agent Registry
+          </h2>
           <p>
-            {{ agents().length }} agent(s) currently displayed.
+            {{ filteredAgents().length }} of {{ agents().length }} agent(s) shown.
           </p>
         </div>
 
@@ -94,18 +119,54 @@ import {
           (click)="reload()"
           [disabled]="loading()"
         >
+          <svg class="btn-icon" viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3M4 4v5h5M20 20v-5h-5"/></svg>
           Refresh
         </button>
       </div>
 
+      <div class="filters">
+        <div class="search-field">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input
+            type="text"
+            placeholder="Search by name or agent code..."
+            [(ngModel)]="searchTerm"
+          />
+        </div>
+
+        <select [(ngModel)]="statusFilter">
+          <option value="">All statuses</option>
+          <option value="DRAFT">Draft</option>
+          <option value="PENDING_KYC">Pending KYC</option>
+          <option value="PENDING_LOCATION_VERIFICATION">Pending Location Verification</option>
+          <option value="PENDING_COMPLIANCE_REVIEW">Pending Compliance Review</option>
+          <option value="PENDING_APPROVAL">Pending Approval</option>
+          <option value="APPROVED">Approved</option>
+          <option value="AGREEMENT_PENDING">Agreement Pending</option>
+          <option value="TRAINING_PENDING">Training Pending</option>
+          <option value="TERMINAL_PENDING">Terminal Pending</option>
+          <option value="ACTIVE">Active</option>
+          <option value="RESTRICTED">Restricted</option>
+          <option value="SUSPENDED">Suspended</option>
+          <option value="REJECTED">Rejected</option>
+          <option value="TERMINATED">Terminated</option>
+        </select>
+
+        @if (searchTerm() || statusFilter()) {
+          <button class="btn-outline" (click)="clearFilters()">Clear</button>
+        }
+      </div>
+
       @if (loading()) {
-        <p>Loading agents...</p>
+        <div class="empty-state">Loading agents...</div>
       } @else if (loadError()) {
         <div class="error-box">
           {{ loadError() }}
         </div>
       } @else if (agents().length === 0) {
-        <p>No agents registered yet.</p>
+        <div class="empty-state">No agents registered yet.</div>
+      } @else if (filteredAgents().length === 0) {
+        <div class="empty-state">No agents match these filters.</div>
       } @else {
         <div class="table-wrapper">
           <table>
@@ -122,9 +183,9 @@ import {
             </thead>
 
             <tbody>
-              @for (agent of agents(); track agent.id) {
+              @for (agent of filteredAgents(); track agent.id) {
                 <tr>
-                  <td>
+                  <td class="mono">
                     <strong>{{ agent.agent_code }}</strong>
                   </td>
 
@@ -192,7 +253,7 @@ import {
 
                       <button
                         class="danger"
-                        (click)="reject(agent)"
+                        (click)="toggleRejectForm(agent.id)"
                         [disabled]="workingAgentId() === agent.id"
                       >
                         Reject
@@ -205,7 +266,7 @@ import {
                     ) {
                       <button
                         class="danger"
-                        (click)="suspend(agent)"
+                        (click)="toggleSuspendForm(agent.id)"
                         [disabled]="workingAgentId() === agent.id"
                       >
                         Suspend
@@ -250,6 +311,64 @@ import {
                     }
                   </td>
                 </tr>
+
+                @if (rejectFormId() === agent.id) {
+                  <tr class="expanded-row">
+                    <td colspan="7">
+                      <div class="inline-form">
+                        <label>
+                          Reason for rejecting this agent
+                          <textarea
+                            rows="2"
+                            [(ngModel)]="rejectReason"
+                            [ngModelOptions]="{ standalone: true }"
+                          ></textarea>
+                        </label>
+                        <div class="inline-form-actions">
+                          <button class="btn-outline" (click)="rejectFormId.set(null)">
+                            Cancel
+                          </button>
+                          <button
+                            class="danger"
+                            (click)="reject(agent)"
+                            [disabled]="!rejectReason.trim()"
+                          >
+                            Confirm Rejection
+                          </button>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                }
+
+                @if (suspendFormId() === agent.id) {
+                  <tr class="expanded-row">
+                    <td colspan="7">
+                      <div class="inline-form">
+                        <label>
+                          Reason for suspending this agent
+                          <textarea
+                            rows="2"
+                            [(ngModel)]="suspendReason"
+                            [ngModelOptions]="{ standalone: true }"
+                          ></textarea>
+                        </label>
+                        <div class="inline-form-actions">
+                          <button class="btn-outline" (click)="suspendFormId.set(null)">
+                            Cancel
+                          </button>
+                          <button
+                            class="danger"
+                            (click)="suspend(agent)"
+                            [disabled]="!suspendReason.trim()"
+                          >
+                            Confirm Suspension
+                          </button>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                }
               }
             </tbody>
           </table>
@@ -260,44 +379,63 @@ import {
   styles: [`
     :host {
       display: block;
+      font-family: var(--font-sans);
+      color: var(--color-foreground);
     }
 
     .page-header {
-      margin-bottom: 18px;
+      margin-bottom: var(--space-5);
     }
 
     h1 {
       margin: 0;
-      font-size: 1.5rem;
-      color: #1e2761;
+      font-size: var(--font-size-2xl);
+      font-weight: 700;
+      color: var(--color-primary);
     }
 
     h2 {
-      margin: 0 0 12px;
-      font-size: 1.05rem;
-      color: #1e2761;
+      margin: 0 0 8px;
+      font-size: var(--font-size-lg);
+      font-weight: 600;
+      color: var(--color-primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-icon {
+      width: 18px;
+      height: 18px;
+      flex: 0 0 18px;
+      fill: none;
+      stroke: var(--color-accent);
+      stroke-width: 1.7;
+      stroke-linecap: round;
+      stroke-linejoin: round;
     }
 
     .subtitle {
       margin: 5px 0 0;
-      color: #666;
-      font-size: 0.9rem;
+      color: var(--color-muted);
+      font-size: var(--font-size-sm);
     }
 
     .card {
-      background: white;
-      border: 1px solid #e1e5ee;
-      border-radius: 10px;
-      padding: 18px;
-      margin-bottom: 18px;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+      padding: var(--space-5);
+      margin-bottom: var(--space-4);
     }
 
     .section-header {
       display: flex;
       justify-content: space-between;
-      gap: 15px;
+      gap: var(--space-4);
       align-items: flex-start;
-      margin-bottom: 14px;
+      margin-bottom: var(--space-4);
     }
 
     .section-header h2 {
@@ -306,13 +444,49 @@ import {
 
     .section-header p {
       margin: 0;
-      color: #777;
-      font-size: 0.85rem;
+      color: var(--color-muted);
+      font-size: var(--font-size-sm);
     }
+
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: var(--space-3);
+      margin-bottom: var(--space-4);
+    }
+
+    .stat-card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+      padding: var(--space-4);
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .stat-value {
+      font-size: var(--font-size-2xl);
+      font-weight: 700;
+      color: var(--color-primary);
+      line-height: 1.1;
+    }
+
+    .stat-label {
+      font-size: var(--font-size-xs);
+      color: var(--color-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-weight: 600;
+    }
+
+    .stat-card.stat-warning .stat-value { color: var(--color-warning); }
+    .stat-card.stat-danger .stat-value { color: var(--color-danger); }
 
     .onboard-form {
       display: flex;
-      gap: 8px;
+      gap: var(--space-2);
       flex-wrap: wrap;
       align-items: center;
     }
@@ -320,9 +494,16 @@ import {
     .onboard-form input,
     .onboard-form select {
       padding: 8px 10px;
-      border: 1px solid #ccc;
-      border-radius: 5px;
-      background: white;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-sm);
+      background: var(--color-surface);
+      font-size: var(--font-size-sm);
+      transition: border-color var(--transition-fast);
+    }
+
+    .onboard-form input:focus-visible,
+    .onboard-form select:focus-visible {
+      border-color: var(--color-primary);
     }
 
     .onboard-form input[type="text"] {
@@ -333,49 +514,153 @@ import {
       width: 110px;
     }
 
+    .filters {
+      display: flex;
+      gap: var(--space-3);
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: var(--space-4);
+    }
+
+    .search-field {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 10px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-sm);
+      background: var(--color-surface);
+      flex: 1 1 260px;
+      max-width: 360px;
+      transition: border-color var(--transition-fast);
+    }
+
+    .search-field:focus-within {
+      border-color: var(--color-primary);
+    }
+
+    .search-field svg {
+      width: 15px;
+      height: 15px;
+      flex: 0 0 15px;
+      fill: none;
+      stroke: var(--color-muted);
+      stroke-width: 2;
+      stroke-linecap: round;
+    }
+
+    .search-field input {
+      border: none;
+      outline: none;
+      padding: 8px 0;
+      font-size: var(--font-size-sm);
+      background: transparent;
+      width: 100%;
+    }
+
+    .filters > select {
+      padding: 8px 10px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-sm);
+      background: var(--color-surface);
+      font-size: var(--font-size-sm);
+    }
+
     button,
     .open-link {
-      padding: 6px 10px;
-      border: 0;
-      border-radius: 5px;
-      font-size: 0.82rem;
+      padding: 7px 12px;
+      border: 1px solid transparent;
+      border-radius: var(--radius-sm);
+      font-size: var(--font-size-sm);
+      font-weight: 600;
       cursor: pointer;
       text-decoration: none;
       white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background var(--transition-fast), filter var(--transition-fast);
+    }
+
+    .btn-icon {
+      width: 14px;
+      height: 14px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
     }
 
     button {
-      background: #1e2761;
-      color: white;
+      background: var(--color-primary);
+      color: var(--color-on-primary);
+    }
+
+    button:hover:not(:disabled) {
+      background: var(--color-primary-hover);
     }
 
     button:disabled {
-      opacity: 0.55;
+      opacity: 0.5;
       cursor: not-allowed;
     }
 
     button.danger {
-      background: #a6432f;
+      background: var(--color-danger);
+    }
+
+    button.danger:hover:not(:disabled) {
+      filter: brightness(0.92);
+    }
+
+    button.btn-outline {
+      background: transparent;
+      border-color: var(--color-border);
+      color: var(--color-foreground);
+    }
+
+    button.btn-outline:hover:not(:disabled) {
+      background: var(--color-muted-bg);
     }
 
     .secondary-button {
-      background: #eef1f8;
-      color: #1e2761;
-      border: 1px solid #ccd3e5;
+      background: transparent;
+      color: var(--color-primary);
+      border: 1px solid var(--color-border);
+    }
+
+    .secondary-button:hover:not(:disabled) {
+      background: var(--color-muted-bg);
     }
 
     .open-link {
       display: inline-block;
-      background: #1e2761;
-      color: white;
+      background: var(--color-primary);
+      color: var(--color-on-primary);
+    }
+
+    .open-link:hover {
+      background: var(--color-primary-hover);
     }
 
     .error-box {
-      margin-bottom: 15px;
-      padding: 10px 12px;
-      background: #f6d9d5;
-      color: #a6432f;
-      border-radius: 6px;
+      margin-bottom: var(--space-4);
+      padding: var(--space-3);
+      background: var(--color-danger-bg);
+      color: var(--color-danger);
+      border-radius: var(--radius-md);
+      font-size: var(--font-size-sm);
+    }
+
+    .empty-state {
+      padding: var(--space-6) var(--space-4);
+      border: 1px dashed var(--color-border);
+      border-radius: var(--radius-md);
+      color: var(--color-muted);
+      background: var(--color-background);
+      font-size: var(--font-size-sm);
+      text-align: center;
     }
 
     .table-wrapper {
@@ -389,21 +674,29 @@ import {
 
     th,
     td {
-      padding: 10px 8px;
-      border-bottom: 1px solid #eee;
+      padding: var(--space-3) var(--space-2);
+      border-bottom: 1px solid var(--color-border);
       text-align: left;
       vertical-align: middle;
-      font-size: 0.84rem;
+      font-size: var(--font-size-sm);
     }
 
     th {
-      color: #555;
+      color: var(--color-muted);
+      background: var(--color-background);
+      font-size: var(--font-size-xs);
       font-weight: 600;
-      background: #fafbfe;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .mono {
+      font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+      font-size: var(--font-size-xs);
     }
 
     tbody tr:hover {
-      background: #fafbfe;
+      background: var(--color-background);
     }
 
     .agent-name {
@@ -413,8 +706,8 @@ import {
     }
 
     .agent-name span {
-      color: #777;
-      font-size: 0.78rem;
+      color: var(--color-muted);
+      font-size: var(--font-size-xs);
     }
 
     .actions {
@@ -427,60 +720,93 @@ import {
     .status,
     .meta-badge {
       display: inline-block;
-      padding: 4px 8px;
-      border-radius: 12px;
-      font-size: 0.74rem;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: var(--font-size-xs);
+      font-weight: 600;
       white-space: nowrap;
     }
 
     .meta-badge {
-      background: #eef1f8;
-      color: #4d5875;
+      background: var(--color-muted-bg);
+      color: var(--color-muted);
     }
 
     .status-draft {
-      background: #eeeeee;
-      color: #555;
+      background: var(--color-muted-bg);
+      color: var(--color-muted);
     }
 
     .status-pending {
-      background: #fbe9c9;
-      color: #8a5d00;
+      background: var(--color-warning-bg);
+      color: var(--color-warning);
     }
 
     .status-approved {
-      background: #d9e8fb;
-      color: #1a4d8f;
+      background: var(--color-info-bg);
+      color: var(--color-info);
     }
 
     .status-active {
-      background: #d7f0dd;
-      color: #1f6f5c;
+      background: var(--color-success-bg);
+      color: var(--color-success);
     }
 
     .status-danger {
-      background: #f6d9d5;
-      color: #a6432f;
+      background: var(--color-danger-bg);
+      color: var(--color-danger);
     }
 
     .status-neutral {
-      background: #eef1f8;
-      color: #4d5875;
+      background: var(--color-muted-bg);
+      color: var(--color-muted);
     }
 
     .rejection-reason {
-      color: #b3261e;
-      font-size: 0.78rem;
+      color: var(--color-danger);
+      font-size: var(--font-size-xs);
       font-style: italic;
     }
 
     .continue-note {
-      color: #6f5b00;
-      background: #fff3d5;
-      border-radius: 10px;
-      padding: 3px 7px;
-      font-size: 0.72rem;
+      color: var(--color-warning);
+      background: var(--color-warning-bg);
+      border-radius: 999px;
+      padding: 3px 8px;
+      font-size: var(--font-size-xs);
+      font-weight: 600;
       white-space: nowrap;
+    }
+
+    .expanded-row td {
+      background: var(--color-background);
+      padding: var(--space-4);
+    }
+
+    .inline-form label {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      font-size: var(--font-size-sm);
+      font-weight: 500;
+      max-width: 480px;
+    }
+
+    .inline-form textarea {
+      box-sizing: border-box;
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-sm);
+      font-size: var(--font-size-sm);
+      font-family: inherit;
+      resize: vertical;
+    }
+
+    .inline-form-actions {
+      display: flex;
+      gap: var(--space-2);
+      margin-top: var(--space-2);
     }
   `],
 })
@@ -497,6 +823,59 @@ export class AgentListComponent implements OnInit {
   registering = signal(false);
 
   workingAgentId = signal<number | null>(null);
+
+  searchTerm = signal('');
+  statusFilter = signal('');
+
+  rejectFormId = signal<number | null>(null);
+  suspendFormId = signal<number | null>(null);
+  rejectReason = '';
+  suspendReason = '';
+
+  filteredAgents = computed(() => {
+    const term = this.searchTerm().trim().toLowerCase();
+    const status = this.statusFilter();
+
+    return this.agents().filter((agent) => {
+      const matchesTerm =
+        !term ||
+        agent.legal_name.toLowerCase().includes(term) ||
+        agent.agent_code.toLowerCase().includes(term) ||
+        (agent.trading_name ?? '').toLowerCase().includes(term);
+
+      const matchesStatus = !status || agent.status === status;
+
+      return matchesTerm && matchesStatus;
+    });
+  });
+
+  activeCount = computed(
+    () => this.agents().filter((a) => a.status === 'ACTIVE').length
+  );
+
+  pendingCount = computed(
+    () =>
+      this.agents().filter((a) =>
+        [
+          'DRAFT',
+          'PENDING_KYC',
+          'PENDING_LOCATION_VERIFICATION',
+          'PENDING_COMPLIANCE_REVIEW',
+          'PENDING_APPROVAL',
+          'APPROVED',
+          'AGREEMENT_PENDING',
+          'TRAINING_PENDING',
+          'TERMINAL_PENDING',
+        ].includes(a.status)
+      ).length
+  );
+
+  issueCount = computed(
+    () =>
+      this.agents().filter((a) =>
+        ['SUSPENDED', 'RESTRICTED'].includes(a.status)
+      ).length
+  );
 
   constructor(
     private api: AgentApiService
@@ -524,6 +903,11 @@ export class AgentListComponent implements OnInit {
         this.loading.set(false);
       },
     });
+  }
+
+  clearFilters(): void {
+    this.searchTerm.set('');
+    this.statusFilter.set('');
   }
 
   register(): void {
@@ -619,23 +1003,37 @@ export class AgentListComponent implements OnInit {
       });
   }
 
-  reject(agent: Agent): void {
-    const reason =
-      window.prompt(
-        'Reason for rejecting this agent:'
-      );
+  toggleRejectForm(agentId: number): void {
+    this.rejectReason = '';
+    this.suspendFormId.set(null);
+    this.rejectFormId.update((current) =>
+      current === agentId ? null : agentId
+    );
+  }
 
-    if (!reason?.trim()) {
+  toggleSuspendForm(agentId: number): void {
+    this.suspendReason = '';
+    this.rejectFormId.set(null);
+    this.suspendFormId.update((current) =>
+      current === agentId ? null : agentId
+    );
+  }
+
+  reject(agent: Agent): void {
+    const reason = this.rejectReason.trim();
+
+    if (!reason) {
       return;
     }
 
+    this.rejectFormId.set(null);
     this.actionError.set(null);
     this.workingAgentId.set(agent.id);
 
     this.api
       .reject(
         agent.id,
-        reason.trim()
+        reason
       )
       .subscribe({
         next: () => {
@@ -654,22 +1052,20 @@ export class AgentListComponent implements OnInit {
   }
 
   suspend(agent: Agent): void {
-    const reason =
-      window.prompt(
-        'Reason for suspending this agent:'
-      );
+    const reason = this.suspendReason.trim();
 
-    if (!reason?.trim()) {
+    if (!reason) {
       return;
     }
 
+    this.suspendFormId.set(null);
     this.actionError.set(null);
     this.workingAgentId.set(agent.id);
 
     this.api
       .suspend(
         agent.id,
-        reason.trim()
+        reason
       )
       .subscribe({
         next: () => {

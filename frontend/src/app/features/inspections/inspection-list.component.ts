@@ -1,4 +1,4 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AgentInspectionApiService } from '../../core/agent-inspection-api.service';
@@ -25,6 +25,25 @@ import { AgentInspection } from '../../core/models/api.models';
         </button>
       </div>
 
+      <div class="stat-grid">
+        <div class="stat-card">
+          <span class="stat-value">{{ scheduledCount() }}</span>
+          <span class="stat-label">Scheduled</span>
+        </div>
+        <div class="stat-card" [class.stat-danger]="nonCompliantCount() > 0">
+          <span class="stat-value">{{ nonCompliantCount() }}</span>
+          <span class="stat-label">Non-Compliant</span>
+        </div>
+        <div class="stat-card" [class.stat-warning]="pendingFollowUpCount() > 0">
+          <span class="stat-value">{{ pendingFollowUpCount() }}</span>
+          <span class="stat-label">Follow-Up Pending</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">{{ inspections().length }}</span>
+          <span class="stat-label">Showing</span>
+        </div>
+      </div>
+
       @if (error()) {
         <div class="error-box">{{ error() }}</div>
       }
@@ -45,7 +64,7 @@ import { AgentInspection } from '../../core/models/api.models';
             <label>
               Inspector User ID
               <input type="number" [(ngModel)]="form.inspector_id" />
-              <span class="muted">Numeric platform user ID.</span>
+              <span class="hint">Numeric platform user ID.</span>
             </label>
 
             <label>
@@ -100,13 +119,19 @@ import { AgentInspection } from '../../core/models/api.models';
             Overdue follow-up only
           </label>
 
-          <button class="btn-outline" (click)="reload()">Refresh</button>
+          <button class="btn-outline" (click)="reload()">
+            <svg viewBox="0 0 24 24" class="btn-icon"><path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3M4 4v5h5M20 20v-5h-5"/></svg>
+            Refresh
+          </button>
         </div>
 
         @if (loading()) {
           <div class="empty-state">Loading...</div>
         } @else if (inspections().length === 0) {
-          <div class="empty-state">No inspections match these filters.</div>
+          <div class="empty-state">
+            <svg viewBox="0 0 24 24" class="empty-icon"><rect x="6" y="4" width="12" height="17" rx="1.5"/><path d="M9 3.5h6v2H9zM9 11l2 2 4-4"/></svg>
+            No inspections match these filters.
+          </div>
         } @else {
           <div class="table-wrapper">
             <table>
@@ -125,10 +150,10 @@ import { AgentInspection } from '../../core/models/api.models';
               <tbody>
                 @for (i of inspections(); track i.id) {
                   <tr>
-                    <td>{{ i.inspection_no }}</td>
+                    <td class="mono">{{ i.inspection_no }}</td>
                     <td>{{ i.agent?.legal_name ?? ('#' + i.agent_id) }}</td>
                     <td>{{ displayStatus(i.inspection_type) }}</td>
-                    <td>{{ i.inspection_date }}</td>
+                    <td>{{ formatDate(i.inspection_date) }}</td>
                     <td>
                       <span class="status-badge" [class]="statusClass(i.status)">
                         {{ displayStatus(i.status) }}
@@ -143,7 +168,7 @@ import { AgentInspection } from '../../core/models/api.models';
                           {{ displayStatus(i.compliance_outcome) }}
                         </span>
                       } @else {
-                        —
+                        <span class="muted">—</span>
                       }
                     </td>
                     <td>
@@ -194,13 +219,6 @@ import { AgentInspection } from '../../core/models/api.models';
                               >
                                 Start
                               </button>
-                              <button
-                                class="btn-danger-outline"
-                                (click)="cancel(i)"
-                                [disabled]="working()"
-                              >
-                                Cancel
-                              </button>
                             }
 
                             @if (
@@ -209,17 +227,14 @@ import { AgentInspection } from '../../core/models/api.models';
                             ) {
                               <button
                                 class="btn-success"
-                                (click)="complete(i)"
+                                (click)="toggleCompleteForm(i.id)"
                                 [disabled]="working()"
                               >
                                 Complete
                               </button>
-                            }
-
-                            @if (i.status === 'IN_PROGRESS') {
                               <button
                                 class="btn-danger-outline"
-                                (click)="cancel(i)"
+                                (click)="toggleCancelForm(i.id)"
                                 [disabled]="working()"
                               >
                                 Cancel
@@ -238,13 +253,119 @@ import { AgentInspection } from '../../core/models/api.models';
                             @if (i.follow_up_status === 'IN_PROGRESS') {
                               <button
                                 class="btn-success"
-                                (click)="completeFollowUp(i)"
+                                (click)="toggleFollowUpForm(i.id)"
                                 [disabled]="working()"
                               >
                                 Complete Follow-Up
                               </button>
                             }
                           </div>
+
+                          @if (completeFormId() === i.id) {
+                            <div class="inline-form">
+                              <div class="inline-form-grid">
+                                <label class="full-width">
+                                  Findings
+                                  <textarea
+                                    rows="2"
+                                    [(ngModel)]="completeForm.findings"
+                                    [ngModelOptions]="{ standalone: true }"
+                                  ></textarea>
+                                </label>
+                                <label>
+                                  Compliance Outcome
+                                  <select
+                                    [(ngModel)]="completeForm.compliance_outcome"
+                                    [ngModelOptions]="{ standalone: true }"
+                                  >
+                                    <option value="COMPLIANT">Compliant</option>
+                                    <option value="MINOR_NON_COMPLIANCE">Minor Non-Compliance</option>
+                                    <option value="MAJOR_NON_COMPLIANCE">Major Non-Compliance</option>
+                                    <option value="CRITICAL_NON_COMPLIANCE">Critical Non-Compliance</option>
+                                  </select>
+                                </label>
+                                @if (completeForm.compliance_outcome !== 'COMPLIANT') {
+                                  <label>
+                                    Corrective Action
+                                    <input
+                                      [(ngModel)]="completeForm.corrective_action"
+                                      [ngModelOptions]="{ standalone: true }"
+                                    />
+                                  </label>
+                                  <label>
+                                    Deadline
+                                    <input
+                                      type="date"
+                                      [(ngModel)]="completeForm.corrective_action_deadline"
+                                      [ngModelOptions]="{ standalone: true }"
+                                    />
+                                  </label>
+                                }
+                              </div>
+                              <div class="inline-form-actions">
+                                <button class="btn-outline" (click)="completeFormId.set(null)">
+                                  Cancel
+                                </button>
+                                <button
+                                  class="btn-success"
+                                  (click)="complete(i)"
+                                  [disabled]="working() || !completeForm.findings.trim()"
+                                >
+                                  Confirm Completion
+                                </button>
+                              </div>
+                            </div>
+                          }
+
+                          @if (cancelFormId() === i.id) {
+                            <div class="inline-form">
+                              <label>
+                                Cancellation reason
+                                <textarea
+                                  rows="2"
+                                  [(ngModel)]="cancelReason"
+                                  [ngModelOptions]="{ standalone: true }"
+                                ></textarea>
+                              </label>
+                              <div class="inline-form-actions">
+                                <button class="btn-outline" (click)="cancelFormId.set(null)">
+                                  Back
+                                </button>
+                                <button
+                                  class="btn-danger-outline"
+                                  (click)="cancel(i)"
+                                  [disabled]="working() || !cancelReason.trim()"
+                                >
+                                  Confirm Cancellation
+                                </button>
+                              </div>
+                            </div>
+                          }
+
+                          @if (followUpFormId() === i.id) {
+                            <div class="inline-form">
+                              <label>
+                                Follow-up notes (optional)
+                                <textarea
+                                  rows="2"
+                                  [(ngModel)]="followUpNotes"
+                                  [ngModelOptions]="{ standalone: true }"
+                                ></textarea>
+                              </label>
+                              <div class="inline-form-actions">
+                                <button class="btn-outline" (click)="followUpFormId.set(null)">
+                                  Cancel
+                                </button>
+                                <button
+                                  class="btn-success"
+                                  (click)="completeFollowUp(i)"
+                                  [disabled]="working()"
+                                >
+                                  Confirm Follow-Up Complete
+                                </button>
+                              </div>
+                            </div>
+                          }
                         </div>
                       </td>
                     </tr>
@@ -260,42 +381,68 @@ import { AgentInspection } from '../../core/models/api.models';
   styles: [`
     :host { display: block; font-family: var(--font-sans); color: var(--color-foreground); }
     .page { max-width: 1240px; margin: 0 auto; }
-    .page-header { display: flex; justify-content: space-between; gap: var(--space-5); align-items: flex-start; margin-bottom: var(--space-5); }
+    .page-header { display: flex; justify-content: space-between; gap: var(--space-5); align-items: flex-start; margin-bottom: var(--space-4); }
     h1 { margin: 0 0 4px; font-size: var(--font-size-2xl); font-weight: 700; color: var(--color-primary); }
     p { margin: 0; color: var(--color-muted); font-size: var(--font-size-sm); }
+
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--space-3); margin-bottom: var(--space-4); }
+    .stat-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); padding: var(--space-4); display: flex; flex-direction: column; gap: 2px; }
+    .stat-value { font-size: var(--font-size-2xl); font-weight: 700; color: var(--color-primary); line-height: 1.1; }
+    .stat-label { font-size: var(--font-size-xs); color: var(--color-muted); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+    .stat-card.stat-warning .stat-value { color: var(--color-warning); }
+    .stat-card.stat-danger .stat-value { color: var(--color-danger); }
+
     .card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); padding: var(--space-5); margin-bottom: var(--space-4); }
     .filters { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-4); flex-wrap: wrap; }
     .filters select { padding: 8px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); font-size: var(--font-size-sm); }
     .checkbox-field { display: flex; align-items: center; gap: 6px; font-size: var(--font-size-sm); color: var(--color-foreground); }
+
     .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-3); }
     .form-grid label { display: flex; flex-direction: column; gap: 5px; font-size: var(--font-size-sm); font-weight: 500; color: var(--color-foreground); }
-    .form-grid input, .form-grid select, .form-grid textarea { box-sizing: border-box; width: 100%; padding: 8px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); font-size: var(--font-size-sm); }
-    .form-grid .muted { font-size: var(--font-size-xs); color: var(--color-muted); font-weight: 400; }
+    .form-grid input, .form-grid select, .form-grid textarea { box-sizing: border-box; width: 100%; padding: 8px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); font-size: var(--font-size-sm); font-family: inherit; }
+    .form-grid .hint { font-size: var(--font-size-xs); color: var(--color-muted); font-weight: 400; }
     .full-width { grid-column: 1 / -1; }
     .form-actions { grid-column: 1 / -1; }
-    button { padding: 8px 14px; border: 1px solid transparent; border-radius: var(--radius-sm); background: var(--color-primary); color: var(--color-on-primary); font-size: var(--font-size-sm); font-weight: 600; cursor: pointer; }
+
+    button { padding: 8px 14px; border: 1px solid transparent; border-radius: var(--radius-sm); background: var(--color-primary); color: var(--color-on-primary); font-size: var(--font-size-sm); font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: background var(--transition-fast), filter var(--transition-fast); }
     button:hover:not(:disabled) { background: var(--color-primary-hover); }
-    button:disabled { opacity: 0.55; cursor: not-allowed; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
     button.btn-outline { background: transparent; border-color: var(--color-border); color: var(--color-foreground); }
     button.btn-outline:hover:not(:disabled) { background: var(--color-muted-bg); }
     button.btn-success { background: var(--color-success); }
+    button.btn-success:hover:not(:disabled) { filter: brightness(0.93); }
     button.btn-danger-outline { background: transparent; border-color: var(--color-danger-bg); color: var(--color-danger); }
     button.btn-danger-outline:hover:not(:disabled) { background: var(--color-danger-bg); }
+    .btn-icon { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
     .table-wrapper { width: 100%; overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; }
-    th, td { padding: var(--space-2); border-bottom: 1px solid var(--color-border); text-align: left; font-size: var(--font-size-sm); white-space: nowrap; }
+    th, td { padding: var(--space-3) var(--space-2); border-bottom: 1px solid var(--color-border); text-align: left; font-size: var(--font-size-sm); white-space: nowrap; }
+    tbody tr:not(.expanded-row):hover { background: var(--color-background); }
+    .mono { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: var(--font-size-xs); color: var(--color-muted); }
     th { color: var(--color-muted); background: var(--color-background); font-size: var(--font-size-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
+
     .status-badge { display: inline-block; font-size: var(--font-size-xs); font-weight: 600; padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
     .status-active { background: var(--color-success-bg); color: var(--color-success); }
     .status-pending { background: var(--color-warning-bg); color: var(--color-warning); }
     .status-info { background: var(--color-info-bg); color: var(--color-info); }
     .status-danger { background: var(--color-danger-bg); color: var(--color-danger); }
     .status-neutral { background: var(--color-muted-bg); color: var(--color-muted); }
+
     .expanded-row td { background: var(--color-background); padding: var(--space-4); white-space: normal; }
     .detail p { margin: 0 0 var(--space-2); }
     .muted { color: var(--color-muted); font-size: var(--font-size-sm); }
     .actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); }
-    .empty-state { padding: var(--space-4); border: 1px dashed var(--color-border); border-radius: var(--radius-md); color: var(--color-muted); background: var(--color-background); font-size: var(--font-size-sm); text-align: center; }
+
+    .inline-form { margin-top: var(--space-3); padding: var(--space-3); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+    .inline-form > label { display: flex; flex-direction: column; gap: 5px; font-size: var(--font-size-sm); font-weight: 500; }
+    .inline-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--space-3); }
+    .inline-form-grid label { display: flex; flex-direction: column; gap: 5px; font-size: var(--font-size-sm); font-weight: 500; }
+    .inline-form textarea, .inline-form input, .inline-form select { box-sizing: border-box; width: 100%; padding: 8px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); font-size: var(--font-size-sm); font-family: inherit; resize: vertical; }
+    .inline-form-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-3); }
+
+    .empty-state { padding: var(--space-6) var(--space-4); border: 1px dashed var(--color-border); border-radius: var(--radius-md); color: var(--color-muted); background: var(--color-background); font-size: var(--font-size-sm); text-align: center; display: flex; flex-direction: column; align-items: center; gap: var(--space-2); }
+    .empty-icon { width: 28px; height: 28px; fill: none; stroke: currentColor; stroke-width: 1.5; opacity: 0.5; }
     .error-box { padding: var(--space-3); background: var(--color-danger-bg); color: var(--color-danger); border-radius: var(--radius-md); margin-bottom: var(--space-4); font-size: var(--font-size-sm); }
   `],
 })
@@ -306,10 +453,33 @@ export class InspectionListComponent implements OnInit {
   error = signal<string | null>(null);
   showCreateForm = signal(false);
   expandedId = signal<number | null>(null);
+  completeFormId = signal<number | null>(null);
+  cancelFormId = signal<number | null>(null);
+  followUpFormId = signal<number | null>(null);
+
+  cancelReason = '';
+  followUpNotes = '';
+  completeForm = this.emptyCompleteForm();
 
   filterStatus = '';
   filterFollowUp = '';
   filterOverdue = false;
+
+  scheduledCount = computed(
+    () => this.inspections().filter((i) => i.status === 'SCHEDULED').length
+  );
+  nonCompliantCount = computed(
+    () =>
+      this.inspections().filter(
+        (i) =>
+          !!i.compliance_outcome && i.compliance_outcome !== 'COMPLIANT'
+      ).length
+  );
+  pendingFollowUpCount = computed(
+    () =>
+      this.inspections().filter((i) => i.follow_up_status === 'PENDING')
+        .length
+  );
 
   form: {
     agent_id: number | null;
@@ -355,6 +525,26 @@ export class InspectionListComponent implements OnInit {
 
   toggleExpanded(id: number): void {
     this.expandedId.update((current) => (current === id ? null : id));
+    this.completeFormId.set(null);
+    this.cancelFormId.set(null);
+    this.followUpFormId.set(null);
+  }
+
+  toggleCompleteForm(id: number): void {
+    this.completeForm = this.emptyCompleteForm();
+    this.cancelFormId.set(null);
+    this.completeFormId.update((current) => (current === id ? null : id));
+  }
+
+  toggleCancelForm(id: number): void {
+    this.cancelReason = '';
+    this.completeFormId.set(null);
+    this.cancelFormId.update((current) => (current === id ? null : id));
+  }
+
+  toggleFollowUpForm(id: number): void {
+    this.followUpNotes = '';
+    this.followUpFormId.update((current) => (current === id ? null : id));
   }
 
   create(): void {
@@ -401,41 +591,25 @@ export class InspectionListComponent implements OnInit {
   }
 
   complete(i: AgentInspection): void {
-    const findings = prompt('Findings:');
-    if (!findings) return;
+    if (!this.completeForm.findings.trim()) return;
 
-    const outcome = prompt(
-      'Compliance outcome (COMPLIANT, MINOR_NON_COMPLIANCE, MAJOR_NON_COMPLIANCE, CRITICAL_NON_COMPLIANCE):',
-      'COMPLIANT'
-    );
-    if (!outcome) return;
-
-    let correctiveAction: string | undefined;
-    let deadline: string | undefined;
-
-    if (outcome !== 'COMPLIANT') {
-      correctiveAction = prompt('Corrective action (optional):') ?? undefined;
-
-      if (correctiveAction) {
-        deadline =
-          prompt('Corrective action deadline (YYYY-MM-DD):') ?? undefined;
-      }
-    }
-
+    this.completeFormId.set(null);
     this.runAction(
       this.api.complete(i.id, {
-        findings,
-        compliance_outcome: outcome,
-        corrective_action: correctiveAction || undefined,
-        corrective_action_deadline: deadline || undefined,
+        findings: this.completeForm.findings.trim(),
+        compliance_outcome: this.completeForm.compliance_outcome,
+        corrective_action:
+          this.completeForm.corrective_action.trim() || undefined,
+        corrective_action_deadline:
+          this.completeForm.corrective_action_deadline || undefined,
       })
     );
   }
 
   cancel(i: AgentInspection): void {
-    const reason = prompt('Cancellation reason:');
-    if (!reason) return;
-    this.runAction(this.api.cancel(i.id, reason));
+    if (!this.cancelReason.trim()) return;
+    this.cancelFormId.set(null);
+    this.runAction(this.api.cancel(i.id, this.cancelReason.trim()));
   }
 
   startFollowUp(i: AgentInspection): void {
@@ -443,8 +617,10 @@ export class InspectionListComponent implements OnInit {
   }
 
   completeFollowUp(i: AgentInspection): void {
-    const notes = prompt('Follow-up notes (optional):') ?? undefined;
-    this.runAction(this.api.completeFollowUp(i.id, notes));
+    this.followUpFormId.set(null);
+    this.runAction(
+      this.api.completeFollowUp(i.id, this.followUpNotes.trim() || undefined)
+    );
   }
 
   private runAction(
@@ -493,6 +669,13 @@ export class InspectionListComponent implements OnInit {
       .replace(/\b\w/g, (c) => c.toUpperCase());
   }
 
+  formatDate(value: string | null): string {
+    if (!value) return '—';
+    return new Date(value).toLocaleDateString(undefined, {
+      dateStyle: 'medium',
+    });
+  }
+
   private emptyForm() {
     return {
       agent_id: null,
@@ -500,6 +683,15 @@ export class InspectionListComponent implements OnInit {
       inspector_id: null,
       inspection_type: 'ROUTINE',
       inspection_date: new Date().toISOString().slice(0, 10),
+    };
+  }
+
+  private emptyCompleteForm() {
+    return {
+      findings: '',
+      compliance_outcome: 'COMPLIANT',
+      corrective_action: '',
+      corrective_action_deadline: '',
     };
   }
 }

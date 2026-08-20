@@ -2,12 +2,13 @@ import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { forkJoin } from 'rxjs';
+import { forkJoin, of } from 'rxjs';
 
 import { AgentApiService } from '../../core/agent-api.service';
 import {
   Agent,
   AgentAgreement,
+  ApiResponse,
   AgentAgreementApprovalType,
   AgentAgreementSignatory,
   AgentAgreementSignatoryParty,
@@ -122,7 +123,10 @@ import {
         <!-- ===================================================== -->
 
         <section class="card">
-          <h2>Overview</h2>
+          <h2>
+            <svg class="section-icon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg>
+            Overview
+          </h2>
 
           <div class="details-grid">
             <div>
@@ -222,7 +226,10 @@ import {
               <div class="action-number">2</div>
 
               <div>
-                <h2>KYC & Due Diligence</h2>
+                <h2>
+                  <svg class="section-icon" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
+                  KYC & Due Diligence
+                </h2>
 
                 <p>
                   Capture beneficial ownership and documentary
@@ -709,7 +716,10 @@ import {
         <section class="card">
           <div class="section-header">
             <div>
-              <h2>Locations</h2>
+              <h2>
+                <svg class="section-icon" viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.3"/></svg>
+                Locations
+              </h2>
 
               <p>
                 Registered physical premises, GPS coordinates and
@@ -1014,7 +1024,10 @@ import {
         <section class="card">
           <div class="section-header">
             <div>
-              <h2>Agreements</h2>
+              <h2>
+                <svg class="section-icon" viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7z"/><path d="M15 3v4h4M9 12h6M9 16h6M9 8h2"/></svg>
+                Agreements
+              </h2>
 
               <p>
                 Versioned agency agreements, commercial terms
@@ -1484,7 +1497,10 @@ import {
         <section class="card">
           <div class="section-header">
             <div>
-              <h2>Training</h2>
+              <h2>
+                <svg class="section-icon" viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="17" rx="1.5"/><path d="M9 3.5h6v2H9zM9 11l2 2 4-4"/></svg>
+                Training
+              </h2>
 
               <p>
                 Agency banking training guide delivery and
@@ -1644,7 +1660,10 @@ import {
         <section class="card">
           <div class="section-header">
             <div>
-              <h2>Operators</h2>
+              <h2>
+                <svg class="section-icon" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M16 11a3 3 0 1 0 0-6M21 20c0-2.8-1.9-5.1-4.5-5.8"/></svg>
+                Operators
+              </h2>
 
               <p>
                 Platform users authorised to operate this agent's
@@ -1787,7 +1806,10 @@ import {
         <section class="card">
           <div class="section-header">
             <div>
-              <h2>Terminals</h2>
+              <h2>
+                <svg class="section-icon" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="12" rx="1.5"/><path d="M9 20h6M12 15v5"/></svg>
+                Terminals
+              </h2>
 
               <p>
                 POS/device registry and geo-fence status per
@@ -1964,7 +1986,10 @@ import {
         <section class="card">
           <div class="section-header">
             <div>
-              <h2>Transactions</h2>
+              <h2>
+                <svg class="section-icon" viewBox="0 0 24 24"><path d="M4 8h13M13 4l4 4-4 4M20 16H7M11 12l-4 4 4 4"/></svg>
+                Transactions
+              </h2>
 
               <p>
                 Cash-in, cash-out and transfer, routed through the
@@ -2267,6 +2292,24 @@ import {
       font-size: var(--font-size-lg);
       font-weight: 600;
       color: var(--color-primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-icon {
+      width: 18px;
+      height: 18px;
+      flex: 0 0 18px;
+      fill: none;
+      stroke: var(--color-accent);
+      stroke-width: 1.7;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    tbody tr:not(.expanded-row):hover {
+      background: var(--color-background);
     }
 
     h3 {
@@ -2718,6 +2761,7 @@ import {
     .location-top {
       display: flex;
       justify-content: space-between;
+      align-items: flex-start;
       gap: var(--space-4);
     }
 
@@ -3233,81 +3277,48 @@ export class AgentDetailComponent implements OnInit {
   // LOAD ALL AGENT DATA
   // ============================================================
 
+  private templatesLoaded = false;
+  private trainingDocumentsLoaded = false;
+
   reload(): void {
     this.loading.set(true);
     this.error.set(null);
 
+    // The agent's own sub-resources (owners, documents, locations,
+    // agreements, operators, terminals, transactions) are all eager-loaded
+    // server-side in a single GET /agents/{id} response instead of 8
+    // separate round-trips. Agreement templates and training documents are
+    // global lists (not scoped to this agent) and are cached after the
+    // first load so they aren't re-fetched on every reload() call.
     forkJoin({
       agent:
         this.api.show(this.agentId),
 
-      owners:
-        this.api.listOwners(this.agentId),
+      templates: this.templatesLoaded
+        ? of<ApiResponse<AgentAgreementTemplate[]>>({ success: true, message: '', data: this.templates() })
+        : this.api.listAgreementTemplates(),
 
-      documents:
-        this.api.listDocuments(this.agentId),
-
-      locations:
-        this.api.listLocations(this.agentId),
-
-      agreements:
-        this.api.listAgreements(this.agentId),
-
-      templates:
-        this.api.listAgreementTemplates(),
-
-      trainingDocuments:
-        this.api.listTrainingDocuments(),
-
-      operators:
-        this.api.listOperators(this.agentId),
-
-      terminals:
-        this.api.listTerminals(this.agentId),
-
-      transactions:
-        this.api.listTransactions(this.agentId),
+      trainingDocuments: this.trainingDocumentsLoaded
+        ? of<ApiResponse<TrainingDocument[]>>({ success: true, message: '', data: this.trainingDocuments() })
+        : this.api.listTrainingDocuments(),
     }).subscribe({
       next: (result) => {
-        this.agent.set(
-          result.agent.data
-        );
+        const agent = result.agent.data;
 
-        this.owners.set(
-          result.owners.data
-        );
+        this.agent.set(agent);
+        this.owners.set(agent.owners ?? []);
+        this.documents.set(agent.documents ?? []);
+        this.locations.set(agent.locations ?? []);
+        this.agreements.set(agent.agreements ?? []);
+        this.operators.set(agent.operators ?? []);
+        this.terminals.set(agent.terminals ?? []);
+        this.transactions.set(agent.transactions ?? []);
 
-        this.documents.set(
-          result.documents.data
-        );
+        this.templates.set(result.templates.data);
+        this.templatesLoaded = true;
 
-        this.locations.set(
-          result.locations.data
-        );
-
-        this.agreements.set(
-          result.agreements.data
-        );
-
-        this.templates.set(
-          result.templates.data
-        );
-
-        this.trainingDocuments.set(
-          result.trainingDocuments.data
-        );
-
-        this.operators.set(
-          result.operators.data
-        );
-
-        this.terminals.set(
-          result.terminals.data
-        );
-
-        this.transactions.set(
-          result.transactions.data
-        );
+        this.trainingDocuments.set(result.trainingDocuments.data);
+        this.trainingDocumentsLoaded = true;
 
         this.loading.set(false);
       },
