@@ -3,12 +3,11 @@ import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/rou
 import { MerchantPortalApiService } from '../../core/merchant-portal-api.service';
 import { MerchantPortalSessionService } from '../../core/merchant-portal-session.service';
 import { AuthService } from '../../core/auth.service';
-import { TessaWidgetComponent } from '../../../tessa/tessa-widget.component';
 
 @Component({
   selector: 'app-merchant-shell',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, TessaWidgetComponent],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive],
   template: `
     <div class="merchant-shell">
       <aside class="merchant-sidebar" [class.open]="menuOpen()">
@@ -51,7 +50,6 @@ import { TessaWidgetComponent } from '../../../tessa/tessa-widget.component';
         </header>
         <main class="merchant-content"><router-outlet></router-outlet></main>
       </section>
-      <app-tessa-widget />
     </div>
   `,
   styles: [`

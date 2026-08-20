@@ -125,7 +125,6 @@ input, select, textarea {
   font-family: inherit;
 }
 
-<<<<<<< HEAD
 @media (max-width: 640px) {
   input, select, textarea {
     /* Prevent automatic form zoom in mobile Safari. */
@@ -156,7 +155,9 @@ input, select, textarea {
   app-merchant-shell .mfa-modal {
     max-height: calc(100dvh - 1rem);
     overflow-y: auto;
-=======
+  }
+}
+
 /* Visible focus ring everywhere — accessibility requirement, never remove */
 button:focus-visible,
 a:focus-visible,
@@ -172,6 +173,5 @@ textarea:focus-visible {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
->>>>>>> 228552f58ba37c290dab4ab8ea144e42b7b3d290
   }
 }

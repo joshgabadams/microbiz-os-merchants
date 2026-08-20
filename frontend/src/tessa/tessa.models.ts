@@ -1,8 +1,16 @@
+export interface TessaAttachment {
+  name: string;
+  type: string;
+  size: number;
+  previewUrl?: string;
+}
+
 export interface TessaMessage {
   id: string;
   role: 'assistant' | 'user';
   content: string;
   createdAt: string;
+  attachments?: TessaAttachment[];
 }
 
 export interface TessaConversationContext {
@@ -16,6 +24,7 @@ export interface TessaMessageRequest {
   context: {
     route: string;
   };
+  attachments?: Array<{ name: string; type: string; size: number }>;
 }
 
 export interface TessaMessageApiResponse {
