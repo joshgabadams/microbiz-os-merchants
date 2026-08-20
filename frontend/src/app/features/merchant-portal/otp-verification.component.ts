@@ -10,7 +10,7 @@ import { MerchantPortalSessionService } from '../../core/merchant-portal-session
   imports: [FormsModule, RouterLink],
   template: `
     <main class="otp-page">
-      <a class="brand" routerLink="/login/merchants"><span>M</span> MicroBiz</a>
+      <a class="brand" routerLink="/login/merchants"><span>M</span> MicroBiz Merchants</a>
       <section class="otp-card">
         <div class="step">Step 4 of 6</div>
         <div class="phone-icon">✦</div>
@@ -38,6 +38,7 @@ import { MerchantPortalSessionService } from '../../core/merchant-portal-session
   `,
   styles: [`
     :host { display: block; min-height: 100vh; }.otp-page { min-height: 100vh; background: #f5f7fb; padding: 2.2rem 1.25rem; }.brand { display: flex; align-items: center; gap: .6rem; width: fit-content; margin: 0 auto; color: #1e2761; font-weight: 800; text-decoration: none; }.brand span { width: 2rem; height: 2rem; display: grid; place-items: center; background: #ffcb45; border-radius: .6rem; }.otp-card { width: min(100%, 480px); background: white; margin: 4rem auto 0; padding: clamp(1.5rem, 5vw, 2.8rem); border: 1px solid #e2e6ef; border-radius: 1rem; box-shadow: 0 18px 55px rgba(30,39,97,.08); text-align: center; position: relative; }.step { position: absolute; top: 1.2rem; right: 1.4rem; color: #9298a9; font-size: .7rem; }.phone-icon { width: 3.3rem; height: 3.3rem; margin: 0 auto 1.3rem; display: grid; place-items: center; border-radius: .8rem; background: #fff2cc; color: #9a6a00; font-size: 1.15rem; }.eyebrow { margin: 0; color: #9a6a00; text-transform: uppercase; letter-spacing: .12em; font-size: .66rem; font-weight: 850; }h1 { margin: .5rem 0 .7rem; color: #192250; font-size: 1.7rem; letter-spacing: -.035em; }.subtitle { margin: 0 auto 1.7rem; max-width: 370px; color: #777e92; font-size: .8rem; line-height: 1.6; }.subtitle strong { color: #414a61; }label { display: block; color: #51596f; font-size: .7rem; font-weight: 750; text-align: left; }input { display: block; width: 100%; margin-top: .5rem; border: 1px solid #d7dce8; border-radius: .65rem; padding: .85rem; text-align: center; letter-spacing: .65em; font-size: 1.5rem; font-weight: 800; color: #1e2761; outline: 0; }input:focus { border-color: #4057ad; box-shadow: 0 0 0 3px rgba(64,87,173,.12); }.preview-note { color: #8b91a3; font-size: .68rem; margin: .55rem 0 1rem; }.primary { width: 100%; border: 0; border-radius: .6rem; padding: .86rem; background: #1e2761; color: white; font-weight: 750; }.primary:disabled { opacity: .55; cursor: not-allowed; }.error { background: #fff0ee; color: #a43b2b; padding: .7rem; border-radius: .5rem; font-size: .73rem; margin-bottom: 1rem; }.resend { color: #8b91a3; font-size: .7rem; margin: 1.1rem 0 .5rem; }.resend-button { border: 0; background: transparent; color: #2d4597; font-weight: 750; font-size: .72rem; margin-top: 1rem; }.back { display: block; margin-top: 1rem; color: #697187; font-size: .7rem; text-decoration: none; }
+    @media (max-width: 520px) { .otp-page { padding: 1rem .75rem 1.5rem; }.otp-card { margin-top: 2rem; padding: 3.5rem 1.2rem 1.4rem; }.step { top: 1rem; right: 1.1rem; }.phone-icon { margin-bottom: 1rem; }h1 { font-size: 1.45rem; }input { letter-spacing: .45em; font-size: 1.3rem; } }
   `],
 })
 export class OtpVerificationComponent implements OnInit, OnDestroy {

@@ -239,11 +239,32 @@ export class MerchantPortalApiService {
         .pipe(map((response) => this.mapRegistration(response.data, selectedAccount?.account_no ?? preview.account_no)));
     }
 
+    const business_name = payload.trading_name || payload.legal_name;
+    const account_number = selectedAccount?.account_no ?? preview.account_no;
+
+    // Fold the details captured during registration into the merchant's
+    // profile record so /merchant/profile reflects what was actually
+    // submitted here instead of the unrelated seed data.
+    this.profile = {
+      ...this.profile,
+      merchantId: 15,
+      merchantCode: 'MER-000015',
+      businessName: business_name,
+      contactName: payload.contact_name,
+      email: payload.email || this.profile.email,
+      phone: payload.phone,
+      registrationNumber: payload.registration_number,
+      accountNumber: account_number,
+      status: 'DRAFT',
+      settlementAccountName: business_name,
+      settlementAccountNumber: account_number,
+    };
+
     return of({
-      merchant_id: 15,
-      merchant_code: 'MER-000015',
-      business_name: payload.trading_name || payload.legal_name,
-      account_number: selectedAccount?.account_no ?? preview.account_no,
+      merchant_id: this.profile.merchantId,
+      merchant_code: this.profile.merchantCode,
+      business_name,
+      account_number,
       status: 'DRAFT',
     }).pipe(delay(900));
   }

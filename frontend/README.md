@@ -50,10 +50,11 @@ Implemented areas:
 - Support tickets and status tracking
 - Notifications, preferences, password management, and MFA setup
 - Analytics, statements, and CSV/PDF export flows
-- Reusable payment links and QR payment assets
+- Payment Tools implementation retained for a future release; merchant navigation and direct route access are currently disabled
 - Reconciliation summaries and transaction disputes
 - Merchant team invitations and role-based access controls
 - Floating Tessa merchant assistant with contextual mock guidance
+- Responsive merchant layouts for mobile navigation, forms, tables, modals, filters, and Tessa
 - Merchant session guard and logout
 
 Only account preview currently uses the live backend. Other merchant features

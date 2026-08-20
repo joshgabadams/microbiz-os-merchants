@@ -87,21 +87,30 @@ password change, security summary, and MFA setup/confirm/disable. All features
 have responsive loading, empty, success, validation, and error states. Terminal
 activation and suspension remain staff-only operations.
 
-### Phase 5: reporting, payment tools, and operating control
+### Phase 5: reporting and operating control
 
 Routes:
 
 ```text
 /merchant/reports
-/merchant/payment-tools
 /merchant/operations
 ```
 
 Implemented date-filtered analytics, CSS-native sales/channel/location charts,
-statement preview and CSV/PDF download flow, reusable payment links and QR
-assets, reconciliation summaries, transaction disputes, and role-based merchant
-team management. Live APIs are feature-disabled; typed mocks allow complete UI
-testing while the backend implements the Phase 5 contract.
+statement preview and CSV/PDF download flow, reconciliation summaries,
+transaction disputes, and role-based merchant team management. Live APIs are
+feature-disabled; typed mocks allow complete UI testing while the backend
+implements the Phase 5 contract.
+
+The Payment Tools UI and typed service contracts remain in source for a future
+release, but merchant navigation is hidden and `/merchant/payment-tools`
+redirects to the dashboard. Its backend endpoints are not required for the
+current merchant release.
+
+Mobile responsiveness has been finalized across the merchant shell, onboarding,
+forms, filters, tables, modals, actions, and Tessa. Tables scroll horizontally
+where their data cannot safely collapse, and form controls retain mobile-safe
+font sizing.
 
 ## Architecture and important files
 

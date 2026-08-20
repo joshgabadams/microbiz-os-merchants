@@ -27,7 +27,7 @@ export class TessaService {
     if (/settle|settlement/.test(value)) return 'Settlements move cleared merchant funds to your linked MicroBiz account. Open Settlements to see what is available, request a settlement, and follow its status.';
     if (/dispute|debited|failed/.test(value)) return 'Open Reconciliation, select Disputes, and choose Raise dispute. You will need the merchant transaction number, a reason, and a short explanation.';
     if (/report|statement|analytics/.test(value)) return 'Reports & analytics lets you select a date range, compare sales by channel and location, and download a merchant statement.';
-    if (/link|qr/.test(value)) return 'Open Payment tools to create a reusable link or QR code. You can set a fixed amount or allow the customer to enter one.';
+    if (/link|qr/.test(value)) return 'Merchant payment links and reusable QR tools are currently unavailable. You can still record supported QR and POS collections from Accept payment.';
     if (/terminal|device|location/.test(value)) return 'Locations & devices shows your outlets and terminal status. You can add a location or submit a terminal request there.';
     if (/support|help|human/.test(value)) return 'Open Support to create and track a ticket. For urgent account security issues, contact the merchant support team directly.';
     return `I can help ${context.businessName} with transactions, settlements, reports, payment links, reconciliation, terminals, and support. What would you like to do?`;

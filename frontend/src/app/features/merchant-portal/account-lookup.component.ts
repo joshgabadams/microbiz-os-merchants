@@ -10,7 +10,7 @@ import { MerchantPortalSessionService } from '../../core/merchant-portal-session
   imports: [FormsModule, RouterLink],
   template: `
     <main class="account-page">
-      <a class="account-brand" routerLink="/login/merchants"><span>M</span> MicroBiz</a>
+      <a class="account-brand" routerLink="/login/merchants"><span>M</span> MicroBiz Merchants</a>
       <section class="account-card">
         <div class="step">Step 2 of 6</div>
         <div class="account-icon">#</div>
@@ -56,6 +56,13 @@ import { MerchantPortalSessionService } from '../../core/merchant-portal-session
     button:disabled { opacity: .55; cursor: not-allowed; }
     .error { padding: .75rem; background: #fff0ee; color: #a43b2b; border-radius: .55rem; font-size: .8rem; margin-bottom: 1rem; }
     .back-link { display: block; text-align: center; margin-top: 1.25rem; color: #5f6880; font-size: .8rem; text-decoration: none; }
+    @media (max-width: 520px) {
+      .account-page { padding: 1rem .75rem 1.5rem; }
+      .account-card { margin-top: 2rem; padding: 3.5rem 1.2rem 1.4rem; }
+      .step { top: 1rem; right: 1.1rem; }
+      .account-icon { margin-bottom: 1rem; }
+      h1 { font-size: 1.45rem; }
+    }
   `],
 })
 export class AccountLookupComponent implements OnInit {

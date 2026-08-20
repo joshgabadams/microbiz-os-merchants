@@ -15,6 +15,14 @@ html, body {
   color: #1b2140;
 }
 
+body {
+  overflow-x: hidden;
+}
+
+img, svg {
+  max-width: 100%;
+}
+
 a {
   color: inherit;
 }
@@ -42,6 +50,39 @@ button {
   font-family: inherit;
 }
 
-input {
+input, select, textarea {
   font-family: inherit;
+}
+
+@media (max-width: 640px) {
+  input, select, textarea {
+    /* Prevent automatic form zoom in mobile Safari. */
+    font-size: 16px;
+  }
+
+  app-merchant-shell .merchant-content,
+  app-merchant-shell .merchant-content > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  app-merchant-shell .responsive-table,
+  app-merchant-shell .responsive {
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  app-merchant-shell .modal-backdrop,
+  app-merchant-shell .backdrop {
+    padding: .5rem;
+  }
+
+  app-merchant-shell .modal,
+  app-merchant-shell .confirm-modal,
+  app-merchant-shell .mfa-modal {
+    max-height: calc(100dvh - 1rem);
+    overflow-y: auto;
+  }
 }

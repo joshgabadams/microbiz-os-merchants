@@ -22,7 +22,7 @@ type RegistrationForm = Omit<ConfirmMerchantRegistrationPayload, 'branch_id'> & 
   template: `
     <main class="registration-page">
       <header>
-        <a routerLink="/login/merchants" class="brand"><span>M</span> MicroBiz</a>
+        <a routerLink="/login/merchants" class="brand"><span>M</span> MicroBiz Merchants</a>
         <span class="step">Step 6 of 6</span>
       </header>
 
@@ -57,26 +57,36 @@ type RegistrationForm = Omit<ConfirmMerchantRegistrationPayload, 'branch_id'> & 
             <h2>Confirm your business details</h2>
             <p class="subtitle">Verified account details are locked. Complete the remaining required information.</p>
 
+            <div class="entity-switch" role="group" aria-label="Registration type">
+              <button type="button" [class.active]="entityType === 'CORPORATE'" (click)="setEntityType('CORPORATE')">Corporate business</button>
+              <button type="button" [class.active]="entityType === 'INDIVIDUAL'" (click)="setEntityType('INDIVIDUAL')">Individual / sole trader</button>
+            </div>
+
             <form (ngSubmit)="submit()" #registrationForm="ngForm">
               <div class="field-grid">
-                <label class="wide">Legal business name
+                <label class="wide">{{ entityType === 'INDIVIDUAL' ? 'Full legal name (as shown on ID)' : 'Registered company name' }}
                   <input name="legal_name" [(ngModel)]="form.legal_name" required maxlength="255" />
                 </label>
-                <label>Trading name <small>Optional</small>
+                <label>{{ entityType === 'INDIVIDUAL' ? 'Business/trade name' : 'Trading name' }} <small>Optional</small>
                   <input name="trading_name" [(ngModel)]="form.trading_name" maxlength="255" />
                 </label>
-                <label>Business type <small>Optional</small>
-                  <select name="business_type" [(ngModel)]="form.business_type">
-                    <option value="">Select business type</option>
-                    <option value="SOLE_PROPRIETORSHIP">Sole proprietorship</option>
-                    <option value="PARTNERSHIP">Partnership</option>
-                    <option value="LIMITED_COMPANY">Limited company</option>
-                    <option value="OTHER">Other</option>
-                  </select>
-                </label>
-                <label>Registration number
-                  <input name="registration_number" [(ngModel)]="form.registration_number" required maxlength="255" placeholder="RC or business registration number" />
-                </label>
+                @if (entityType === 'CORPORATE') {
+                  <label>Business type <small>Optional</small>
+                    <select name="business_type" [(ngModel)]="form.business_type">
+                      <option value="">Select business type</option>
+                      <option value="PARTNERSHIP">Partnership</option>
+                      <option value="LIMITED_COMPANY">Limited company</option>
+                      <option value="OTHER">Other</option>
+                    </select>
+                  </label>
+                  <label>Registration number
+                    <input name="registration_number" [(ngModel)]="form.registration_number" required maxlength="255" placeholder="RC or business registration number" />
+                  </label>
+                } @else {
+                  <label>BVN / National ID number
+                    <input name="registration_number" [(ngModel)]="form.registration_number" required maxlength="255" placeholder="Bank Verification Number or National ID" />
+                  </label>
+                }
                 <label>Primary contact
                   <input name="contact_name" [(ngModel)]="form.contact_name" required maxlength="255" />
                 </label>
@@ -111,17 +121,20 @@ type RegistrationForm = Omit<ConfirmMerchantRegistrationPayload, 'branch_id'> & 
     .registration-wrap { width: min(1180px, calc(100% - 2.5rem)); margin: 0 auto; padding: 3.5rem 0; display: grid; grid-template-columns: .75fr 1.25fr; gap: clamp(2rem, 7vw, 6rem); align-items: start; }.registration-copy { padding-top: 2rem; }.eyebrow { color: #9a6a00; text-transform: uppercase; letter-spacing: .13em; font-weight: 800; font-size: .68rem; }.registration-copy h1 { color: #172152; font-size: clamp(2.2rem, 4vw, 3.8rem); line-height: 1.06; letter-spacing: -.05em; margin: .8rem 0 1.2rem; }.registration-copy > p:not(.eyebrow) { color: #6e758b; line-height: 1.7; font-size: .9rem; }
     .progress-list { display: grid; gap: 1rem; margin-top: 2rem; }.progress-list > div { display: flex; gap: .75rem; align-items: center; }.progress-list > div > span { width: 1.9rem; height: 1.9rem; border-radius: 50%; display: grid; place-items: center; font-size: .68rem; font-weight: 850; }.progress-list .complete > span { background: #def4e8; color: #23754e; }.progress-list .current > span { background: #1e2761; color: white; }.progress-list p { display: grid; gap: .15rem; margin: 0; }.progress-list strong { color: #3b435a; font-size: .77rem; }.progress-list small { color: #9197a8; font-size: .65rem; }
     .registration-card { background: #fff; padding: clamp(1.4rem, 4vw, 2.4rem); border: 1px solid #e1e5ef; border-radius: 1rem; box-shadow: 0 18px 50px rgba(30,39,97,.07); }.account-summary { display: grid; grid-template-columns: auto 1fr auto; gap: .75rem; align-items: center; padding: .85rem; background: #f7f8fc; border: 1px solid #e5e8f0; border-radius: .7rem; margin-bottom: 1.5rem; }.account-summary > span { width: 2.7rem; height: 2.7rem; border-radius: .65rem; display: grid; place-items: center; color: white; background: #1e2761; font-weight: 850; }.account-summary div { display: grid; gap: .12rem; }.account-summary small { color: #9298a9; font-size: .58rem; }.account-summary strong { color: #343d55; font-size: .78rem; }.account-summary em { color: #737a8f; font-size: .65rem; font-style: normal; }.account-summary b { color: #24774f; background: #e2f4e9; border-radius: 1rem; padding: .28rem .5rem; font-size: .57rem; }
-    h2 { margin: 0 0 .4rem; font-size: 1.4rem; letter-spacing: -.025em; color: #283149; }.subtitle { color: #7b8297; font-size: .77rem; margin: 0 0 1.5rem; }.field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }label { font-size: .7rem; color: #4b5369; font-weight: 750; }label > small { color: #9a9fb0; font-weight: 500; margin-left: .25rem; }label.wide { grid-column: 1 / -1; }input, select { display: block; width: 100%; margin-top: .4rem; padding: .76rem .8rem; border: 1px solid #d8dce8; border-radius: .55rem; outline: 0; background: white; color: #303950; font-size: .78rem; }input:focus, select:focus { border-color: #4057ad; box-shadow: 0 0 0 3px rgba(64,87,173,.1); }input[readonly] { background: #f5f6f8; color: #777e91; }.field-hint { display: block; margin: .4rem 0 0 !important; color: #9a6a00 !important; font-size: .61rem; }
+    h2 { margin: 0 0 .4rem; font-size: 1.4rem; letter-spacing: -.025em; color: #283149; }.subtitle { color: #7b8297; font-size: .77rem; margin: 0 0 1.5rem; }
+    .entity-switch { background: #f1f3f8; padding: .3rem; border-radius: .7rem; display: grid; grid-template-columns: 1fr 1fr; gap: .3rem; margin-bottom: 1.4rem; }.entity-switch button { border: 0; background: transparent; padding: .68rem .5rem; border-radius: .5rem; color: #697088; font-weight: 700; font-size: .74rem; }.entity-switch button.active { background: white; color: #1e2761; box-shadow: 0 2px 10px rgba(24,34,80,.1); }
+    .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }label { font-size: .7rem; color: #4b5369; font-weight: 750; }label > small { color: #9a9fb0; font-weight: 500; margin-left: .25rem; }label.wide { grid-column: 1 / -1; }input, select { display: block; width: 100%; margin-top: .4rem; padding: .76rem .8rem; border: 1px solid #d8dce8; border-radius: .55rem; outline: 0; background: white; color: #303950; font-size: .78rem; }input:focus, select:focus { border-color: #4057ad; box-shadow: 0 0 0 3px rgba(64,87,173,.1); }input[readonly] { background: #f5f6f8; color: #777e91; }.field-hint { display: block; margin: .4rem 0 0 !important; color: #9a6a00 !important; font-size: .61rem; }
     .terms { display: flex; gap: .55rem; align-items: flex-start; margin: 1.2rem 0; font-weight: 500; line-height: 1.5; color: #656c80; }.terms input { width: auto; margin: .15rem 0 0; }.submit-button, .success-state button { width: 100%; border: 0; border-radius: .6rem; padding: .85rem; background: #1e2761; color: #fff; font-weight: 750; }.submit-button:disabled { opacity: .55; cursor: not-allowed; }.form-error { background: #fff0ee; color: #a43b2b; padding: .75rem; border-radius: .55rem; margin-bottom: 1rem; font-size: .73rem; }
     .success-state { text-align: center; padding: 2.5rem 1rem; }.success-icon { width: 4rem; height: 4rem; display: grid; place-items: center; margin: 0 auto 1.4rem; background: #def4e8; color: #20754c; border-radius: 50%; font-size: 1.5rem; }.success-state h2 { margin: .55rem 0; }.success-state p:not(.eyebrow) { color: #6e758b; line-height: 1.65; margin-bottom: 1.5rem; font-size: .82rem; }
     @media (max-width: 800px) { .registration-wrap { grid-template-columns: 1fr; padding: 2rem 0; gap: 1.5rem; }.registration-copy { padding: 0; }.progress-list { display: none; } }
-    @media (max-width: 540px) { .field-grid { grid-template-columns: 1fr; }label.wide { grid-column: auto; }.account-summary { grid-template-columns: auto 1fr; }.account-summary b { grid-column: 2; width: fit-content; } }
+    @media (max-width: 540px) { .registration-page { padding-inline: .75rem; }.registration-wrap { width: 100%; }.registration-card { padding: 1.2rem; }.field-grid { grid-template-columns: 1fr; }label.wide { grid-column: auto; }.account-summary { grid-template-columns: auto 1fr; }.account-summary b { grid-column: 2; width: fit-content; } }
   `],
 })
 export class MerchantRegistrationComponent implements OnInit {
   preview = signal<MerchantAccountPreview | null>(null);
   selected = signal<MerchantEligibleAccount | null>(null);
   result = signal<MerchantRegistrationConfirmation | null>(null);
+  entityType: 'INDIVIDUAL' | 'CORPORATE' = 'CORPORATE';
   form: RegistrationForm = {
     fincore_client_id: 0,
     fincore_account_id: 0,
@@ -154,18 +167,26 @@ export class MerchantRegistrationComponent implements OnInit {
 
     this.preview.set(preview);
     this.selected.set(selected);
+    this.entityType = preview.legal_form === 'PERSON' ? 'INDIVIDUAL' : 'CORPORATE';
     this.form = {
       fincore_client_id: preview.fincore_client_id,
       fincore_account_id: selected.fincore_account_id,
       legal_name: preview.display_name ?? '',
       trading_name: preview.display_name ?? '',
-      business_type: '',
+      business_type: this.entityType === 'INDIVIDUAL' ? 'SOLE_PROPRIETORSHIP' : '',
       registration_number: '',
       contact_name: preview.display_name ?? '',
       phone: preview.mobile_no ?? '',
       email: preview.email ?? '',
       branch_id: null,
     };
+  }
+
+  setEntityType(type: 'INDIVIDUAL' | 'CORPORATE'): void {
+    if (this.entityType === type) return;
+    this.entityType = type;
+    this.form.business_type = type === 'INDIVIDUAL' ? 'SOLE_PROPRIETORSHIP' : '';
+    this.form.registration_number = '';
   }
 
   submit(): void {

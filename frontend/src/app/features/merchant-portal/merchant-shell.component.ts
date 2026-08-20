@@ -12,7 +12,7 @@ import { TessaWidgetComponent } from '../../../tessa/tessa-widget.component';
   template: `
     <div class="merchant-shell">
       <aside class="merchant-sidebar" [class.open]="menuOpen()">
-        <div class="merchant-brand"><span>M</span><strong>MicroBiz</strong></div>
+        <div class="merchant-brand"><span>M</span><strong>MicroBiz Merchants</strong></div>
         <div class="workspace-label">Merchant workspace</div>
         <nav (click)="menuOpen.set(false)">
           <a routerLink="/merchant/dashboard" routerLinkActive="active"><span>⌂</span> Overview</a>
@@ -20,7 +20,6 @@ import { TessaWidgetComponent } from '../../../tessa/tessa-widget.component';
           <a routerLink="/merchant/transactions" routerLinkActive="active"><span>↔</span> Transactions</a>
           <a routerLink="/merchant/settlements" routerLinkActive="active"><span>↓</span> Settlements</a>
           <a routerLink="/merchant/reports" routerLinkActive="active"><span>▥</span> Reports & analytics</a>
-          <a routerLink="/merchant/payment-tools" routerLinkActive="active"><span>⌁</span> Payment tools</a>
           <a routerLink="/merchant/operations" routerLinkActive="active"><span>✓</span> Reconciliation</a>
           <a routerLink="/merchant/business" routerLinkActive="active"><span>⌖</span> Locations & devices</a>
           <a routerLink="/merchant/support" routerLinkActive="active"><span>?</span> Support</a>
@@ -59,7 +58,7 @@ import { TessaWidgetComponent } from '../../../tessa/tessa-widget.component';
     :host { display: block; min-height: 100vh; }
     .merchant-shell { min-height: 100vh; display: flex; background: #f4f6fa; }
     .merchant-sidebar { width: 250px; position: fixed; inset: 0 auto 0 0; background: #172052; color: white; padding: 1.4rem 1rem 1rem; display: flex; flex-direction: column; z-index: 30; }
-    .merchant-brand { display: flex; align-items: center; gap: .65rem; padding: .1rem .55rem; font-size: 1.08rem; }
+    .merchant-brand { display: flex; align-items: center; gap: .6rem; padding: .1rem .55rem; font-size: .96rem; line-height: 1.15; }
     .merchant-brand span { width: 2rem; height: 2rem; border-radius: .6rem; background: #ffcb45; color: #172052; display: grid; place-items: center; font-weight: 850; }
     .workspace-label { margin: 1.7rem .55rem .75rem; text-transform: uppercase; font-size: .62rem; color: #828dbb; letter-spacing: .12em; font-weight: 800; }
     nav { display: grid; gap: .3rem; overflow-y: auto; min-height: 0; }
@@ -88,12 +87,17 @@ import { TessaWidgetComponent } from '../../../tessa/tessa-widget.component';
     .menu-toggle { display: none; border: 0; background: transparent; color: #172052; font-size: 1.25rem; }
     .menu-backdrop { display: none; }
     @media (max-width: 820px) {
-      .merchant-sidebar { transform: translateX(-100%); transition: transform .2s ease; box-shadow: 15px 0 50px rgba(16,24,66,.2); }
+      .merchant-sidebar { width: min(86vw, 290px); transform: translateX(-100%); transition: transform .2s ease; box-shadow: 15px 0 50px rgba(16,24,66,.2); }
       .merchant-sidebar.open { transform: translateX(0); }
       .merchant-main { margin-left: 0; }
       .menu-toggle { display: block; }
       .topbar-context { display: none; }
       .menu-backdrop { display: block; position: fixed; inset: 0; z-index: 25; border: 0; background: rgba(11,17,46,.45); }
+    }
+    @media (max-width: 520px) {
+      .merchant-topbar { height: 62px; padding: 0 1rem; }
+      .merchant-content { padding: 1rem; }
+      .topbar-actions { gap: .5rem; }
     }
   `],
 })

@@ -807,6 +807,10 @@ not a JSON envelope. Apply a maximum synchronous range and queue larger jobs.
 
 ### Payment links and reusable QR assets
 
+> Release status: merchant access to Payment Tools is intentionally disabled.
+> The frontend contracts below are retained for a future release and these
+> endpoints are not required to complete the current merchant portal rollout.
+
 ```text
 GET   /api/v1/merchant/payment-assets
 POST  /api/v1/merchant/payment-assets

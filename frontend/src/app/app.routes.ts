@@ -112,10 +112,8 @@ export const routes: Routes = [
       },
       {
         path: 'payment-tools',
-        loadComponent: () =>
-          import('./features/merchant-portal/merchant-payment-tools.component').then(
-            (m) => m.MerchantPaymentToolsComponent
-          ),
+        redirectTo: 'dashboard',
+        pathMatch: 'full',
       },
       {
         path: 'operations',

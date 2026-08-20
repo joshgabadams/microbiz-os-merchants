@@ -14,9 +14,9 @@ import { PortalRole } from '../../core/models/merchant-portal.models';
   template: `
     <main class="portal-auth">
       <section class="portal-auth__intro">
-        <a class="portal-brand portal-brand--light" routerLink="/login/merchants" aria-label="MicroBiz home">
+        <a class="portal-brand portal-brand--light" routerLink="/login/merchants" aria-label="MicroBiz Merchants home">
           <span class="portal-brand__mark">M</span>
-          <span>MicroBiz</span>
+          <span>MicroBiz Merchants</span>
         </a>
         <div>
           <p class="eyebrow">Business banking, simplified</p>
@@ -30,7 +30,7 @@ import { PortalRole } from '../../core/models/merchant-portal.models';
         <form class="portal-auth__card" (ngSubmit)="submit()" #loginForm="ngForm">
           <div class="portal-auth__mobile-brand">
             <span class="portal-brand__mark">M</span>
-            <strong>MicroBiz</strong>
+            <strong>MicroBiz Merchants</strong>
           </div>
           <p class="eyebrow">Welcome back</p>
           <h2>Sign in to your account</h2>
@@ -110,6 +110,12 @@ import { PortalRole } from '../../core/models/merchant-portal.models';
       .portal-auth__intro { display: none; }
       .portal-auth__panel { padding: 2rem 1.25rem; align-items: start; }
       .portal-auth__mobile-brand { display: flex; align-items: center; gap: .65rem; margin: 1rem 0 3rem; color: #1e2761; }
+    }
+    @media (max-width: 520px) {
+      .portal-auth__panel { padding: 1rem; }
+      .portal-auth__mobile-brand { margin: .5rem 0 2rem; }
+      .portal-auth__card h2 { font-size: 1.6rem; }
+      .portal-form-row { align-items: flex-start; flex-wrap: wrap; }
     }
   `],
 })

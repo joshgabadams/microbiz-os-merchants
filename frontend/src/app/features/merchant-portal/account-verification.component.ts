@@ -9,7 +9,7 @@ import { MerchantPortalSessionService } from '../../core/merchant-portal-session
   imports: [RouterLink],
   template: `
     <main class="verification-page">
-      <a class="brand" routerLink="/login/merchants"><span>M</span> MicroBiz</a>
+      <a class="brand" routerLink="/login/merchants"><span>M</span> MicroBiz Merchants</a>
       @if (session.accountPreview(); as account) {
         <section class="verification-card">
           <div class="step">Step 3 of 6</div>
@@ -50,7 +50,7 @@ import { MerchantPortalSessionService } from '../../core/merchant-portal-session
     .business-name { display: grid; grid-template-columns: auto 1fr auto; gap: .75rem; align-items: center; background: #f7f8fc; border: 1px solid #e6e9f1; border-radius: .7rem; padding: .9rem; }.business-name > span { width: 2.7rem; height: 2.7rem; display: grid; place-items: center; border-radius: .65rem; background: #1e2761; color: white; font-weight: 850; }.business-name div { display: grid; gap: .18rem; }.business-name small { color: #9298a9; font-size: .59rem; }.business-name strong { color: #303950; font-size: .8rem; }.business-name em { font-style: normal; color: #24774f; background: #e1f4e9; padding: .27rem .5rem; border-radius: 1rem; font-size: .57rem; font-weight: 800; }.business-name em.inactive { color: #a43b2b; background: #fde9e5; }
     dl { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin: 1.25rem 0; border: 1px solid #e6e9f1; border-radius: .7rem; overflow: hidden; }dl div { padding: .8rem .9rem; display: grid; gap: .24rem; border-bottom: 1px solid #edf0f4; }dl div:nth-child(odd) { border-right: 1px solid #edf0f4; }dl div:nth-last-child(-n+2) { border-bottom: 0; }dt { color: #9298a9; font-size: .6rem; }dd { margin: 0; color: #384158; font-size: .73rem; font-weight: 750; }
     .primary { width: 100%; border: 0; border-radius: .6rem; padding: .86rem; background: #1e2761; color: #fff; font-size: .8rem; font-weight: 750; }.primary:disabled { opacity: .55; cursor: not-allowed; }.back { display: block; text-align: center; margin-top: 1rem; color: #667087; font-size: .72rem; text-decoration: none; }.error { padding: .72rem; margin-bottom: 1rem; border-radius: .5rem; background: #fff0ee; color: #a43b2b; font-size: .74rem; }
-    @media (max-width: 520px) { dl { grid-template-columns: 1fr; }dl div, dl div:nth-child(odd), dl div:nth-last-child(-n+2) { border-right: 0; border-bottom: 1px solid #edf0f4; }dl div:last-child { border-bottom: 0; }.business-name { grid-template-columns: auto 1fr; }.business-name em { grid-column: 2; width: fit-content; } }
+    @media (max-width: 520px) { .verification-page { padding: 1rem .75rem 1.5rem; }.verification-card { margin-top: 2rem; padding: 3.5rem 1.2rem 1.4rem; }h1 { font-size: 1.45rem; }dl { grid-template-columns: 1fr; }dl div, dl div:nth-child(odd), dl div:nth-last-child(-n+2) { border-right: 0; border-bottom: 1px solid #edf0f4; }dl div:last-child { border-bottom: 0; }.business-name { grid-template-columns: auto 1fr; }.business-name em { grid-column: 2; width: fit-content; } }
   `],
 })
 export class AccountVerificationComponent implements OnInit {
