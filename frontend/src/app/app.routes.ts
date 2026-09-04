@@ -236,6 +236,13 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'terminal-callup',
+        loadComponent: () =>
+          import('./features/terminal-callup/terminal-callup.component').then(
+            (m) => m.TerminalCallupComponent
+          ),
+      },
+      {
         path: 'fixed-deposits',
         loadComponent: () =>
           import('./features/fixed-deposits/fixed-deposit-list.component').then(

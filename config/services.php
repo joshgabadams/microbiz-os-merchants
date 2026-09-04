@@ -2,6 +2,11 @@
 
 return [
 
+    'terminal_lookup' => [
+        'url' => env('TERMINAL_LOOKUP_URL', 'https://fincore.microbizmfb.com/api/terminalid'),
+        'serial_url' => env('TERMINAL_SERIAL_LOOKUP_URL', 'https://fincore.microbizmfb.com/api/serialid'),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Third Party Services

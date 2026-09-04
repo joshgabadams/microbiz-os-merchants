@@ -28,6 +28,7 @@ use App\Http\Controllers\Api\AgentInspectionController;
 use App\Http\Controllers\Api\TessaAlertController;
 use App\Http\Controllers\Api\TransactionReversalController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\TerminalLookupController;
 
 // ---------- Public (unauthenticated) ----------
 // The only routes in this entire API reachable without staff Basic Auth
@@ -68,6 +69,10 @@ Route::middleware('auth.basic.once')->group(function () {
 
     Route::prefix('v1')->group(function () {
         Route::get('/me', [AuthController::class, 'me']);
+
+        Route::get('/terminals/lookup/{lookupType}/{identifier}', [TerminalLookupController::class, 'show'])
+            ->whereIn('lookupType', ['terminal-id', 'serial-number'])
+            ->where('identifier', '[A-Za-z0-9_-]+');
 
         Route::post('/mfa/setup', [MfaController::class, 'setup']);
         Route::post('/mfa/enable', [MfaController::class, 'enable']);
